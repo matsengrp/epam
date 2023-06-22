@@ -2,4 +2,5 @@ ablang
 jax
 jaxlib
 jaxopt
+pytest
 typing_extensions
