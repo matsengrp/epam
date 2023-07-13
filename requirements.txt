@@ -4,3 +4,5 @@ jaxlib
 jaxopt
 pytest
 typing_extensions
+tensorboardX
+h5py
