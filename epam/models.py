@@ -1,11 +1,100 @@
+from abc import ABC, abstractmethod
 import ablang
+import h5py
 import numpy as np
 import pandas as pd
 from scipy.special import softmax
 import matplotlib.pyplot as plt
+from epam.sequences import translate_sequences
+import epam.utils as utils
 
 
-class AbLang:
+class BaseModel(ABC):
+    @abstractmethod
+    def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
+        pass
+
+    def probability_vector_of_child_seq(self, prob_arr, child_seq):
+        """
+        Calculate the sitewise probability of a child sequence given a probability array.
+
+        Parameters:
+        prob_arr (numpy.ndarray): A 2D array containing the normalized probabilities of the amino acids by site.
+        child_seq (str): The child sequence for which we want the probability vector.
+
+        Returns:
+        numpy.ndarray: A 1D array containing the sitewise probability of the child sequence.
+
+        """
+        assert (
+            len(child_seq) == prob_arr.shape[1]
+        ), "The child sequence length does not match the probability array length."
+
+        return np.array(
+            [
+                prob_arr[self.aa_str_sorted.index(aa), i]
+                for i, aa in enumerate(child_seq)
+            ]
+        )
+
+    def write_probability_matrices(self, pcp_path, output_path):
+        """
+        Produce a probability matrix for each parent-child pair (PCP) of nucleotide sequences with a substitution model.
+
+        An HDF5 output file is created that includes the file path to the PCP data and a checksum for verification.
+
+        Parameters:
+        model (epam.BaseModel): model for predicting substitution probabilities.
+        pcp_filename (str): file name of parent-child pair data.
+        output_filename (str): output file name.
+
+        """
+        checksum = utils.generate_file_checksum(pcp_path)
+        pcp_df = pd.read_csv(pcp_path, index_col=0)
+
+        with h5py.File(output_path, "w") as outfile:
+            # attributes related to PCP data file
+            outfile.attrs["checksum"] = checksum
+            outfile.attrs["pcp_filename"] = pcp_path
+
+            for i, row in pcp_df.iterrows():
+                parent = row["orig_seq"]
+                child = row["mut_seq"]
+                [parent_aa, child_aa] = translate_sequences([parent, child])
+                matrix = self.prob_matrix_of_parent_child_pair(parent_aa, child_aa)
+
+                # create a group for each matrix
+                grp = outfile.create_group(f"matrix{i}")
+                grp.attrs["pcp_index"] = i
+
+                # enable gzip compression
+                grp.create_dataset(
+                    "data", data=matrix, compression="gzip", compression_opts=4
+                )
+
+    def plot_sequences(self, seqs):
+        """
+        Plot the normalized probabilities of the various amino acids by site for each sequence in seqs.
+
+        Parameters:
+        seqs (list): List of sequences to plot.
+        """
+        plt.figure(figsize=(10, 6))
+
+        for seq in seqs:
+            # get probability array for this sequence
+            arr = self.probability_array_of_seq(seq)
+            # create a line plot for this sequence
+            plt.plot(self.probability_vector_of_child_seq(arr, seq), label=seq)
+
+        plt.legend()
+        plt.xlabel("Site")
+        plt.ylabel("Probability")
+        plt.title("Sequence Probabilities")
+        plt.show()
+
+
+class AbLang(BaseModel):
     def __init__(self, chain="heavy"):
         """
         Initialize AbLang model with specified chain and create amino acid string.
@@ -47,46 +136,18 @@ class AbLang:
 
         return arr_sorted
 
-    def probability_vector_of_child_seq(self, prob_arr, child_seq):
+    def prob_matrix_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
         """
-        Calculate the sitewise probability of a child sequence given a probability array.
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
 
         Parameters:
-        prob_arr (numpy.ndarray): A 2D array containing the normalized probabilities of the amino acids by site.
-        child_seq (str): The child sequence for which we want the probability vector.
+        parent (str): The parent sequence for which we want the array of probabilities.
+        child (str): The child sequence (ignored for AbLang model)
 
         Returns:
-        numpy.ndarray: A 1D array containing the sitewise probability of the child sequence.
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        assert (
-            len(child_seq) == prob_arr.shape[1]
-        ), "The child sequence length does not match the probability array length."
-
-        return np.array(
-            [
-                prob_arr[self.aa_str_sorted.index(aa), i]
-                for i, aa in enumerate(child_seq)
-            ]
-        )
-
-    def plot_sequences(self, seqs):
-        """
-        Plot the normalized probabilities of the various amino acids by site for each sequence in seqs.
-
-        Parameters:
-        seqs (list): List of sequences to plot.
-        """
-        plt.figure(figsize=(10, 6))
-
-        for seq in seqs:
-            # get probability array for this sequence
-            arr = self.probability_array_of_seq(seq)
-            # create a line plot for this sequence
-            plt.plot(self.probability_vector_of_child_seq(arr, seq), label=seq)
-
-        plt.legend()
-        plt.xlabel("Site")
-        plt.ylabel("Probability")
-        plt.title("Sequence Probabilities")
-        plt.show()
+        return self.probability_array_of_seq(parent)
