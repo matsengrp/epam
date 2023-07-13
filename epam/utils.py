@@ -22,12 +22,8 @@ def generate_file_checksum(filename, buf_size=65536):
     """
     sha256 = hashlib.sha256()
     with open(filename, "rb") as f:
-        while True:
-            data = f.read(buf_size)
-            if not data:
-                break
+        for data in iter(lambda: f.read(buf_size), b""):
             sha256.update(data)
-
     return sha256.hexdigest()
 
 
