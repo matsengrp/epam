@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
 import ablang
+import h5py
 import numpy as np
 import pandas as pd
 from scipy.special import softmax
 import matplotlib.pyplot as plt
+from epam.sequences import translate_sequences
+import epam.utils as utils
 
 
 class BaseModel(ABC):
@@ -33,6 +36,41 @@ class BaseModel(ABC):
                 for i, aa in enumerate(child_seq)
             ]
         )
+
+    def write_probability_matrices(self, pcp_path, output_path):
+        """
+        Produce a probability matrix for each parent-child pair (PCP) of nucleotide sequences with a substitution model.
+
+        An HDF5 output file is created that includes the file path to the PCP data and a checksum for verification.
+
+        Parameters:
+        model (epam.BaseModel): model for predicting substitution probabilities.
+        pcp_filename (str): file name of parent-child pair data.
+        output_filename (str): output file name.
+
+        """
+        checksum = utils.generate_file_checksum(pcp_path)
+        pcp_df = pd.read_csv(pcp_path, index_col=0)
+
+        with h5py.File(output_path, "w") as outfile:
+            # attributes related to PCP data file
+            outfile.attrs["checksum"] = checksum
+            outfile.attrs["pcp_filename"] = pcp_path
+
+            for i, row in pcp_df.iterrows():
+                parent = row["orig_seq"]
+                child = row["mut_seq"]
+                [parent_aa, child_aa] = translate_sequences([parent, child])
+                matrix = self.prob_matrix_of_parent_child_pair(parent_aa, child_aa)
+
+                # create a group for each matrix
+                grp = outfile.create_group(f"matrix{i}")
+                grp.attrs["pcp_index"] = i
+
+                # enable gzip compression
+                grp.create_dataset(
+                    "data", data=matrix, compression="gzip", compression_opts=4
+                )
 
     def plot_sequences(self, seqs):
         """

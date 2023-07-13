@@ -1,13 +1,13 @@
 import h5py
 import pandas as pd
-from epam.utils import generate_file_checksum, produce_probability_matrices
+from epam.utils import generate_file_checksum
 from epam.models import AbLang
 
 infilename = "data/parent-child-example.csv"
 outfilename = "tests/matrices.hdf5"
 
 ablang_heavy = AbLang(chain="heavy")
-produce_probability_matrices(ablang_heavy, infilename, outfilename)
+ablang_heavy.write_probability_matrices(infilename, outfilename)
 
 test_site = 23
 test_aa = "P"
