@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 import ablang
 import numpy as np
 import pandas as pd
@@ -5,7 +6,13 @@ from scipy.special import softmax
 import matplotlib.pyplot as plt
 
 
-class AbLang:
+class BaseModel(ABC):
+    @abstractmethod
+    def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
+        pass
+
+
+class AbLang(BaseModel):
     def __init__(self, chain="heavy"):
         """
         Initialize AbLang model with specified chain and create amino acid string.
@@ -90,3 +97,19 @@ class AbLang:
         plt.ylabel("Probability")
         plt.title("Sequence Probabilities")
         plt.show()
+
+    def prob_matrix_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
+
+        Parameters:
+        parent (str): The parent sequence for which we want the array of probabilities.
+        child (str): The child sequence (ignored for AbLang model)
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+
+        """
+        return self.probability_array_of_seq(parent)
