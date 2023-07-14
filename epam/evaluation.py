@@ -7,11 +7,11 @@ from epam.models import *
 def evaluate(prob_mat_filename):
     """
     Evaluate model predictions against reality in parent-child pairs (PCPs)
-    Function should be model-agnositic and currently includes substitution accuracy
+    Function should be model-agnositic and currently limited to substitution accuracy
     Output to CSV with columns for the different metrics, and a row for each PCP
 
     Parameters:
-    prob_mat_filename (string?): 
+    prob_mat_filename (str): file name of probability matrix for parent-child pairs
     """
     with h5py.File(prob_mat_filename, "r") as prob_mat_file:
         pcp_filename = prob_mat_file.attrs["pcp_filename"]
@@ -26,22 +26,28 @@ def evaluate(prob_mat_filename):
 
 
 # calculated for full data set - loop through data set for each metric
-def sub_accuracy
+def sub_accuracy(prob_mat_file):
+    """
+    Calculate substitution accuracy for all PCPs in one data set/HDF5 file
+    Returns substitution accuracy score for use in evaluate() and reporting all files
+
+    Parameters:
 
 
-
-# read in prob_match for one PCP
-# read in sequence data for child sequence and parent sequence
-# translate child sequence from nuc to aa,  
-# location/number of mutations in child (as scanning, track substitions)
-# evaluate child sequence:
-    # for sub accuracy:
-    # find sites that mutated in predicted sequence
-    # find number of mutated sites that match child aa
-    # take ratio of number of matches/number of mutated sites
+    Returns:
 
 
-#for matrix in prob_mat_file.keys() # gives group name / 1 matrix
+    """
+    # probably need to open file for reading first (?)
+    # set empty counters for num_mut_total and num_mut_correct
+    # read in probablity matrix for one PCP at a time, iterate over all pairs
+    for matrix in prob_mat_file.keys():
+        # read in corresponding parent (orig_seq) and child (mut_seq) sequence
+        # translate nt sequences to aa sequences
+        # scan through sites and find locations of substitutions
+        # if site mutated, add to some counters for num_mut_total
+        # if site mutated, check if aa matches aa with highest prob in matrix
+        print
+    # calculate substitution accuracy (ratio of num_mut_correct/num_mut_total)
+    # return value
 
-# given n substitutions observed in the child, find top n probable substitutions/create predicted seq
-# compare predicted sequence with child sequence:
