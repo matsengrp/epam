@@ -1,3 +1,5 @@
+"""Code for evaluating model performance."""
+
 import h5py
 import pandas as pd
 from epam.utils import generate_file_checksum
@@ -5,7 +7,7 @@ from epam.models import *
 from epam.sequences import translate_sequences
 
 
-def evaluate(prob_mat_filename):
+def evaluate(prob_mat_filename, outfilename):
     """
     Evaluate model predictions against reality in parent-child pairs (PCPs)
     Function should be model-agnositic and currently limited to substitution accuracy
@@ -22,8 +24,13 @@ def evaluate(prob_mat_filename):
             raise ValueError(f"checksum failed for {pcp_filename}.")
 
         # call metric functions
+        sub_acc = calculate_sub_accuracy(prob_mat_filename)
 
-        # output metrics in csv
+        # output metrics to csv
+        model_performance = pd.DataFrame({'data_set': [pcp_filename], # gives full path currently
+                                          'model': ['ablang'], # hard coded for the moment
+                                          'sub_accuracy': [sub_acc]})
+        model_performance.to_csv(outfilename, index=False)
 
 
 # calculated for full data set - loop through data set for each metric
@@ -75,7 +82,7 @@ def calculate_sub_accuracy(prob_mat_file):
                     # sort the probabilities (lowest to highest) and return the result as ordered list of indices
                     # reverse the order of the list of indices (argsort() only sorts by lowest to highest)
                     prob_sorted_aa_indices = matrix[:,i].argsort()[::-1] # code from Kevin
-                    # strong ranked aa string for easy eval
+                    # string ranked aa string for easy eval
                     pred_aa_ranked = "".join((np.array(list(aa_str_sorted))[prob_sorted_aa_indices]))
                     # get AA sequence predicted by model
                     # force a substitution if model predicts same aa as parent
@@ -84,7 +91,7 @@ def calculate_sub_accuracy(prob_mat_file):
                         pred_aa_sub = pred_aa_ranked[1]
                     elif pred_aa_ranked[0] != parent_aa[i]:
                         pred_aa_sub = pred_aa_ranked[0]
-                    # if aa matches highest prob aa in matrix, add to num_sub_correct
+                    # if aa matches predicted aa (given a substitution), add to num_sub_correct
                     if pred_aa_sub == child_aa[i]:
                         num_sub_correct += 1
         # calculate substitution accuracy (ratio of num_sub_correct/num_sub_total)

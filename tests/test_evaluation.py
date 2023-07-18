@@ -1,14 +1,30 @@
-import pytest
-#import h5py
-#import numpy as np
-#import pandas as pd
+import pandas as pd
+import os
+from epam.utils import generate_file_checksum
+from epam.models import AbLang
 from epam.evaluation import *
 
-prob_mat_file = "tests/matrices.hdf5"
-aa_str_sorted = 'ACDEFGHIKLMNPQRSTVWY'
+infilename = "data/parent-child-example.csv"
+outfilename = "tests/matrices.hdf5"
+evalfilename = "tests/model_performance.csv"
 
-def test_evaluate_substitution_accuracy():
-    assert calculate_sub_accuracy(prob_mat_file) == 41/99
+# this test is probably not necessary
+def test_calculate_substitution_accuracy():
+    # encode
+    ablang_heavy = AbLang(chain="heavy")
+    ablang_heavy.write_probability_matrices(infilename, outfilename)
 
-# need to think of way to test main function def test_evaluate():
-# maybe test that file was written: https://stackoverflow.com/questions/20531072/writing-a-pytest-function-to-check-outputting-to-a-file-in-python
+    # evaluate metrics:
+    # substitution accuracy
+    assert calculate_sub_accuracy(outfilename) == 41/99
+
+# simple test of main function, should replace with something smarter and check file contents
+def test_evaluate():
+    # encode example
+    ablang_heavy = AbLang(chain="heavy")
+    ablang_heavy.write_probability_matrices(infilename, outfilename)
+
+    # ensure evaluation script produces csv:
+    evaluate(outfilename, evalfilename)
+    assert os.path.exists(evalfilename) == True
+    
