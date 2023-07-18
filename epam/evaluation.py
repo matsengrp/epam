@@ -38,6 +38,10 @@ def calculate_sub_accuracy(prob_mat_file):
     Returns:
     sub_accuracy (float): calculated substitution accuracy for data set of PCPs
     """
+
+    # set alphabetical order of aa for easy use across functions
+    aa_str_sorted = 'ACDEFGHIKLMNPQRSTVWY'
+
     # open file for reading
     with h5py.File(prob_mat_file, "r") as matfile:
         # get path to PCP sequence data
@@ -45,12 +49,14 @@ def calculate_sub_accuracy(prob_mat_file):
         # read in PCPs as a pandas df
         pcp_df = pd.read_csv(pcp_filename, index_col=0)
         # set empty counters for num_sub_total and num_sub_correct
-        num_sub_total = 0. # floats to avoid issues with integer division??
-        num_sub_correct = 0.
+        num_sub_total = 0
+        num_sub_correct = 0
         # read in probablity matrix for one PCP at a time, iterate over all pairs
-        for matrix in matfile.keys():
-            # get on probablity matrix
-            grp = matfile[matrix]
+        for matname in matfile.keys():
+            # get one group
+            grp = matfile[matname]
+            # get its probablity matrix
+            matrix = grp['data']
             # get identity for pairing with sequences
             index = grp.attrs["pcp_index"]
             # pull corresponding PCP info
@@ -59,16 +65,27 @@ def calculate_sub_accuracy(prob_mat_file):
             child = row["mut_seq"]
             # translate nt sequences to AA sequences
             [parent_aa, child_aa] = translate_sequences([parent, child])
-            # add check to make sure len(parent_aa) = len(child_aa) ??
-            # get AA sequence predicted by model
-            pred_aa_sub = matrix.max(axis='columns') # PROBABLY WRONG
+            # add check to make sure len(parent_aa) = len(child_aa) - IQtree should cover so would this check be worth the time it takes to run ??
             # scan through sites and find locations of substitutions
             for i in range(len(parent_aa)):
                 # if mutated, add to num_sub_total
                 if parent_aa[i] != child_aa[i]:
                     num_sub_total += 1
+                    # get the column of the probability matrix corresponding to amino acid site of interest
+                    # sort the probabilities (lowest to highest) and return the result as ordered list of indices
+                    # reverse the order of the list of indices (argsort() only sorts by lowest to highest)
+                    prob_sorted_aa_indices = matrix[:,i].argsort()[::-1] # code from Kevin
+                    # strong ranked aa string for easy eval
+                    pred_aa_ranked = "".join((np.array(list(aa_str_sorted))[prob_sorted_aa_indices]))
+                    # get AA sequence predicted by model
+                    # force a substitution if model predicts same aa as parent
+                    # if highest prob aa doesn't match parent, use it
+                    if pred_aa_ranked[0] == parent_aa[i]:
+                        pred_aa_sub = pred_aa_ranked[1]
+                    elif pred_aa_ranked[0] != parent_aa[i]:
+                        pred_aa_sub = pred_aa_ranked[0]
                     # if aa matches highest prob aa in matrix, add to num_sub_correct
-                    if pred_aa_sub[i] == child_aa[i]:
+                    if pred_aa_sub == child_aa[i]:
                         num_sub_correct += 1
         # calculate substitution accuracy (ratio of num_sub_correct/num_sub_total)
         sub_accuracy = num_sub_correct/num_sub_total
