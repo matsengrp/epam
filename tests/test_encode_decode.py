@@ -6,6 +6,7 @@ from epam.models import AbLang
 infilename = "data/parent-child-example.csv"
 outfilename = "tests/matrices.hdf5"
 
+
 def test_encode_decode():
     # encode
     ablang_heavy = AbLang(chain="heavy")

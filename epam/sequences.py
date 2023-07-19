@@ -4,6 +4,10 @@
 from Bio import SeqIO
 from Bio.Seq import Seq
 
+# set alphabetical order of aa for easy use across functions
+global aa_str_sorted
+aa_str_sorted = "ACDEFGHIKLMNPQRSTVWY"
+
 
 def read_fasta_sequences(file_path):
     with open(file_path, "r") as handle:

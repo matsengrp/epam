@@ -8,6 +8,7 @@ infilename = "data/parent-child-example.csv"
 outfilename = "tests/matrices.hdf5"
 evalfilename = "tests/model_performance.csv"
 
+
 # this test is probably not necessary
 def test_calculate_substitution_accuracy():
     # encode
@@ -16,7 +17,8 @@ def test_calculate_substitution_accuracy():
 
     # evaluate metrics:
     # substitution accuracy
-    assert calculate_sub_accuracy(outfilename) == 41/99
+    assert calculate_sub_accuracy(outfilename) == 41 / 99
+
 
 # simple test of main function, should replace with something smarter and check file contents
 def test_evaluate():
@@ -27,4 +29,3 @@ def test_evaluate():
     # ensure evaluation script produces csv:
     evaluate(outfilename, evalfilename)
     assert os.path.exists(evalfilename) == True
-    
