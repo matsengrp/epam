@@ -76,7 +76,7 @@ def calculate_sub_accuracy(prob_mat_path):
             matrix = grp["data"]
             index = grp.attrs["pcp_index"]
 
-            parent_nt, child_nt = pcp_df.loc[index, ["orig_seq", "mut_seq"]]
+            parent_nt, child_nt = pcp_df.loc[index, ["parent", "child"]]
             [parent_aa, child_aa] = translate_sequences([parent_nt, child_nt])
 
             assert len(parent_aa) == len(
