@@ -58,8 +58,8 @@ class BaseModel(ABC):
             outfile.attrs["pcp_filename"] = pcp_path
 
             for i, row in pcp_df.iterrows():
-                parent = row["orig_seq"]
-                child = row["mut_seq"]
+                parent = row["parent"]
+                child = row["child"]
                 [parent_aa, child_aa] = translate_sequences([parent, child])
                 matrix = self.prob_matrix_of_parent_child_pair(parent_aa, child_aa)
 
