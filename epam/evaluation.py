@@ -3,20 +3,21 @@
 import h5py
 import pandas as pd
 from epam.sequences import aa_str_sorted
-from epam.utils import generate_file_checksum
+from epam.utils import generate_file_checksum, pcp_path_of_prob_mat_path
 from epam.models import *
 from epam.sequences import translate_sequences
 
 
 def evaluate(prob_mat_path, model_performance_path):
     """
-    Evaluate model predictions against reality in parent-child pairs (PCPs)
-    Function is model-agnositic and currently limited to substitution accuracy
-    Output to CSV with columns for the different metrics and a row per data set
+    Evaluate model predictions against reality in parent-child pairs (PCPs).
+    Function is model-agnositic and currently limited to substitution accuracy.
+    Output to CSV with columns for the different metrics and a row per data set.
 
     Parameters:
-    prob_mat_path (str): path to probability matrix for parent-child pairs
-    outfilename (str): path to output for model performance metrics
+    prob_mat_path (str): path to probability matrix for parent-child pairs.
+    outfilename (str): path to output for model performance metrics.
+
     """
     pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
 
@@ -33,36 +34,17 @@ def evaluate(prob_mat_path, model_performance_path):
     model_performance.to_csv(model_performance_path, index=False)
 
 
-def pcp_path_of_prob_mat_path(prob_mat_path):
-    """
-    Return the path to the PCP file that matches the probability matrix
-    Check SHAs to ensure the PCP file matches the probability matrix
-
-    Parameters:
-    prob_mat_path (str): path to probability matrix for parent-child pairs
-
-    Returns:
-    pcp_path (str): path to parent-child pairs
-    """
-    with h5py.File(prob_mat_path, "r") as prob_mat_file:
-        pcp_path = prob_mat_file.attrs["pcp_filename"]
-
-        if prob_mat_file.attrs["checksum"] != generate_file_checksum(pcp_path):
-            raise ValueError(f"checksum failed for {pcp_path}.")
-
-    return pcp_path
-
-
 def calculate_sub_accuracy(prob_mat_path):
     """
-    Calculate substitution accuracy for all PCPs in one data set/HDF5 file
-    Returns substitution accuracy score for use in evaluate() and reporting all files
+    Calculate substitution accuracy for all PCPs in one data set/HDF5 file.
+    Returns substitution accuracy score for use in evaluate() and reporting all files.
 
     Parameters:
-    prob_mat_path (str): path to probability matrices for parent-child pairs
+    prob_mat_path (str): path to probability matrices for parent-child pairs.
 
     Returns:
-    sub_accuracy (float): calculated substitution accuracy for data set of PCPs
+    sub_accuracy (float): calculated substitution accuracy for data set of PCPs.
+
     """
     with h5py.File(prob_mat_path, "r") as matfile:
         pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
@@ -101,15 +83,16 @@ def calculate_sub_accuracy(prob_mat_path):
 
 def highest_ranked_substitution(matrix_i, parent_aa, i):
     """
-    Return the highest ranked substitution for a given parent-child pair
+    Return the highest ranked substitution for a given parent-child pair.
 
     Parameters:
-    matrix_i (np.array): probability matrix for parent-child pair at aa site i
-    parent_aa (str): parent amino acid sequence
-    i (int): index of amino acid site substituted
+    matrix_i (np.array): probability matrix for parent-child pair at aa site i.
+    parent_aa (str): parent amino acid sequence.
+    i (int): index of amino acid site substituted.
 
     Returns:
-    pred_aa_sub (str): predicted amino acid substitution (most likely non-parent aa)
+    pred_aa_sub (str): predicted amino acid substitution (most likely non-parent aa).
+
     """
     prob_sorted_aa_indices = matrix_i.argsort()[::-1]
 

@@ -11,32 +11,25 @@ correct_model_eval_path = "tests/eval-model-performance.csv"
 
 
 def test_calculate_substitution_accuracy():
-    # encode
     ablang_heavy = AbLang(chain="heavy")
     ablang_heavy.write_probability_matrices(example_pcp_path, example_prob_mat_path)
 
-    # evaluate metrics:
-    # substitution accuracy
     assert calculate_sub_accuracy(example_prob_mat_path) == 4 / 13
 
 
 def test_evaluate():
-    # encode example
     ablang_heavy = AbLang(chain="heavy")
     ablang_heavy.write_probability_matrices(example_pcp_path, example_prob_mat_path)
 
-    # ensure evaluation script produces csv
     evaluate(example_prob_mat_path, example_model_eval_path)
     assert os.path.exists(example_model_eval_path) == True
 
-    # ensure output produced matches expect output
     assert generate_file_checksum(example_model_eval_path) == generate_file_checksum(
         correct_model_eval_path
     )
 
 
 def test_highest_ranked_substitution():
-    # create example matrix for two sites
     example_matrix = np.array(
         [
             [0.6, 0.1],  # A
