@@ -3,7 +3,7 @@
 import h5py
 import pandas as pd
 from epam.sequences import aa_str_sorted
-from epam.utils import generate_file_checksum, pcp_path_of_prob_mat_path
+from epam.utils import pcp_path_of_prob_mat_path
 from epam.models import *
 from epam.sequences import translate_sequences
 
@@ -11,7 +11,7 @@ from epam.sequences import translate_sequences
 def evaluate(prob_mat_path, model_performance_path):
     """
     Evaluate model predictions against reality in parent-child pairs (PCPs).
-    Function is model-agnositic and currently limited to substitution accuracy.
+    Function is model-agnositic and currently calculates substitution accuracy, r-precision, and cross loss entropy.
     Output to CSV with columns for the different metrics and a row per data set.
 
     Parameters:
@@ -22,12 +22,16 @@ def evaluate(prob_mat_path, model_performance_path):
     pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
 
     sub_acc = calculate_sub_accuracy(prob_mat_path)
+    r_prec = None
+    cross_ent = None
 
     model_performance = pd.DataFrame(
         {
             "data_set": [pcp_path],
             "model": ["ablang"],  # Issue 8: hard coded for the moment
             "sub_accuracy": [sub_acc],
+            "r_precision": [r_prec],
+            "cross_entropy": [cross_ent]
         }
     )
 
@@ -37,7 +41,7 @@ def evaluate(prob_mat_path, model_performance_path):
 def calculate_sub_accuracy(prob_mat_path):
     """
     Calculate substitution accuracy for all PCPs in one data set/HDF5 file.
-    Returns substitution accuracy score for use in evaluate() and reporting all files.
+    Returns substitution accuracy score for use in evaluate() and output files.
 
     Parameters:
     prob_mat_path (str): path to probability matrices for parent-child pairs.
@@ -104,3 +108,70 @@ def highest_ranked_substitution(matrix_i, parent_aa, i):
         pred_aa_sub = pred_aa_ranked[0]
 
     return pred_aa_sub
+
+
+def calculate_r_precision(prob_mat_path):
+    """
+    Calculate r-precision for all PCPs in one data set/HDF5 file.
+    Returns r-precision score for use in evaluate() and output files.
+        
+    Parameters:
+    prob_mat_path (str): path to probability matrices for parent-child pairs.
+
+    Returns:
+    r_precision (float): calculated r-precision for data set of PCPs.
+
+    """
+    with h5py.File(prob_mat_path, "r") as matfile:
+        pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
+        pcp_df = pd.read_csv(pcp_path, index_col=0)
+
+        num_sub_total = 0
+        num_sub_location_correct = 0
+
+        for matname in matfile.keys():
+            grp = matfile[matname]
+            matrix = grp["data"]
+            index = grp.attrs["pcp_index"]
+
+            parent_nt, child_nt = pcp_df.loc[index, ["parent", "child"]]
+            [parent_aa, child_aa] = translate_sequences([parent_nt, child_nt])
+
+            
+
+        r_precision = num_sub_location_correct / num_sub_total
+
+        return r_precision
+
+
+def locate_child_substitutions():
+    """
+    Return the location of the amino acid substitutions for a given parent-child pair.
+
+    Parameters:
+
+    Returns:
+
+    """
+
+def locate_top_k_substitutions():
+    """
+    Return the top k substitutions for a given parent-child pair.
+
+    Parameters:
+
+    Returns:
+
+    """
+
+
+def calculate_cross_loss_entropy():
+    """
+    Calculate cross loss entropy for all PCPs in one data set/HDF5 file.
+
+    Parameters:
+
+    Returns:
+
+
+    """
