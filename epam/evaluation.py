@@ -15,14 +15,14 @@ def evaluate(prob_mat_path, model_performance_path):
     Output to CSV with columns for the different metrics and a row per data set.
 
     Parameters:
-    prob_mat_path (str): path to probability matrix for parent-child pairs.
-    outfilename (str): path to output for model performance metrics.
+    prob_mat_path (str): Path to probability matrix for parent-child pairs.
+    outfilename (str): Path to output for model performance metrics.
 
     """
     pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
 
     sub_acc = calculate_sub_accuracy(prob_mat_path)
-    r_prec = None
+    r_prec = calculate_r_precision(prob_mat_path)
     cross_ent = None
 
     model_performance = pd.DataFrame(
@@ -31,7 +31,7 @@ def evaluate(prob_mat_path, model_performance_path):
             "model": ["ablang"],  # Issue 8: hard coded for the moment
             "sub_accuracy": [sub_acc],
             "r_precision": [r_prec],
-            "cross_entropy": [cross_ent]
+            "cross_entropy": [cross_ent],
         }
     )
 
@@ -44,10 +44,10 @@ def calculate_sub_accuracy(prob_mat_path):
     Returns substitution accuracy score for use in evaluate() and output files.
 
     Parameters:
-    prob_mat_path (str): path to probability matrices for parent-child pairs.
+    prob_mat_path (str): Path to probability matrices for parent-child pairs.
 
     Returns:
-    sub_accuracy (float): calculated substitution accuracy for data set of PCPs.
+    sub_accuracy (float): Calculated substitution accuracy for data set of PCPs.
 
     """
     with h5py.File(prob_mat_path, "r") as matfile:
@@ -90,12 +90,12 @@ def highest_ranked_substitution(matrix_i, parent_aa, i):
     Return the highest ranked substitution for a given parent-child pair.
 
     Parameters:
-    matrix_i (np.array): probability matrix for parent-child pair at aa site i.
-    parent_aa (str): parent amino acid sequence.
-    i (int): index of amino acid site substituted.
+    matrix_i (np.array): Probability matrix for parent-child pair at aa site i.
+    parent_aa (str): Parent amino acid sequence.
+    i (int): Index of amino acid site substituted.
 
     Returns:
-    pred_aa_sub (str): predicted amino acid substitution (most likely non-parent aa).
+    pred_aa_sub (str): Predicted amino acid substitution (most likely non-parent aa).
 
     """
     prob_sorted_aa_indices = matrix_i.argsort()[::-1]
@@ -114,12 +114,12 @@ def calculate_r_precision(prob_mat_path):
     """
     Calculate r-precision for all PCPs in one data set/HDF5 file.
     Returns r-precision score for use in evaluate() and output files.
-        
+
     Parameters:
-    prob_mat_path (str): path to probability matrices for parent-child pairs.
+    prob_mat_path (str): Path to probability matrices for parent-child pairs.
 
     Returns:
-    r_precision (float): calculated r-precision for data set of PCPs.
+    r_precision (float): Calculated r-precision for data set of PCPs.
 
     """
     with h5py.File(prob_mat_path, "r") as matfile:
@@ -137,32 +137,95 @@ def calculate_r_precision(prob_mat_path):
             parent_nt, child_nt = pcp_df.loc[index, ["parent", "child"]]
             [parent_aa, child_aa] = translate_sequences([parent_nt, child_nt])
 
-            
+            child_sub_sites = locate_child_substitutions(parent_aa, child_aa)
+            k_sub = child_sub_sites.size
+
+            num_sub_total += k_sub
+
+            if k_sub > 0:
+                site_sub_probs = calculate_site_substitution_probabilities(
+                    matrix, parent_aa
+                )
+
+                pred_sub_sites = locate_top_k_substitutions(site_sub_probs, k_sub)
+
+                correct_predictions = np.intersect1d(child_sub_sites, pred_sub_sites)
+
+                num_sub_location_correct += correct_predictions.size
 
         r_precision = num_sub_location_correct / num_sub_total
 
         return r_precision
 
 
-def locate_child_substitutions():
+def locate_child_substitutions(parent_aa, child_aa):
     """
     Return the location of the amino acid substitutions for a given parent-child pair.
 
     Parameters:
+    parent_aa (str): Amino acid sequence of parent.
+    child_aa (str): Amino acid sequence of child.
 
     Returns:
+    child_sub_sites (np.array): Location of substitutions in parent-child pair.
 
     """
+    child_sub_sites = []
 
-def locate_top_k_substitutions():
+    for i in range(len(parent_aa)):
+        if parent_aa[i] != child_aa[i]:
+            child_sub_sites.append(i)
+
+    child_sub_sites = np.array(child_sub_sites)
+
+    return child_sub_sites
+
+
+def calculate_site_substitution_probabilities(prob_matrix, parent_aa):
     """
-    Return the top k substitutions for a given parent-child pair.
+    Calculate the probability of substitution at each site for a parent sequence.
 
     Parameters:
+    prob_matrix (np.ndarray): A 2D array containing the normalized probabilities of the amino acids by site for a parent sequence.
+    parent_aa (str): Amino acid sequence of parent.
 
     Returns:
+    site_sub_probs (np.array): 1D array containing probability of substitution at each site for a parent sequence.
 
     """
+    site_sub_probs = []
+
+    for i in range(len(parent_aa)):
+        site_sub_probs.append(1 - prob_matrix[:, i][aa_str_sorted.index(parent_aa[i])])
+
+    site_sub_probs = np.array(site_sub_probs)
+
+    assert site_sub_probs.size == len(
+        parent_aa
+    ), "The number of substitution probabilities does not match the number of amino acid sites."
+
+    return site_sub_probs
+
+
+def locate_top_k_substitutions(site_sub_probs, k_sub):
+    """
+    Return the top k substitutions predicted for a parent-child pair given precalculated site substitution probabilities.
+
+    Parameters:
+    site_sub_probs (str): Probability of substition at each site for a parent sequence.
+    k_sub (int): Number of substitutions observed in PCP.
+
+    Returns:
+    pred_sub_sites (np.array): Location of top-k predicted substitutions by model (unordered).
+
+    """
+    pred_sub_sites = np.argpartition(site_sub_probs, -k_sub)[-k_sub:]
+
+    assert (
+        pred_sub_sites.size == k_sub
+    ), "The number of predicted substitution sites does not match the number of actual substitution sites."
+
+    return pred_sub_sites
 
 
 def calculate_cross_loss_entropy():
