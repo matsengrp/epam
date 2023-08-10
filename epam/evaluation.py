@@ -16,13 +16,70 @@ def evaluate(prob_mat_path, model_performance_path):
 
     Parameters:
     prob_mat_path (str): Path to probability matrix for parent-child pairs.
-    outfilename (str): Path to output for model performance metrics.
+    model_performance_path (str): Path to output for model performance metrics.
 
     """
     pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
 
     sub_acc = calculate_sub_accuracy(prob_mat_path)
-    r_prec = calculate_r_precision(prob_mat_path)
+
+    pcp_df = pd.read_csv(pcp_path, index_col=0)
+
+    pcp_df["aa_seqs"] = pcp_df.apply(
+        lambda row: translate_sequences([row["parent"], row["child"]]), axis=1
+    )
+    pcp_df["pcp_sub_status"] = pcp_df.apply(
+        lambda row: 1 if row["aa_seqs"][0] != row["aa_seqs"][1] else 0, axis=1
+    )
+    pcp_df["pcp_sub_location"] = pcp_df.apply(
+        lambda row: locate_child_substitutions(row["aa_seqs"][0], row["aa_seqs"][1]),
+        axis=1,
+    )
+    pcp_df["k_sub"] = pcp_df.apply(lambda row: row["pcp_sub_location"].size, axis=1)
+
+    site_sub_probs = []
+
+    with h5py.File(prob_mat_path, "r") as matfile:
+        for matname in matfile.keys():
+            grp = matfile[matname]
+            matrix = grp["data"]
+            index = grp.attrs["pcp_index"]
+
+            site_sub_probs.append(
+                calculate_site_substitution_probabilities(
+                    matrix, pcp_df["aa_seqs"].iloc[index][0]
+                )
+            )
+
+    pcp_df["site_sub_probs"] = site_sub_probs
+
+    pcp_df["model_sub_location"] = pcp_df.apply(
+        lambda row: []
+        if row["k_sub"] == 0
+        else locate_top_k_substitutions(row["site_sub_probs"], row["k_sub"]),
+        axis=1,
+    )
+
+    pcp_df["correct_site_predictions"] = pcp_df.apply(
+        lambda row: np.intersect1d(row["pcp_sub_location"], row["model_sub_location"]),
+        axis=1,
+    )
+
+    pcp_df["k_sub_correct"] = pcp_df.apply(
+        lambda row: row["correct_site_predictions"].size, axis=1
+    )
+
+    r_prec = pcp_df["k_sub_correct"].sum() / pcp_df["k_sub"].sum()
+
+    print("new function: ")
+    print("r-precision: ", r_prec)
+    print("num_sub_total: ", pcp_df["k_sub"].sum())
+    print("num_sub_location_correct: ", pcp_df["k_sub_correct"].sum())
+
+    for i in range(len(pcp_df)):
+        print("index: ", i, "correct predictions: ", pcp_df["k_sub_correct"].iloc[i])
+
+    # r_prec = calculate_r_precision(prob_mat_path)
     cross_ent = None
 
     model_performance = pd.DataFrame(
@@ -122,40 +179,6 @@ def calculate_r_precision(prob_mat_path):
     r_precision (float): Calculated r-precision for data set of PCPs.
 
     """
-    with h5py.File(prob_mat_path, "r") as matfile:
-        pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
-        pcp_df = pd.read_csv(pcp_path, index_col=0)
-
-        num_sub_total = 0
-        num_sub_location_correct = 0
-
-        for matname in matfile.keys():
-            grp = matfile[matname]
-            matrix = grp["data"]
-            index = grp.attrs["pcp_index"]
-
-            parent_nt, child_nt = pcp_df.loc[index, ["parent", "child"]]
-            [parent_aa, child_aa] = translate_sequences([parent_nt, child_nt])
-
-            child_sub_sites = locate_child_substitutions(parent_aa, child_aa)
-            k_sub = child_sub_sites.size
-
-            num_sub_total += k_sub
-
-            if k_sub > 0:
-                site_sub_probs = calculate_site_substitution_probabilities(
-                    matrix, parent_aa
-                )
-
-                pred_sub_sites = locate_top_k_substitutions(site_sub_probs, k_sub)
-
-                correct_predictions = np.intersect1d(child_sub_sites, pred_sub_sites)
-
-                num_sub_location_correct += correct_predictions.size
-
-        r_precision = num_sub_location_correct / num_sub_total
-
-        return r_precision
 
 
 def locate_child_substitutions(parent_aa, child_aa):
@@ -212,7 +235,7 @@ def locate_top_k_substitutions(site_sub_probs, k_sub):
     Return the top k substitutions predicted for a parent-child pair given precalculated site substitution probabilities.
 
     Parameters:
-    site_sub_probs (str): Probability of substition at each site for a parent sequence.
+    site_sub_probs (str?): Probability of substition at each site for a parent sequence.
     k_sub (int): Number of substitutions observed in PCP.
 
     Returns:
