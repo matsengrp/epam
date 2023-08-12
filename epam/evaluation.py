@@ -40,8 +40,8 @@ def evaluate(prob_mat_path, model_performance_path):
     site_sub_probs = []
 
     with h5py.File(prob_mat_path, "r") as matfile:
-        for matname in matfile.keys():
-            grp = matfile[matname]
+        for i in range(len(pcp_df)):
+            grp = matfile["matrix" + str(i)]
             matrix = grp["data"]
             index = grp.attrs["pcp_index"]
 
@@ -73,11 +73,14 @@ def evaluate(prob_mat_path, model_performance_path):
 
     print("new function: ")
     print("r-precision: ", r_prec)
-    print("num_sub_total: ", pcp_df["k_sub"].sum())
-    print("num_sub_location_correct: ", pcp_df["k_sub_correct"].sum())
+    # print("num_sub_total: ", pcp_df["k_sub"].sum())
+    # print("num_sub_location_correct: ", pcp_df["k_sub_correct"].sum())
 
-    for i in range(len(pcp_df)):
-        print("index: ", i, "correct predictions: ", pcp_df["k_sub_correct"].iloc[i])
+    for i in range(3):
+        print("index: ", i)
+        print("pcp_sub_location: ", pcp_df["pcp_sub_location"].iloc[i])
+        print("model_sub_location: ", pcp_df["model_sub_location"].iloc[i])
+        print("correct predictions: ", pcp_df["correct_site_predictions"].iloc[i])
 
     # r_prec = calculate_r_precision(prob_mat_path)
     cross_ent = None
