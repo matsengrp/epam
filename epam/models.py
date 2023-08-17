@@ -175,42 +175,43 @@ class SHMple(BaseModel):
         parent_codon (str): The specified codon.
         mut_probs (list): The mutability probabilities for each site in the codon.
         sub_probs (list): The substitution probabilities for each site in the codon.
-        
+
         Returns:
         list: An array of probabilities for all 20 amino acids
-        
-        """   
-        aa_probs={}
+
+        """
+        aa_probs = {}
         for aa in self.aa_str_sorted:
             aa_probs[aa] = 0
-        
+
         # iterate through all possible child codons
-        for codon_list in itertools.product(['A','C','G','T'],repeat=3):
+        for codon_list in itertools.product(["A", "C", "G", "T"], repeat=3):
             child_codon = "".join(codon_list)
 
             try:
                 aa = translate_sequences([child_codon])[0]
             except ValueError:  # check for STOP codon
                 continue
-            
+
             # iterate through codon sites and compute total probability of potential child codon
-            child_prob=1
+            child_prob = 1
             for isite in range(3):
-                if parent_codon[isite]==child_codon[isite]:
-                    child_prob *= (1 - mut_probs[isite])
+                if parent_codon[isite] == child_codon[isite]:
+                    child_prob *= 1 - mut_probs[isite]
                 else:
                     child_prob *= mut_probs[isite]
-                    child_prob *= sub_probs[isite][self.nt_str_sorted.index(child_codon[isite])]
-                    
+                    child_prob *= sub_probs[isite][
+                        self.nt_str_sorted.index(child_codon[isite])
+                    ]
+
             aa_probs[aa] += child_prob
 
         # need renormalization factor so that amino acid probabilities sum to 1,
         # since probabilities to STOP codon are dropped
         psum = np.sum([aa_probs[aa] for aa in aa_probs.keys()])
 
-        return [aa_probs[aa]/psum for aa in self.aa_str_sorted]
-    
-    
+        return [aa_probs[aa] / psum for aa in self.aa_str_sorted]
+
     def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to a SHMple model.
@@ -225,18 +226,22 @@ class SHMple(BaseModel):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        branch_length = np.mean([a!=b for a,b in zip(parent, child)])
-        muts, subs = self.model.predict_mutabilities_and_substitutions([parent], [branch_length])
-        
+        branch_length = np.mean([a != b for a, b in zip(parent, child)])
+        muts, subs = self.model.predict_mutabilities_and_substitutions(
+            [parent], [branch_length]
+        )
+
         # keep track of probabilities as a row per amino acid site, then take transpose before returning output
         prob_matrix = []
-    
-        for i in range(0,len(parent),3):
-            parent_codon = parent[i:i+3]
-            codon_muts = muts[0][i:i+3].squeeze()
-            codon_subs = subs[0][i:i+3]
-            
-            site_probs = self.codon_to_aa_probabilities(parent_codon, codon_muts, codon_subs)
+
+        for i in range(0, len(parent), 3):
+            parent_codon = parent[i : i + 3]
+            codon_muts = muts[0][i : i + 3].squeeze()
+            codon_subs = subs[0][i : i + 3]
+
+            site_probs = self.codon_to_aa_probabilities(
+                parent_codon, codon_muts, codon_subs
+            )
             prob_matrix.append(site_probs)
-            
+
         return np.array(prob_matrix).transpose()
