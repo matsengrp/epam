@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
 import ablang
+import shmple
 import h5py
 import numpy as np
 import pandas as pd
 from scipy.special import softmax
 import matplotlib.pyplot as plt
+import itertools
 from epam.sequences import translate_sequences
 import epam.utils as utils
 
@@ -151,3 +153,90 @@ class AbLang(BaseModel):
 
         """
         return self.probability_array_of_seq(parent)
+
+
+class SHMple(BaseModel):
+    def __init__(self, weights_directory):
+        """
+        Initialize a SHMple model with specified directory to trained model weights.
+
+        Parameters:
+        weights_directory (str): directory path to trained model weights.
+        """
+        self.model = shmple.AttentionModel(weights_dir=weights_directory)
+        self.nt_str_sorted = "ACGT"
+        self.aa_str_sorted = "ACDEFGHIKLMNPQRSTVWY"
+
+    def codon_to_aa_probabilities(self, parent_codon, mut_probs, sub_probs):
+        """
+        For a specified codon and given nucleotide mutability and substitution probabilities, compute the amino acid substitution probabilities
+
+        Parameters:
+        parent_codon (str): The specified codon.
+        mut_probs (list): The mutability probabilities for each site in the codon.
+        sub_probs (list): The substitution probabilities for each site in the codon.
+        
+        Returns:
+        list: An array of probabilities for all 20 amino acids
+        
+        """   
+        aa_probs={}
+        for aa in self.aa_str_sorted:
+            aa_probs[aa] = 0
+        
+        # iterate through all possible child codons
+        for codon_list in itertools.product(['A','C','G','T'],repeat=3):
+            child_codon = "".join(codon_list)
+
+            try:
+                aa = translate_sequences([child_codon])[0]
+            except ValueError:  # check for STOP codon
+                continue
+            
+            # iterate through codon sites and compute total probability of potential child codon
+            child_prob=1
+            for isite in range(3):
+                if parent_codon[isite]==child_codon[isite]:
+                    child_prob *= (1 - mut_probs[isite])
+                else:
+                    child_prob *= mut_probs[isite]
+                    child_prob *= sub_probs[isite][self.nt_str_sorted.index(child_codon[isite])]
+                    
+            aa_probs[aa] += child_prob
+
+        # need renormalization factor so that amino acid probabilities sum to 1,
+        # since probabilities to STOP codon are dropped
+        psum = np.sum([aa_probs[aa] for aa in aa_probs.keys()])
+
+        return [aa_probs[aa]/psum for aa in self.aa_str_sorted]
+    
+    
+    def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to a SHMple model.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
+
+        Parameters:
+        parent (str): The parent sequence for which we want the array of probabilities.
+        child (str): The child sequence
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+
+        """
+        branch_length = np.mean([a!=b for a,b in zip(parent, child)])
+        muts, subs = self.model.predict_mutabilities_and_substitutions([parent], [branch_length])
+        
+        # keep track of probabilities as a row per amino acid site, then take transpose before returning output
+        prob_matrix = []
+    
+        for i in range(0,len(parent),3):
+            parent_codon = parent[i:i+3]
+            codon_muts = muts[0][i:i+3].squeeze()
+            codon_subs = subs[0][i:i+3]
+            
+            site_probs = self.codon_to_aa_probabilities(parent_codon, codon_muts, codon_subs)
+            prob_matrix.append(site_probs)
+            
+        return np.array(prob_matrix).transpose()
