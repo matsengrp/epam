@@ -20,7 +20,7 @@ def test_ablang():
 
 
 parent_nt_seq = "CAGGTGCAGCTGGTGGAG"  # QVQLVE
-child_nt_seq = "CAGGCGCAGCCGGCGGAG"   # QAQPAE
+child_nt_seq = "CAGGCGCAGCCGGCGGAG"  # QAQPAE
 
 
 def test_shmple():

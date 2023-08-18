@@ -7,7 +7,7 @@ import pandas as pd
 from scipy.special import softmax
 import matplotlib.pyplot as plt
 import itertools
-from epam.sequences import translate_sequences
+from epam.sequences import translate_sequences, nt_str_sorted, aa_str_sorted
 import epam.utils as utils
 
 
@@ -33,10 +33,7 @@ class BaseModel(ABC):
         ), "The child sequence length does not match the probability array length."
 
         return np.array(
-            [
-                prob_arr[self.aa_str_sorted.index(aa), i]
-                for i, aa in enumerate(child_seq)
-            ]
+            [prob_arr[aa_str_sorted.index(aa), i] for i, aa in enumerate(child_seq)]
         )
 
     def write_probability_matrices(self, pcp_path, output_path):
@@ -109,10 +106,9 @@ class AbLang(BaseModel):
         vocab_dict = self.model.tokenizer.vocab_to_aa
         self.aa_str = "".join([vocab_dict[i + 1] for i in range(20)])
         self.aa_str_sorted_indices = np.argsort(list(self.aa_str))
-        self.aa_str_sorted = "".join(
+        assert aa_str_sorted == "".join(
             np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
-        assert self.aa_str_sorted == "".join(sorted(self.aa_str_sorted))
 
     def probability_array_of_seq(self, seq):
         """
@@ -164,20 +160,18 @@ class SHMple(BaseModel):
         weights_directory (str): directory path to trained model weights.
         """
         self.model = shmple.AttentionModel(weights_dir=weights_directory)
-        self.nt_str_sorted = "ACGT"
-        self.aa_str_sorted = "ACDEFGHIKLMNPQRSTVWY"
 
     def codon_to_aa_probabilities(self, parent_codon, mut_probs, sub_probs):
         """
-        For a specified codon and given nucleotide mutability and substitution probabilities, 
+        For a specified codon and given nucleotide mutability and substitution probabilities,
         compute the amino acid substitution probabilities.
 
-        Following terminology from Yaari et al 2013, "mutability" refers to the probability 
-        of a nucleotide mutating at a given site, while "substitution" refers to the probability 
-        of a nucleotide mutating to another nucleotide at a given site conditional on having 
+        Following terminology from Yaari et al 2013, "mutability" refers to the probability
+        of a nucleotide mutating at a given site, while "substitution" refers to the probability
+        of a nucleotide mutating to another nucleotide at a given site conditional on having
         a mutation.
 
-        We assume that the mutation and substitution probabilities already take branch length 
+        We assume that the mutation and substitution probabilities already take branch length
         into account. Here we translate those into amino acid probabilities, which are normalized.
         Probabilities to stop codons are dropped, but self probabilities are kept.
 
@@ -191,7 +185,7 @@ class SHMple(BaseModel):
 
         """
         aa_probs = {}
-        for aa in self.aa_str_sorted:
+        for aa in aa_str_sorted:
             aa_probs[aa] = 0
 
         # iterate through all possible child codons
@@ -211,7 +205,7 @@ class SHMple(BaseModel):
                 else:
                     child_prob *= mut_probs[isite]
                     child_prob *= sub_probs[isite][
-                        self.nt_str_sorted.index(child_codon[isite])
+                        nt_str_sorted.index(child_codon[isite])
                     ]
 
             aa_probs[aa] += child_prob
@@ -220,7 +214,7 @@ class SHMple(BaseModel):
         # since probabilities to STOP codon are dropped
         psum = np.sum([aa_probs[aa] for aa in aa_probs.keys()])
 
-        return [aa_probs[aa] / psum for aa in self.aa_str_sorted]
+        return [aa_probs[aa] / psum for aa in aa_str_sorted]
 
     def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
         """
