@@ -177,6 +177,10 @@ class SHMple(BaseModel):
         of a nucleotide mutating to another nucleotide at a given site conditional on having 
         a mutation.
 
+        We assume that the mutation and substitution probabilities already take branch length 
+        into account. Here we translate those into amino acid probabilities, which are normalized.
+        Probabilities to stop codons are dropped, but self probabilities are kept.
+
         Parameters:
         parent_codon (str): The specified codon.
         mut_probs (list): The mutability probabilities for each site in the codon.
