@@ -169,7 +169,13 @@ class SHMple(BaseModel):
 
     def codon_to_aa_probabilities(self, parent_codon, mut_probs, sub_probs):
         """
-        For a specified codon and given nucleotide mutability and substitution probabilities, compute the amino acid substitution probabilities
+        For a specified codon and given nucleotide mutability and substitution probabilities, 
+        compute the amino acid substitution probabilities.
+
+        Following terminology from Yaari et al 2013, "mutability" refers to the probability 
+        of a nucleotide mutating at a given site, while "substitution" refers to the probability 
+        of a nucleotide mutating to another nucleotide at a given site conditional on having 
+        a mutation.
 
         Parameters:
         parent_codon (str): The specified codon.
@@ -177,7 +183,7 @@ class SHMple(BaseModel):
         sub_probs (list): The substitution probabilities for each site in the codon.
 
         Returns:
-        list: An array of probabilities for all 20 amino acids
+        list: An array of probabilities for all 20 amino acids.
 
         """
         aa_probs = {}
@@ -220,7 +226,7 @@ class SHMple(BaseModel):
 
         Parameters:
         parent (str): The parent sequence for which we want the array of probabilities.
-        child (str): The child sequence
+        child (str): The child sequence.
 
         Returns:
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
