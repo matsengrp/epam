@@ -4,8 +4,8 @@
 from Bio import SeqIO
 from Bio.Seq import Seq
 
-global aa_str_sorted
 aa_str_sorted = "ACDEFGHIKLMNPQRSTVWY"
+nt_str_sorted = "ACGT"
 
 
 def read_fasta_sequences(file_path):

@@ -156,3 +156,4 @@ cython_debug/
 .DS_Store
 _ignore
 tests/*.hdf5
+.vscode
