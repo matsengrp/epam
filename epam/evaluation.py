@@ -25,64 +25,42 @@ def evaluate(prob_mat_path, model_performance_path):
 
     pcp_df = pd.read_csv(pcp_path, index_col=0)
 
-    pcp_df["aa_seqs"] = pcp_df.apply(
-        lambda row: translate_sequences([row["parent"], row["child"]]), axis=1
-    )
-    pcp_df["pcp_sub_status"] = pcp_df.apply(
-        lambda row: 1 if row["aa_seqs"][0] != row["aa_seqs"][1] else 0, axis=1
-    )
-    pcp_df["pcp_sub_location"] = pcp_df.apply(
-        lambda row: locate_child_substitutions(row["aa_seqs"][0], row["aa_seqs"][1]),
-        axis=1,
-    )
-    pcp_df["k_sub"] = pcp_df.apply(lambda row: row["pcp_sub_location"].size, axis=1)
+    nt_seqs = list(zip(pcp_df['parent'], pcp_df['child'])) # list of tuples
+
+    aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs] # list of tuples
+
+    parent_aa_seqs, child_aa_seqs = zip(*aa_seqs) # unzip list of tuples into two lists
 
     site_sub_probs = []
 
     with h5py.File(prob_mat_path, "r") as matfile:
         for i in range(len(pcp_df)):
-            grp = matfile["matrix" + str(i)]
+            grp = matfile["matrix" + str(i)] # assumes that the keys are named "matrix0", "matrix1", etc.
             matrix = grp["data"]
             index = grp.attrs["pcp_index"]
 
             site_sub_probs.append(
                 calculate_site_substitution_probabilities(
-                    matrix, pcp_df["aa_seqs"].iloc[index][0]
+                    matrix, parent_aa_seqs[index]
                 )
             )
 
-    pcp_df["site_sub_probs"] = site_sub_probs
+    pcp_sub_locations = [locate_child_substitutions(parent, child) for parent, child in zip(parent_aa_seqs, child_aa_seqs)]
 
-    pcp_df["model_sub_location"] = pcp_df.apply(
-        lambda row: []
-        if row["k_sub"] == 0
-        else locate_top_k_substitutions(row["site_sub_probs"], row["k_sub"]),
-        axis=1,
-    )
+    k_subs = [len(pcp_sub_location) for pcp_sub_location in pcp_sub_locations]
 
-    pcp_df["correct_site_predictions"] = pcp_df.apply(
-        lambda row: np.intersect1d(row["pcp_sub_location"], row["model_sub_location"]),
-        axis=1,
-    )
+    model_sub_locations = [locate_top_k_substitutions(site_sub_prob, k_sub) for site_sub_prob, k_sub in zip(site_sub_probs, k_subs)]
 
-    pcp_df["k_sub_correct"] = pcp_df.apply(
-        lambda row: row["correct_site_predictions"].size, axis=1
-    )
+    correct_site_predictions = [np.intersect1d(pcp_sub_location, model_sub_location) for pcp_sub_location, model_sub_location in zip(pcp_sub_locations, model_sub_locations)]
 
-    r_prec = pcp_df["k_sub_correct"].sum() / pcp_df["k_sub"].sum()
+    k_subs_correct = [len(correct_site_prediction) for correct_site_prediction in correct_site_predictions]
 
-    print("new function: ")
+    r_prec = sum(k_subs_correct) / sum(k_subs)
+
     print("r-precision: ", r_prec)
-    # print("num_sub_total: ", pcp_df["k_sub"].sum())
-    # print("num_sub_location_correct: ", pcp_df["k_sub_correct"].sum())
-
-    for i in range(3):
-        print("index: ", i)
-        print("pcp_sub_location: ", pcp_df["pcp_sub_location"].iloc[i])
-        print("model_sub_location: ", pcp_df["model_sub_location"].iloc[i])
-        print("correct predictions: ", pcp_df["correct_site_predictions"].iloc[i])
-
+    
     # r_prec = calculate_r_precision(prob_mat_path)
+    
     cross_ent = None
 
     model_performance = pd.DataFrame(
@@ -245,6 +223,9 @@ def locate_top_k_substitutions(site_sub_probs, k_sub):
     pred_sub_sites (np.array): Location of top-k predicted substitutions by model (unordered).
 
     """
+    if k_sub == 0:
+        return []
+
     pred_sub_sites = np.argpartition(site_sub_probs, -k_sub)[-k_sub:]
 
     assert (
