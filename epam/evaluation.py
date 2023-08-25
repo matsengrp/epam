@@ -31,7 +31,7 @@ def evaluate(prob_mat_path, model_performance_path):
 
     pcp_sub_locations = [locate_child_substitutions(parent, child) for parent, child in zip(parent_aa_seqs, child_aa_seqs)]
 
-    pcp_aa_sub_ids = [identify_child_substitutions(parent, child) for parent, child in zip(parent_aa_seqs, child_aa_seqs)]
+    pcp_sub_aa_ids = [identify_child_substitutions(parent, child) for parent, child in zip(parent_aa_seqs, child_aa_seqs)]
 
     k_subs = [len(pcp_sub_location) for pcp_sub_location in pcp_sub_locations]
 
@@ -64,28 +64,28 @@ def evaluate(prob_mat_path, model_performance_path):
 
     model_sub_locations = [locate_top_k_substitutions(site_sub_prob, k_sub) for site_sub_prob, k_sub in zip(site_sub_probs, k_subs)]
     
-    sub_acc = calculate_sub_accuracy(pcp_aa_sub_ids, model_pred_aa_subs, k_subs)
+    sub_acc = calculate_sub_accuracy(pcp_sub_aa_ids, model_pred_aa_subs, k_subs)
     r_prec = calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs)
 
     print("substitution accuracy: ", sub_acc)
     print("r-precision: ", r_prec)
     
-    # cross_ent = None
+    cross_ent = None
 
-    # model_performance = pd.DataFrame(
-    #     {
-    #         "data_set": [pcp_path],
-    #         "model": ["ablang"],  # Issue 8: hard coded for the moment
-    #         "sub_accuracy": [sub_acc],
-    #         "r_precision": [r_prec],
-    #         "cross_entropy": [cross_ent],
-    #     }
-    # )
+    model_performance = pd.DataFrame(
+        {
+            "data_set": [pcp_path],
+            "model": ["ablang"],  # Issue 8: hard coded for the moment
+            "sub_accuracy": [sub_acc],
+            "r_precision": [r_prec],
+            "cross_entropy": [cross_ent],
+        }
+    )
 
-    # model_performance.to_csv(model_performance_path, index=False)
+    model_performance.to_csv(model_performance_path, index=False)
 
 
-def calculate_sub_accuracy(pcp_aa_sub_ids, model_pred_aa_subs, k_subs):
+def calculate_sub_accuracy(pcp_sub_aa_ids, model_pred_aa_subs, k_subs):
     """
     Calculate substitution accuracy for all PCPs in one data set/HDF5 file.
     Returns substitution accuracy score for use in evaluate() and output files.
@@ -97,9 +97,8 @@ def calculate_sub_accuracy(pcp_aa_sub_ids, model_pred_aa_subs, k_subs):
 
     Returns:
     sub_accuracy (float): Calculated substitution accuracy for data set of PCPs.
-
     """
-    num_sub_correct = [np.sum(pcp_aa_sub_ids[i] == model_pred_aa_subs[i]) for i in range(len(model_pred_aa_subs))]
+    num_sub_correct = [np.sum(pcp_sub_aa_ids[i] == model_pred_aa_subs[i]) for i in range(len(model_pred_aa_subs))]
 
     sub_accuracy = sum(num_sub_correct) / sum(k_subs)
 
@@ -175,6 +174,7 @@ def locate_child_substitutions(parent_aa, child_aa):
     child_sub_sites = np.array(child_sub_sites)
 
     return child_sub_sites
+
 
 def identify_child_substitutions(parent_aa, child_aa):
     """
