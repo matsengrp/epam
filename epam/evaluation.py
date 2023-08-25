@@ -21,8 +21,6 @@ def evaluate(prob_mat_path, model_performance_path):
     """
     pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
 
-    sub_acc = calculate_sub_accuracy(prob_mat_path)
-
     pcp_df = pd.read_csv(pcp_path, index_col=0)
 
     nt_seqs = list(zip(pcp_df['parent'], pcp_df['child'])) # list of tuples
@@ -31,7 +29,14 @@ def evaluate(prob_mat_path, model_performance_path):
 
     parent_aa_seqs, child_aa_seqs = zip(*aa_seqs) # unzip list of tuples into two lists
 
+    pcp_sub_locations = [locate_child_substitutions(parent, child) for parent, child in zip(parent_aa_seqs, child_aa_seqs)]
+
+    pcp_aa_sub_ids = [identify_child_substitutions(parent, child) for parent, child in zip(parent_aa_seqs, child_aa_seqs)]
+
+    k_subs = [len(pcp_sub_location) for pcp_sub_location in pcp_sub_locations]
+
     site_sub_probs = []
+    model_pred_aa_subs = []
 
     with h5py.File(prob_mat_path, "r") as matfile:
         for i in range(len(pcp_df)):
@@ -44,88 +49,66 @@ def evaluate(prob_mat_path, model_performance_path):
                     matrix, parent_aa_seqs[index]
                 )
             )
+            
+            pred_aa_sub = []
 
-    pcp_sub_locations = [locate_child_substitutions(parent, child) for parent, child in zip(parent_aa_seqs, child_aa_seqs)]
-
-    k_subs = [len(pcp_sub_location) for pcp_sub_location in pcp_sub_locations]
+            for i in range(len(parent_aa_seqs[index])):
+                if parent_aa_seqs[index][i] != child_aa_seqs[index][i]:
+                    pred_aa_sub.append(
+                        highest_ranked_substitution(
+                            matrix[:, i], parent_aa_seqs[index], i
+                        )
+                    )
+                
+            model_pred_aa_subs.append(pred_aa_sub)
 
     model_sub_locations = [locate_top_k_substitutions(site_sub_prob, k_sub) for site_sub_prob, k_sub in zip(site_sub_probs, k_subs)]
+    
+    sub_acc = calculate_sub_accuracy(pcp_aa_sub_ids, model_pred_aa_subs, k_subs)
+    r_prec = calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs)
 
-    correct_site_predictions = [np.intersect1d(pcp_sub_location, model_sub_location) for pcp_sub_location, model_sub_location in zip(pcp_sub_locations, model_sub_locations)]
-
-    k_subs_correct = [len(correct_site_prediction) for correct_site_prediction in correct_site_predictions]
-
-    r_prec = sum(k_subs_correct) / sum(k_subs)
-
+    print("substitution accuracy: ", sub_acc)
     print("r-precision: ", r_prec)
     
-    # r_prec = calculate_r_precision(prob_mat_path)
-    
-    cross_ent = None
+    # cross_ent = None
 
-    model_performance = pd.DataFrame(
-        {
-            "data_set": [pcp_path],
-            "model": ["ablang"],  # Issue 8: hard coded for the moment
-            "sub_accuracy": [sub_acc],
-            "r_precision": [r_prec],
-            "cross_entropy": [cross_ent],
-        }
-    )
+    # model_performance = pd.DataFrame(
+    #     {
+    #         "data_set": [pcp_path],
+    #         "model": ["ablang"],  # Issue 8: hard coded for the moment
+    #         "sub_accuracy": [sub_acc],
+    #         "r_precision": [r_prec],
+    #         "cross_entropy": [cross_ent],
+    #     }
+    # )
 
-    model_performance.to_csv(model_performance_path, index=False)
+    # model_performance.to_csv(model_performance_path, index=False)
 
 
-def calculate_sub_accuracy(prob_mat_path):
+def calculate_sub_accuracy(pcp_aa_sub_ids, model_pred_aa_subs, k_subs):
     """
     Calculate substitution accuracy for all PCPs in one data set/HDF5 file.
     Returns substitution accuracy score for use in evaluate() and output files.
 
     Parameters:
-    prob_mat_path (str): Path to probability matrices for parent-child pairs.
+    pcp_aa_sub_ids (list): Amino acid substitutions in parent-child pairs.
+    model_pred_aa_subs (list): Predicted amino acid substitutions by model (unordered for each PCP).
+    k_subs (list): Number of substitutions observed in each PCP.
 
     Returns:
     sub_accuracy (float): Calculated substitution accuracy for data set of PCPs.
 
     """
-    with h5py.File(prob_mat_path, "r") as matfile:
-        pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
-        pcp_df = pd.read_csv(pcp_path, index_col=0)
+    num_sub_correct = [np.sum(pcp_aa_sub_ids[i] == model_pred_aa_subs[i]) for i in range(len(model_pred_aa_subs))]
 
-        num_sub_total = 0
-        num_sub_correct = 0
+    sub_accuracy = sum(num_sub_correct) / sum(k_subs)
 
-        for matname in matfile.keys():
-            grp = matfile[matname]
-            matrix = grp["data"]
-            index = grp.attrs["pcp_index"]
-
-            parent_nt, child_nt = pcp_df.loc[index, ["parent", "child"]]
-            [parent_aa, child_aa] = translate_sequences([parent_nt, child_nt])
-
-            assert len(parent_aa) == len(
-                child_aa
-            ), "The parent and child amino acid sequences are not the same length."
-
-            for i in range(len(parent_aa)):
-                if parent_aa[i] != child_aa[i]:
-                    num_sub_total += 1
-
-                    pred_aa_sub = highest_ranked_substitution(
-                        matrix[:, i], parent_aa, i
-                    )
-
-                    if pred_aa_sub == child_aa[i]:
-                        num_sub_correct += 1
-
-        sub_accuracy = num_sub_correct / num_sub_total
-
-        return sub_accuracy
+    return sub_accuracy
 
 
 def highest_ranked_substitution(matrix_i, parent_aa, i):
     """
-    Return the highest ranked substitution for a given parent-child pair.
+    Return the highest ranked substitution for site i in a given parent-child pair.
 
     Parameters:
     matrix_i (np.array): Probability matrix for parent-child pair at aa site i.
@@ -148,18 +131,27 @@ def highest_ranked_substitution(matrix_i, parent_aa, i):
     return pred_aa_sub
 
 
-def calculate_r_precision(prob_mat_path):
+def calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs):
     """
     Calculate r-precision for all PCPs in one data set/HDF5 file.
     Returns r-precision score for use in evaluate() and output files.
 
     Parameters:
-    prob_mat_path (str): Path to probability matrices for parent-child pairs.
+    pcp_sub_locations (list): Location of substitutions in parent-child pairs.
+    model_sub_locations (list): Location of top-k predicted substitutions by model (unordered for each PCP).
+    k_subs (list): Number of substitutions observed in each PCP.
 
     Returns:
     r_precision (float): Calculated r-precision for data set of PCPs.
 
     """
+    correct_site_predictions = [np.intersect1d(pcp_sub_location, model_sub_location) for pcp_sub_location, model_sub_location in zip(pcp_sub_locations, model_sub_locations)]
+
+    k_subs_correct = [len(correct_site_prediction) for correct_site_prediction in correct_site_predictions]
+
+    r_precision = sum(k_subs_correct) / sum(k_subs)
+
+    return r_precision
 
 
 def locate_child_substitutions(parent_aa, child_aa):
@@ -183,6 +175,28 @@ def locate_child_substitutions(parent_aa, child_aa):
     child_sub_sites = np.array(child_sub_sites)
 
     return child_sub_sites
+
+def identify_child_substitutions(parent_aa, child_aa):
+    """
+    Return the identity of the amino acid substitutions for a given parent-child pair.
+
+    Parameters:
+    parent_aa (str): Amino acid sequence of parent.
+    child_aa (str): Amino acid sequence of child.
+
+    Returns:
+    child_aa_subs (np.array): Amino acid substitutions in parent-child pair.
+
+    """
+    child_aa_subs = []
+
+    for i in range(len(parent_aa)):
+        if parent_aa[i] != child_aa[i]:
+            child_aa_subs.append(child_aa[i])
+
+    child_aa_subs = np.array(child_aa_subs)
+
+    return child_aa_subs
 
 
 def calculate_site_substitution_probabilities(prob_matrix, parent_aa):
@@ -216,7 +230,7 @@ def locate_top_k_substitutions(site_sub_probs, k_sub):
     Return the top k substitutions predicted for a parent-child pair given precalculated site substitution probabilities.
 
     Parameters:
-    site_sub_probs (str?): Probability of substition at each site for a parent sequence.
+    site_sub_probs (np.array): Probability of substition at each site for a parent sequence.
     k_sub (int): Number of substitutions observed in PCP.
 
     Returns:
