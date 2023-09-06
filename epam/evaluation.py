@@ -83,17 +83,17 @@ def evaluate(prob_mat_path, model_performance_path):
     print("r-precision: ", r_prec)
     print("cross loss entropy: ", cross_ent)
 
-    # model_performance = pd.DataFrame(
-    #     {
-    #         "data_set": [pcp_path],
-    #         "model": ["ablang"],  # Issue 8: hard coded for the moment
-    #         "sub_accuracy": [sub_acc],
-    #         "r_precision": [r_prec],
-    #         "cross_entropy": [cross_ent],
-    #     }
-    # )
+    model_performance = pd.DataFrame(
+        {
+            "data_set": [pcp_path],
+            "model": ["ablang"],  # Issue 8: hard coded for the moment
+            "sub_accuracy": [sub_acc],
+            "r_precision": [r_prec],
+            "cross_entropy": [cross_ent],
+        }
+    )
 
-    # model_performance.to_csv(model_performance_path, index=False)
+    model_performance.to_csv(model_performance_path, index=False)
 
 
 def locate_child_substitutions(parent_aa, child_aa):
@@ -284,39 +284,14 @@ def calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs):
     cross_entropy_loss (float): Calculated cross entropy loss for data set of PCPs.
 
     """
-    probs_substituted_sites = [
-        site_sub_probs[i][pcp_sub_locations[i]]
-        for i in range(len(pcp_sub_locations))
-        if pcp_sub_locations[i].size != 0
-    ]
+    log_probs_substitution = [] 
+    for i in range(len(site_sub_probs)):
+        for idx, p_i in np.ndenumerate(site_sub_probs[i]):
+            if idx in pcp_sub_locations[i]:
+                log_probs_substitution.append(np.log(p_i))
+            else:
+                log_probs_substitution.append(np.log(1 - p_i))
 
-    pcp_site_sub_status = [
-        np.ones(site_sub_probs[i].size, dtype=bool) for i in range(len(site_sub_probs))
-    ]
-
-    for i in range(len(pcp_sub_locations)):
-        if pcp_sub_locations[i].size != 0:
-            pcp_site_sub_status[i][pcp_sub_locations[i]] = False
-
-    probs_unsubstituted_sites = [
-        site_sub_probs[i][pcp_site_sub_status[i]] for i in range(len(pcp_sub_locations))
-    ]
-
-    # probs_unsubstituted_sites = site_sub_probs.copy()
-
-    # for i in range(len(pcp_sub_locations)):
-    #     if pcp_sub_locations[i].size != 0:
-    #         probs_unsubstituted_sites[i][pcp_sub_locations[i]]=0
-
-    probs_substituted_sites = np.concatenate(probs_substituted_sites)
-    probs_unsubstituted_sites = np.concatenate(probs_unsubstituted_sites)
-
-    first_term = np.sum(np.log(probs_substituted_sites))
-
-    second_term = np.sum(np.log(1 - probs_unsubstituted_sites))
-
-    n_term = len(probs_substituted_sites) + len(probs_unsubstituted_sites)
-
-    cross_entropy_loss = -1 / n_term * (first_term + second_term)
+    cross_entropy_loss = -1 / len(log_probs_substitution) * np.sum(log_probs_substitution)
 
     return cross_entropy_loss

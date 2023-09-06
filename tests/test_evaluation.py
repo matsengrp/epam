@@ -4,8 +4,8 @@ from epam.utils import generate_file_checksum
 from epam.models import AbLang
 from epam.evaluation import *
 
-example_pcp_path = "data/eval-parent-child-example.csv"
-example_prob_mat_path = "tests/eval-matrices.hdf5"
+example_pcp_path = "data/parent-child-example.csv" # "data/eval-parent-child-example.csv"
+example_prob_mat_path = "tests/matrices.hdf5" # "tests/eval-matrices.hdf5"
 example_model_eval_path = "tests/model-performance.csv"
 correct_model_eval_path = "tests/eval-model-performance.csv"
 
