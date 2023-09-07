@@ -44,7 +44,7 @@ def evaluate(prob_mat_path, model_performance_path):
     k_subs = [len(pcp_sub_location) for pcp_sub_location in pcp_sub_locations]
 
     site_sub_probs = []
-    model_pred_aa_subs = []
+    model_sub_aa_ids = []
 
     with h5py.File(prob_mat_path, "r") as matfile:
         for i in range(len(pcp_df)):
@@ -68,20 +68,16 @@ def evaluate(prob_mat_path, model_performance_path):
                         )
                     )
 
-            model_pred_aa_subs.append(pred_aa_sub)
+            model_sub_aa_ids.append(pred_aa_sub)
 
     model_sub_locations = [
         locate_top_k_substitutions(site_sub_prob, k_sub)
         for site_sub_prob, k_sub in zip(site_sub_probs, k_subs)
     ]
 
-    sub_acc = calculate_sub_accuracy(pcp_sub_aa_ids, model_pred_aa_subs, k_subs)
+    sub_acc = calculate_sub_accuracy(pcp_sub_aa_ids, model_sub_aa_ids, k_subs)
     r_prec = calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs)
     cross_ent = calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs)
-
-    print("substitution accuracy: ", sub_acc)
-    print("r-precision: ", r_prec)
-    print("cross loss entropy: ", cross_ent)
 
     model_performance = pd.DataFrame(
         {
@@ -217,14 +213,14 @@ def locate_top_k_substitutions(site_sub_probs, k_sub):
     return pred_sub_sites
 
 
-def calculate_sub_accuracy(pcp_sub_aa_ids, model_pred_aa_subs, k_subs):
+def calculate_sub_accuracy(pcp_sub_aa_ids, model_sub_aa_ids, k_subs):
     """
     Calculate substitution accuracy for all PCPs in one data set/HDF5 file.
     Returns substitution accuracy score for use in evaluate() and output files.
 
     Parameters:
-    pcp_aa_sub_ids (list): Amino acid substitutions in parent-child pairs.
-    model_pred_aa_subs (list): Predicted amino acid substitutions by model (unordered for each PCP).
+    pcp_aa_sub_ids (list): Amino acid substitutions in each PCP.
+    model_sub_aa_ids (list): Amino acid substitutions predicted by model at substituted sites in each PCP.
     k_subs (list): Number of substitutions observed in each PCP.
 
     Returns:
@@ -232,8 +228,8 @@ def calculate_sub_accuracy(pcp_sub_aa_ids, model_pred_aa_subs, k_subs):
 
     """
     num_sub_correct = [
-        np.sum(pcp_sub_aa_ids[i] == model_pred_aa_subs[i])
-        for i in range(len(model_pred_aa_subs))
+        np.sum(pcp_sub_aa_ids[i] == model_sub_aa_ids[i])
+        for i in range(len(model_sub_aa_ids))
     ]
 
     sub_accuracy = sum(num_sub_correct) / sum(k_subs)
@@ -284,14 +280,21 @@ def calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs):
     cross_entropy_loss (float): Calculated cross entropy loss for data set of PCPs.
 
     """
-    log_probs_substitution = [] 
+    log_probs_substitution = []
     for i in range(len(site_sub_probs)):
+        if pcp_sub_locations[i].size > 0:
+            assert any(
+                pcp_sub_locations[i][j] < len(site_sub_probs[i])
+                for j in range(len(pcp_sub_locations[i]))
+            ), "The location of a substitution is greater than the number of sites in the parent sequence."
         for idx, p_i in np.ndenumerate(site_sub_probs[i]):
             if idx in pcp_sub_locations[i]:
                 log_probs_substitution.append(np.log(p_i))
             else:
                 log_probs_substitution.append(np.log(1 - p_i))
 
-    cross_entropy_loss = -1 / len(log_probs_substitution) * np.sum(log_probs_substitution)
+    cross_entropy_loss = (
+        -1 / len(log_probs_substitution) * np.sum(log_probs_substitution)
+    )
 
     return cross_entropy_loss
