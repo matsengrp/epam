@@ -2,6 +2,7 @@
 
 import h5py
 import pandas as pd
+import numpy as np
 from epam.sequences import aa_str_sorted
 from epam.utils import pcp_path_of_prob_mat_path
 from epam.models import *
