@@ -5,7 +5,8 @@ import pandas as pd
 import numpy as np
 from epam.sequences import aa_str_sorted
 from epam.utils import pcp_path_of_prob_mat_path
-from epam.models import *
+
+# from epam.models import *
 from epam.sequences import translate_sequences
 
 
@@ -24,13 +25,11 @@ def evaluate(prob_mat_path, model_performance_path):
 
     pcp_df = pd.read_csv(pcp_path, index_col=0)
 
-    nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))  # list of tuples
+    nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
 
-    aa_seqs = [
-        tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs
-    ]  # list of tuples
+    aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
 
-    parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)  # unzip list of tuples into two lists
+    parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
 
     pcp_sub_locations = [
         locate_child_substitutions(parent, child)
@@ -48,6 +47,7 @@ def evaluate(prob_mat_path, model_performance_path):
     model_sub_aa_ids = []
 
     with h5py.File(prob_mat_path, "r") as matfile:
+        model_name = matfile.attrs["model_name"]
         for i in range(len(pcp_df)):
             grp = matfile[
                 "matrix" + str(i)
@@ -83,7 +83,7 @@ def evaluate(prob_mat_path, model_performance_path):
     model_performance = pd.DataFrame(
         {
             "data_set": [pcp_path],
-            "model": ["ablang"],  # Issue 8: hard coded for the moment
+            "model": [model_name],
             "sub_accuracy": [sub_acc],
             "r_precision": [r_prec],
             "cross_entropy": [cross_ent],
