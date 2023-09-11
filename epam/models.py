@@ -12,6 +12,11 @@ import epam.utils as utils
 
 
 class BaseModel(ABC):
+    @property
+    @abstractmethod
+    def model_name(self):
+        pass
+
     @abstractmethod
     def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
         pass
@@ -50,19 +55,17 @@ class BaseModel(ABC):
         """
         checksum = utils.generate_file_checksum(pcp_path)
         pcp_df = pd.read_csv(pcp_path, index_col=0)
-        model_name = self.modelname
 
         with h5py.File(output_path, "w") as outfile:
             # attributes related to PCP data file
             outfile.attrs["checksum"] = checksum
             outfile.attrs["pcp_filename"] = pcp_path
-            outfile.attrs["model_name"] = model_name
+            outfile.attrs["model_name"] = self.modelname
 
             for i, row in pcp_df.iterrows():
                 parent = row["parent"]
                 child = row["child"]
-                [parent_aa, child_aa] = translate_sequences([parent, child])
-                matrix = self.prob_matrix_of_parent_child_pair(parent_aa, child_aa)
+                matrix = self.prob_matrix_of_parent_child_pair(parent, child)
 
                 # create a group for each matrix
                 grp = outfile.create_group(f"matrix{i}")
@@ -113,6 +116,10 @@ class AbLang(BaseModel):
             np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
 
+    @property
+    def model_name(self):
+        return self.modelname
+
     def probability_array_of_seq(self, seq):
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
@@ -151,7 +158,8 @@ class AbLang(BaseModel):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        return self.probability_array_of_seq(parent)
+        parent_aa = translate_sequences([parent])[0]
+        return self.probability_array_of_seq(parent_aa)
 
 
 class SHMple(BaseModel):
@@ -164,6 +172,10 @@ class SHMple(BaseModel):
         """
         self.model = shmple.AttentionModel(weights_dir=weights_directory)
         self.modelname = modelname
+    
+    @property
+    def model_name(self):
+        return self.modelname
 
     def codon_to_aa_probabilities(self, parent_codon, mut_probs, sub_probs):
         """
