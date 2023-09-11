@@ -172,7 +172,7 @@ class SHMple(BaseModel):
         """
         self.model = shmple.AttentionModel(weights_dir=weights_directory)
         self.modelname = modelname
-    
+
     @property
     def model_name(self):
         return self.modelname

@@ -5,20 +5,39 @@ import pandas as pd
 import numpy as np
 from epam.sequences import aa_str_sorted
 from epam.utils import pcp_path_of_prob_mat_path
-
-# from epam.models import *
 from epam.sequences import translate_sequences
 
 
-def evaluate(prob_mat_path, model_performance_path):
+def evaluate(prob_mat_paths, model_performance_path):
     """
-    Evaluate model predictions against reality in parent-child pairs (PCPs).
-    Function is model-agnositic and currently calculates substitution accuracy, r-precision, and cross loss entropy.
-    Output to CSV with columns for the different metrics and a row per data set.
+    Wrapper function for evaluate_dataset() that takes in a list of probability matrices and outputs a CSV of model performance metrics.
+    Outputs to CSV file with columns for the different metrics and a row per model/data set combo.
+
+    Parameters:
+    prob_mat_paths (list): List of paths to evaluate. Each probability matrix corresponds to predictions for one model on a given data set.
+    model_performance_path (str): Path to output for model performance metrics.
+
+    """
+    model_performances = [
+        evaluate_dataset(prob_mat_path) for prob_mat_path in prob_mat_paths
+    ]
+
+    all_model_performances = pd.DataFrame(model_performances)
+
+    all_model_performances.to_csv(model_performance_path, index=False)
+
+
+def evaluate_dataset(prob_mat_path):
+    """
+    Evaluate model predictions against reality for a set of parent-child pairs (PCPs).
+    Function is model-agnositic and currently calculates substitution accuracy, r-precision, and cross entropy loss.
+    Returns evaluation metrics for a single probability matrix (generated from one model on one data set).
 
     Parameters:
     prob_mat_path (str): Path to probability matrix for parent-child pairs.
-    model_performance_path (str): Path to output for model performance metrics.
+
+    Returns:
+    model_performance (dict): Dictionary of model performance metrics for a single probability matrix.
 
     """
     pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
@@ -59,15 +78,11 @@ def evaluate(prob_mat_path, model_performance_path):
                 calculate_site_substitution_probabilities(matrix, parent_aa_seqs[index])
             )
 
-            pred_aa_sub = []
-
-            for i in range(len(parent_aa_seqs[index])):
-                if parent_aa_seqs[index][i] != child_aa_seqs[index][i]:
-                    pred_aa_sub.append(
-                        highest_ranked_substitution(
-                            matrix[:, i], parent_aa_seqs[index], i
-                        )
-                    )
+            pred_aa_sub = [
+                highest_ranked_substitution(matrix[:, j], parent_aa_seqs[index], j)
+                for j in range(len(parent_aa_seqs[index]))
+                if parent_aa_seqs[index][j] != child_aa_seqs[index][j]
+            ]
 
             model_sub_aa_ids.append(pred_aa_sub)
 
@@ -80,17 +95,15 @@ def evaluate(prob_mat_path, model_performance_path):
     r_prec = calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs)
     cross_ent = calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs)
 
-    model_performance = pd.DataFrame(
-        {
-            "data_set": [pcp_path],
-            "model": [model_name],
-            "sub_accuracy": [sub_acc],
-            "r_precision": [r_prec],
-            "cross_entropy": [cross_ent],
-        }
-    )
+    model_performance = {
+        "data_set": pcp_path,  # [pcp_path],
+        "model": model_name,  # [model_name],
+        "sub_accuracy": sub_acc,  # [sub_acc],
+        "r_precision": r_prec,  # [r_prec],
+        "cross_entropy": cross_ent,  # [cross_ent]
+    }
 
-    model_performance.to_csv(model_performance_path, index=False)
+    return model_performance
 
 
 def locate_child_substitutions(parent_aa, child_aa):
@@ -105,11 +118,7 @@ def locate_child_substitutions(parent_aa, child_aa):
     child_sub_sites (np.array): Location of substitutions in parent-child pair.
 
     """
-    child_sub_sites = []
-
-    for i in range(len(parent_aa)):
-        if parent_aa[i] != child_aa[i]:
-            child_sub_sites.append(i)
+    child_sub_sites = [i for i in range(len(parent_aa)) if parent_aa[i] != child_aa[i]]
 
     child_sub_sites = np.array(child_sub_sites)
 
@@ -128,11 +137,9 @@ def identify_child_substitutions(parent_aa, child_aa):
     child_aa_subs (np.array): Amino acid substitutions in parent-child pair.
 
     """
-    child_aa_subs = []
-
-    for i in range(len(parent_aa)):
-        if parent_aa[i] != child_aa[i]:
-            child_aa_subs.append(child_aa[i])
+    child_aa_subs = [
+        child_aa[i] for i in range(len(parent_aa)) if parent_aa[i] != child_aa[i]
+    ]
 
     child_aa_subs = np.array(child_aa_subs)
 
@@ -151,10 +158,10 @@ def calculate_site_substitution_probabilities(prob_matrix, parent_aa):
     site_sub_probs (np.array): 1D array containing probability of substitution at each site for a parent sequence.
 
     """
-    site_sub_probs = []
-
-    for i in range(len(parent_aa)):
-        site_sub_probs.append(1 - prob_matrix[:, i][aa_str_sorted.index(parent_aa[i])])
+    site_sub_probs = [
+        1 - prob_matrix[:, i][aa_str_sorted.index(parent_aa[i])]
+        for i in range(len(parent_aa))
+    ]
 
     site_sub_probs = np.array(site_sub_probs)
 
@@ -182,6 +189,7 @@ def highest_ranked_substitution(matrix_i, parent_aa, i):
 
     pred_aa_ranked = "".join((np.array(list(aa_str_sorted))[prob_sorted_aa_indices]))
 
+    # skip most likely aa if it is the parent aa (enforce substitution)
     if pred_aa_ranked[0] == parent_aa[i]:
         pred_aa_sub = pred_aa_ranked[1]
     elif pred_aa_ranked[0] != parent_aa[i]:
@@ -220,8 +228,8 @@ def calculate_sub_accuracy(pcp_sub_aa_ids, model_sub_aa_ids, k_subs):
     Returns substitution accuracy score for use in evaluate() and output files.
 
     Parameters:
-    pcp_aa_sub_ids (list): Amino acid substitutions in each PCP.
-    model_sub_aa_ids (list): Amino acid substitutions predicted by model at substituted sites in each PCP.
+    pcp_aa_sub_ids (list of np.array): Amino acid substitutions in each PCP.
+    model_sub_aa_ids (list of np.array): Amino acid substitutions predicted by model at substituted sites in each PCP.
     k_subs (list): Number of substitutions observed in each PCP.
 
     Returns:
@@ -244,8 +252,8 @@ def calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs):
     Returns r-precision score for use in evaluate() and output files.
 
     Parameters:
-    pcp_sub_locations (list): Location of substitutions in parent-child pairs.
-    model_sub_locations (list): Location of top-k predicted substitutions by model (unordered for each PCP).
+    pcp_sub_locations (list of np.array): Location of substitutions in parent-child pairs.
+    model_sub_locations (list of np.array): Location of top-k predicted substitutions by model (unordered for each PCP).
     k_subs (list): Number of substitutions observed in each PCP.
 
     Returns:
@@ -274,8 +282,8 @@ def calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs):
     Calculate cross entropy loss for all PCPs in one data set/HDF5 file.
 
     Parameters:
-    pcp_sub_locations (list): Location of substitutions in parent-child pairs.
-    site_sub_probs (list): Probability of substition at each site for parent sequences.
+    pcp_sub_locations (list of np.array): Location of substitutions in parent-child pairs.
+    site_sub_probs (list of np.array): Probability of substition at each site for parent sequences.
 
     Returns:
     cross_entropy_loss (float): Calculated cross entropy loss for data set of PCPs.

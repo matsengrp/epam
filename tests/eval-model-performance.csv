@@ -1,2 +1,0 @@
-data_set,model,sub_accuracy,r_precision,cross_entropy
-data/parent-child-example.csv,AbLang_heavy,0.41414141414141414,0.08080808080808081,0.47207725469001083

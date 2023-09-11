@@ -1,26 +1,35 @@
 import pandas as pd
-import os
 import numpy as np
 from epam.utils import generate_file_checksum
-from epam.models import AbLang
+from epam.models import AbLang, SHMple
 from epam.evaluation import *
 
 example_pcp_path = "data/parent-child-example.csv"
-example_prob_mat_path = "tests/matrices_ablang.hdf5"
+example_prob_mat_path_ab = "tests/matrices_ablang.hdf5"
+example_prob_mat_path_shm = "tests/matrices_shmple.hdf5"
 example_model_eval_path = "tests/model-performance.csv"
-correct_model_eval_path = "tests/eval-model-performance.csv"
 
 
 def test_evaluate():
     ablang_heavy = AbLang(chain="heavy")
-    ablang_heavy.write_probability_matrices(example_pcp_path, example_prob_mat_path)
+    ablang_heavy.write_probability_matrices(example_pcp_path, example_prob_mat_path_ab)
 
-    evaluate(example_prob_mat_path, example_model_eval_path)
-    assert os.path.exists(example_model_eval_path) == True
-
-    assert generate_file_checksum(example_model_eval_path) == generate_file_checksum(
-        correct_model_eval_path
+    shmple = SHMple(
+        weights_directory="data/shmple_weights/my_shmoof", modelname="my_shmoof"
     )
+    shmple.write_probability_matrices(example_pcp_path, example_prob_mat_path_shm)
+
+    # check model name
+    assert ablang_heavy.modelname == "AbLang_heavy"
+    assert shmple.modelname == "my_shmoof"
+
+    test_sets = [example_prob_mat_path_ab, example_prob_mat_path_shm]
+    evaluate(test_sets, example_model_eval_path)
+
+    # check that evalution output exists and contains the correct number of lines
+    with open(example_model_eval_path, "r") as f:
+        lines = f.readlines()
+        assert len(lines) == len(test_sets) + 1
 
 
 def test_locate_child_substitutions():
