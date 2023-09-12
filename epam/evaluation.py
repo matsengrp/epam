@@ -60,6 +60,7 @@ def evaluate_dataset(prob_mat_path):
         for parent, child in zip(parent_aa_seqs, child_aa_seqs)
     ]
 
+    # k represents the number of substitutions observed in each PCP, top k substitutions will be evaluated for r-precision
     k_subs = [len(pcp_sub_location) for pcp_sub_location in pcp_sub_locations]
 
     site_sub_probs = []
@@ -86,21 +87,21 @@ def evaluate_dataset(prob_mat_path):
 
             model_sub_aa_ids.append(pred_aa_sub)
 
-    model_sub_locations = [
+    top_k_sub_locations = [
         locate_top_k_substitutions(site_sub_prob, k_sub)
         for site_sub_prob, k_sub in zip(site_sub_probs, k_subs)
     ]
 
     sub_acc = calculate_sub_accuracy(pcp_sub_aa_ids, model_sub_aa_ids, k_subs)
-    r_prec = calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs)
+    r_prec = calculate_r_precision(pcp_sub_locations, top_k_sub_locations, k_subs)
     cross_ent = calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs)
 
     model_performance = {
-        "data_set": pcp_path,  # [pcp_path],
-        "model": model_name,  # [model_name],
-        "sub_accuracy": sub_acc,  # [sub_acc],
-        "r_precision": r_prec,  # [r_prec],
-        "cross_entropy": cross_ent,  # [cross_ent]
+        "data_set": pcp_path,
+        "model": model_name,
+        "sub_accuracy": sub_acc,
+        "r_precision": r_prec,
+        "cross_entropy": cross_ent,
     }
 
     return model_performance
@@ -246,14 +247,14 @@ def calculate_sub_accuracy(pcp_sub_aa_ids, model_sub_aa_ids, k_subs):
     return sub_accuracy
 
 
-def calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs):
+def calculate_r_precision(pcp_sub_locations, top_k_sub_locations, k_subs):
     """
     Calculate r-precision for all PCPs in one data set/HDF5 file.
     Returns r-precision score for use in evaluate() and output files.
 
     Parameters:
     pcp_sub_locations (list of np.array): Location of substitutions in parent-child pairs.
-    model_sub_locations (list of np.array): Location of top-k predicted substitutions by model (unordered for each PCP).
+    top_k_sub_locations (list of np.array): Location of top-k predicted substitutions by model (unordered for each PCP).
     k_subs (list): Number of substitutions observed in each PCP.
 
     Returns:
@@ -261,9 +262,9 @@ def calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs):
 
     """
     correct_site_predictions = [
-        np.intersect1d(pcp_sub_location, model_sub_location)
-        for pcp_sub_location, model_sub_location in zip(
-            pcp_sub_locations, model_sub_locations
+        np.intersect1d(pcp_sub_location, top_k_sub_location)
+        for pcp_sub_location, top_k_sub_location in zip(
+            pcp_sub_locations, top_k_sub_locations
         )
     ]
 
@@ -272,7 +273,13 @@ def calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs):
         for correct_site_prediction in correct_site_predictions
     ]
 
-    r_precision = sum(k_subs_correct) / sum(k_subs)
+    pcp_r_precision = [
+        k_correct / k_total
+        for k_correct, k_total in zip(k_subs_correct, k_subs)
+        if k_total > 0
+    ]
+
+    r_precision = sum(pcp_r_precision) / len(pcp_r_precision)
 
     return r_precision
 

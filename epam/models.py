@@ -13,9 +13,8 @@ import epam.utils as utils
 
 class BaseModel(ABC):
     @property
-    @abstractmethod
     def model_name(self):
-        pass
+        return self.modelname
 
     @abstractmethod
     def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
@@ -116,10 +115,6 @@ class AbLang(BaseModel):
             np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
 
-    @property
-    def model_name(self):
-        return self.modelname
-
     def probability_array_of_seq(self, seq):
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
@@ -172,10 +167,6 @@ class SHMple(BaseModel):
         """
         self.model = shmple.AttentionModel(weights_dir=weights_directory)
         self.modelname = modelname
-
-    @property
-    def model_name(self):
-        return self.modelname
 
     def codon_to_aa_probabilities(self, parent_codon, mut_probs, sub_probs):
         """

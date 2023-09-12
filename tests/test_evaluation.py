@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from epam.utils import generate_file_checksum
+import pytest
 from epam.models import AbLang, SHMple
 from epam.evaluation import *
 
@@ -183,9 +183,9 @@ def test_calculate_r_precision():
 
     k_subs = [len(pcp_sub_loc) for pcp_sub_loc in pcp_sub_locations]
 
-    assert (
-        calculate_r_precision(pcp_sub_locations, model_sub_locations, k_subs) == 2 / 6
-    )
+    assert calculate_r_precision(
+        pcp_sub_locations, model_sub_locations, k_subs
+    ) == pytest.approx((5 / 6) / 3)
 
 
 def test_calculate_cross_entropy_loss():
