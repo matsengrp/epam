@@ -12,6 +12,10 @@ import epam.utils as utils
 
 
 class BaseModel(ABC):
+    @property
+    def model_name(self):
+        return self.modelname
+
     @abstractmethod
     def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
         pass
@@ -55,12 +59,12 @@ class BaseModel(ABC):
             # attributes related to PCP data file
             outfile.attrs["checksum"] = checksum
             outfile.attrs["pcp_filename"] = pcp_path
+            outfile.attrs["model_name"] = self.modelname
 
             for i, row in pcp_df.iterrows():
                 parent = row["parent"]
                 child = row["child"]
-                [parent_aa, child_aa] = translate_sequences([parent, child])
-                matrix = self.prob_matrix_of_parent_child_pair(parent_aa, child_aa)
+                matrix = self.prob_matrix_of_parent_child_pair(parent, child)
 
                 # create a group for each matrix
                 grp = outfile.create_group(f"matrix{i}")
@@ -94,7 +98,7 @@ class BaseModel(ABC):
 
 
 class AbLang(BaseModel):
-    def __init__(self, chain="heavy"):
+    def __init__(self, chain="heavy", modelname="AbLang_heavy"):
         """
         Initialize AbLang model with specified chain and create amino acid string.
 
@@ -103,6 +107,7 @@ class AbLang(BaseModel):
         """
         self.model = ablang.pretrained(chain)
         self.model.freeze()
+        self.modelname = modelname
         vocab_dict = self.model.tokenizer.vocab_to_aa
         self.aa_str = "".join([vocab_dict[i + 1] for i in range(20)])
         self.aa_str_sorted_indices = np.argsort(list(self.aa_str))
@@ -148,11 +153,12 @@ class AbLang(BaseModel):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        return self.probability_array_of_seq(parent)
+        parent_aa = translate_sequences([parent])[0]
+        return self.probability_array_of_seq(parent_aa)
 
 
 class SHMple(BaseModel):
-    def __init__(self, weights_directory):
+    def __init__(self, weights_directory, modelname="SHMple"):
         """
         Initialize a SHMple model with specified directory to trained model weights.
 
@@ -160,6 +166,7 @@ class SHMple(BaseModel):
         weights_directory (str): directory path to trained model weights.
         """
         self.model = shmple.AttentionModel(weights_dir=weights_directory)
+        self.modelname = modelname
 
     def codon_to_aa_probabilities(self, parent_codon, mut_probs, sub_probs):
         """
