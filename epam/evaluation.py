@@ -3,7 +3,7 @@
 import h5py
 import pandas as pd
 import numpy as np
-from epam.sequences import aa_str_sorted
+from epam.sequences import AA_STR_SORTED
 from epam.utils import pcp_path_of_prob_mat_path
 from epam.sequences import translate_sequences
 
@@ -160,7 +160,7 @@ def calculate_site_substitution_probabilities(prob_matrix, parent_aa):
 
     """
     site_sub_probs = [
-        1 - prob_matrix[:, i][aa_str_sorted.index(parent_aa[i])]
+        1. - prob_matrix[:, i][AA_STR_SORTED.index(parent_aa[i])]
         for i in range(len(parent_aa))
     ]
 
@@ -188,7 +188,7 @@ def highest_ranked_substitution(matrix_i, parent_aa, i):
     """
     prob_sorted_aa_indices = matrix_i.argsort()[::-1]
 
-    pred_aa_ranked = "".join((np.array(list(aa_str_sorted))[prob_sorted_aa_indices]))
+    pred_aa_ranked = "".join((np.array(list(AA_STR_SORTED))[prob_sorted_aa_indices]))
 
     # skip most likely aa if it is the parent aa (enforce substitution)
     if pred_aa_ranked[0] == parent_aa[i]:

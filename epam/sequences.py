@@ -1,11 +1,16 @@
 """Code for handling sequences and sequence files."""
 
+import itertools
 
 from Bio import SeqIO
 from Bio.Seq import Seq
 
-aa_str_sorted = "ACDEFGHIKLMNPQRSTVWY"
-nt_str_sorted = "ACGT"
+AA_STR_SORTED = "ACDEFGHIKLMNPQRSTVWY"
+NT_STR_SORTED = "ACGT"
+CODONS = [
+    "".join(codon_list)
+    for codon_list in itertools.product(["A", "C", "G", "T"], repeat=3)
+]
 
 
 def read_fasta_sequences(file_path):
