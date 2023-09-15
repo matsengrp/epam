@@ -6,8 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy.special import softmax
 import matplotlib.pyplot as plt
-import itertools
-from epam.sequences import translate_sequences, nt_str_sorted, aa_str_sorted
+from epam.sequences import translate_sequences, NT_STR_SORTED, AA_STR_SORTED, CODONS
 import epam.utils as utils
 
 
@@ -37,7 +36,7 @@ class BaseModel(ABC):
         ), "The child sequence length does not match the probability array length."
 
         return np.array(
-            [prob_arr[aa_str_sorted.index(aa), i] for i, aa in enumerate(child_seq)]
+            [prob_arr[AA_STR_SORTED.index(aa), i] for i, aa in enumerate(child_seq)]
         )
 
     def write_probability_matrices(self, pcp_path, output_path):
@@ -111,7 +110,7 @@ class AbLang(BaseModel):
         vocab_dict = self.model.tokenizer.vocab_to_aa
         self.aa_str = "".join([vocab_dict[i + 1] for i in range(20)])
         self.aa_str_sorted_indices = np.argsort(list(self.aa_str))
-        assert aa_str_sorted == "".join(
+        assert AA_STR_SORTED == "".join(
             np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
 
@@ -192,12 +191,11 @@ class SHMple(BaseModel):
 
         """
         aa_probs = {}
-        for aa in aa_str_sorted:
+        for aa in AA_STR_SORTED:
             aa_probs[aa] = 0
 
         # iterate through all possible child codons
-        for codon_list in itertools.product(["A", "C", "G", "T"], repeat=3):
-            child_codon = "".join(codon_list)
+        for child_codon in CODONS:
 
             try:
                 aa = translate_sequences([child_codon])[0]
@@ -205,14 +203,14 @@ class SHMple(BaseModel):
                 continue
 
             # iterate through codon sites and compute total probability of potential child codon
-            child_prob = 1
+            child_prob = 1.
             for isite in range(3):
                 if parent_codon[isite] == child_codon[isite]:
-                    child_prob *= 1 - mut_probs[isite]
+                    child_prob *= 1. - mut_probs[isite]
                 else:
                     child_prob *= mut_probs[isite]
                     child_prob *= sub_probs[isite][
-                        nt_str_sorted.index(child_codon[isite])
+                        NT_STR_SORTED.index(child_codon[isite])
                     ]
 
             aa_probs[aa] += child_prob
@@ -221,7 +219,7 @@ class SHMple(BaseModel):
         # since probabilities to STOP codon are dropped
         psum = np.sum([aa_probs[aa] for aa in aa_probs.keys()])
 
-        return [aa_probs[aa] / psum for aa in aa_str_sorted]
+        return [aa_probs[aa] / psum for aa in AA_STR_SORTED]
 
     def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
         """
@@ -238,17 +236,22 @@ class SHMple(BaseModel):
 
         """
         branch_length = np.mean([a != b for a, b in zip(parent, child)])
-        muts, subs = self.model.predict_mutabilities_and_substitutions(
+        [rates], [subs] = self.model.predict_mutabilities_and_substitutions(
             [parent], [branch_length]
         )
+
+        # This `mut_probs` is the probability of at least one mutation at each site.
+        # So here we are interpreting the probability in the correctly-specified way rather than the mis-specified 
+        # way. This is helpful because we'd like normalized probabilities.
+        mut_probs = 1.0 - np.exp(-rates)
 
         # keep track of probabilities as a row per amino acid site, then take transpose before returning output
         prob_matrix = []
 
         for i in range(0, len(parent), 3):
             parent_codon = parent[i : i + 3]
-            codon_muts = muts[0][i : i + 3].squeeze()
-            codon_subs = subs[0][i : i + 3]
+            codon_muts = mut_probs[i : i + 3].squeeze()
+            codon_subs = subs[i : i + 3]
 
             site_probs = self.codon_to_aa_probabilities(
                 parent_codon, codon_muts, codon_subs
