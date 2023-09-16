@@ -159,3 +159,13 @@ _ignore
 tests/*.hdf5
 tests/*.csv
 .vscode
+
+# Workflow managers
+work/
+.nextflow/
+.nextflow.*
+.snakemake/
+
+# local data
+pcp_inputs/
+output/

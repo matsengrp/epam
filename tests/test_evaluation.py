@@ -15,13 +15,13 @@ def test_evaluate():
     ablang_heavy.write_probability_matrices(example_pcp_path, example_prob_mat_path_ab)
 
     shmple = SHMple(
-        weights_directory="data/shmple_weights/my_shmoof", modelname="my_shmoof"
+        weights_directory="data/shmple_weights/my_shmoof", model_name="my_shmoof"
     )
     shmple.write_probability_matrices(example_pcp_path, example_prob_mat_path_shm)
 
     # check model name
-    assert ablang_heavy.modelname == "AbLang_heavy"
-    assert shmple.modelname == "my_shmoof"
+    assert ablang_heavy.model_name == "AbLang"
+    assert shmple.model_name == "my_shmoof"
 
     test_sets = [example_prob_mat_path_ab, example_prob_mat_path_shm]
     evaluate(test_sets, example_model_eval_path)
