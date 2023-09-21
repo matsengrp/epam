@@ -160,7 +160,7 @@ def calculate_site_substitution_probabilities(prob_matrix, parent_aa):
 
     """
     site_sub_probs = [
-        1. - prob_matrix[:, i][AA_STR_SORTED.index(parent_aa[i])]
+        1.0 - prob_matrix[:, i][AA_STR_SORTED.index(parent_aa[i])]
         for i in range(len(parent_aa))
     ]
 

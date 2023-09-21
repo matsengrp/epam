@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 import ablang
 import shmple
+import torch
+from esm import Alphabet, FastaBatchedDataset, ProteinBertModel, pretrained, MSATransformer
 import h5py
 import numpy as np
 import pandas as pd
@@ -80,6 +82,7 @@ class BaseModel(ABC):
 
         Parameters:
         seqs (list): List of sequences to plot.
+
         """
         plt.figure(figsize=(10, 6))
 
@@ -103,6 +106,8 @@ class AbLang(BaseModel):
 
         Parameters:
         chain (str): Name of the chain, default is "heavy".
+        modelname (str): Name of the model, default is "AbLang_heavy".
+
         """
         self.model = ablang.pretrained(chain)
         self.model.freeze()
@@ -163,6 +168,8 @@ class SHMple(BaseModel):
 
         Parameters:
         weights_directory (str): directory path to trained model weights.
+        modelname (str): Name of the model, default is "SHMple".
+
         """
         self.model = shmple.AttentionModel(weights_dir=weights_directory)
         self.modelname = modelname
@@ -196,17 +203,16 @@ class SHMple(BaseModel):
 
         # iterate through all possible child codons
         for child_codon in CODONS:
-
             try:
                 aa = translate_sequences([child_codon])[0]
             except ValueError:  # check for STOP codon
                 continue
 
             # iterate through codon sites and compute total probability of potential child codon
-            child_prob = 1.
+            child_prob = 1.0
             for isite in range(3):
                 if parent_codon[isite] == child_codon[isite]:
-                    child_prob *= 1. - mut_probs[isite]
+                    child_prob *= 1.0 - mut_probs[isite]
                 else:
                     child_prob *= mut_probs[isite]
                     child_prob *= sub_probs[isite][
@@ -241,7 +247,7 @@ class SHMple(BaseModel):
         )
 
         # This `mut_probs` is the probability of at least one mutation at each site.
-        # So here we are interpreting the probability in the correctly-specified way rather than the mis-specified 
+        # So here we are interpreting the probability in the correctly-specified way rather than the mis-specified
         # way. This is helpful because we'd like normalized probabilities.
         mut_probs = 1.0 - np.exp(-rates)
 
@@ -259,3 +265,30 @@ class SHMple(BaseModel):
             prob_matrix.append(site_probs)
 
         return np.array(prob_matrix).transpose()
+
+
+class ESM1v(BaseModel):
+    def __init__(self, modelname="ESM1v_1"):
+        """
+        Initialize ESM1v ensemble model; currently using #1 of 5.
+
+        Parameters:
+        modelname (str): Name of the model, default is "ESM1v_1".
+
+        """
+        if torch.backends.cudnn.is_available():
+            print("Using CUDA")
+            device = torch.device("cuda")
+        elif torch.backends.mps.is_available():
+            print("Using Metal Performance Shaders")
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
+
+        self.model, self.alphabet = pretrained.load_model_and_alphabet("esm1v_t33_650M_UR90S_1")
+        self.model.eval()
+        self.model = self.model.to(device)
+        self.modelname = modelname
+
+    def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
+        return None
