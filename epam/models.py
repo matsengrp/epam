@@ -278,17 +278,53 @@ class ESM1v(BaseModel):
         """
         if torch.backends.cudnn.is_available():
             print("Using CUDA")
-            device = torch.device("cuda")
+            self.device = torch.device("cuda")
         elif torch.backends.mps.is_available():
             print("Using Metal Performance Shaders")
-            device = torch.device("mps")
+            self.device = torch.device("mps")
         else:
-            device = torch.device("cpu")
+            self.device = torch.device("cpu")
 
         self.model, self.alphabet = pretrained.load_model_and_alphabet("esm1v_t33_650M_UR90S_1")
         self.model.eval()
-        self.model = self.model.to(device)
+        self.model = self.model.to(self.device)
         self.modelname = modelname
 
-    def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
+    def prob_matrix_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the ESM-1v_1 model.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
+
+        Parameters:
+        parent (str): The parent sequence for which we want the array of probabilities.
+        child (str): The child sequence (ignored for AbLang model)
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+
+        """
+        batch_converter = self.alphabet.get_batch_converter()
+
+        data = [
+            ("protein1", parent),
+        ]
+
+        # store only batch_token?
+        batch_labels, batch_strs, batch_tokens = batch_converter(data)
+
+        with torch.no_grad():
+            batch_tokens = batch_tokens.to(self.device)
+            token_probs_pre_softmax = self.model(batch_tokens)["logits"]
+
+        aa_idxs = [self.alphabet.get_idx(aa) for aa in AA_STR_SORTED]
+
+        # softmax instead of log_softmax? otherwise torch.exp()
+        aa_probs = torch.log_softmax(token_probs_pre_softmax[..., aa_idxs], dim=-1)
+
+        # confirm AA in correct order
+        # check aa_probs type, add AA label if necessary
+
+        # drop 1st and last token, assert correct length
+        
         return None
