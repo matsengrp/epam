@@ -310,8 +310,7 @@ class ESM1v(BaseModel):
             ("protein1", parent),
         ]
 
-        # store only batch_token?
-        batch_labels, batch_strs, batch_tokens = batch_converter(data)
+        batch_tokens = batch_converter(data)[2]
 
         with torch.no_grad():
             batch_tokens = batch_tokens.to(self.device)
@@ -319,12 +318,10 @@ class ESM1v(BaseModel):
 
         aa_idxs = [self.alphabet.get_idx(aa) for aa in AA_STR_SORTED]
 
-        # softmax instead of log_softmax? otherwise torch.exp()
-        aa_probs = torch.log_softmax(token_probs_pre_softmax[..., aa_idxs], dim=-1)
+        aa_probs = torch.softmax(token_probs_pre_softmax[..., aa_idxs], dim=-1)
 
-        # confirm AA in correct order
         # check aa_probs type, add AA label if necessary
 
         # drop 1st and last token, assert correct length
         
-        return None
+        return aa_probs
