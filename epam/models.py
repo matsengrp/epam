@@ -2,7 +2,13 @@ from abc import ABC, abstractmethod
 import ablang
 import shmple
 import torch
-from esm import Alphabet, FastaBatchedDataset, ProteinBertModel, pretrained, MSATransformer
+from esm import (
+    Alphabet,
+    FastaBatchedDataset,
+    ProteinBertModel,
+    pretrained,
+    MSATransformer,
+)
 import h5py
 import numpy as np
 import pandas as pd
@@ -285,7 +291,9 @@ class ESM1v(BaseModel):
         else:
             self.device = torch.device("cpu")
 
-        self.model, self.alphabet = pretrained.load_model_and_alphabet("esm1v_t33_650M_UR90S_1")
+        self.model, self.alphabet = pretrained.load_model_and_alphabet(
+            "esm1v_t33_650M_UR90S_1"
+        )
         self.model.eval()
         self.model = self.model.to(self.device)
         self.modelname = modelname
@@ -306,12 +314,14 @@ class ESM1v(BaseModel):
         """
         batch_converter = self.alphabet.get_batch_converter()
 
+        parent_aa = translate_sequences([parent])[0]
         data = [
-            ("protein1", parent),
+            ("protein1", parent_aa),
         ]
 
         batch_tokens = batch_converter(data)[2]
 
+        # get token probabilities before softmax so we can restrict to 20 amino acids in softmax calculation
         with torch.no_grad():
             batch_tokens = batch_tokens.to(self.device)
             token_probs_pre_softmax = self.model(batch_tokens)["logits"]
@@ -320,8 +330,11 @@ class ESM1v(BaseModel):
 
         aa_probs = torch.softmax(token_probs_pre_softmax[..., aa_idxs], dim=-1)
 
-        # check aa_probs type, add AA label if necessary
+        aa_probs_np = aa_probs.cpu().numpy().squeeze()
 
-        # drop 1st and last token, assert correct length
-        
-        return aa_probs
+        # drop first and last elements, which are the probability of the start and end token
+        prob_matrix = aa_probs_np[1:-1, :].transpose()
+
+        assert prob_matrix.shape[1] == len(parent_aa)
+
+        return prob_matrix
