@@ -3,6 +3,7 @@ import pytest
 from epam.sequences import translate_sequences
 from epam.models import AbLang
 from epam.models import SHMple
+from epam.models import ESM1v
 
 parent_seqs = [
     "EVQLVESGPGLVQPGKSLRLSCVASGFTFSGYGMHWVRQAPGKGLEWIALIIYDESNKYYADSVKGRFTISRDNSKNTLYLQMSSLRAEDTAVFYCAKVKFYDPTAPNDYWGQGTLVTVSS",
@@ -30,4 +31,12 @@ def test_shmple():
     )
     child_aa_seq = translate_sequences([child_nt_seq])[0]
     prob_vec = shmple_shmoof.probability_vector_of_child_seq(prob_matrix, child_aa_seq)
+    assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
+
+
+def test_esm():
+    esm_v1 = ESM1v()
+    prob_matrix = esm_v1.prob_matrix_of_parent_child_pair(parent_nt_seq)
+    child_aa_seq = translate_sequences([child_nt_seq])[0]
+    prob_vec = esm_v1.probability_vector_of_child_seq(prob_matrix, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
