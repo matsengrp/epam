@@ -273,13 +273,13 @@ class SHMple(BaseModel):
         return np.array(prob_matrix).transpose()
 
 
-class ESM1v(BaseModel):
-    def __init__(self, modelname="ESM1v_1"):
+class TorchModel(BaseModel):
+    def __init__(self, modelname="TorchModel"):
         """
-        Initialize ESM1v ensemble model; currently using #1 of 5.
+        Initialize a pytorch model and select device.
 
         Parameters:
-        modelname (str): Name of the model, default is "ESM1v_1".
+        modelname (str): Name of the model, default is "TorchModel".
 
         """
         if torch.backends.cudnn.is_available():
@@ -291,12 +291,25 @@ class ESM1v(BaseModel):
         else:
             self.device = torch.device("cpu")
 
+        self.modelname = modelname
+
+
+class ESM1v(TorchModel):
+    def __init__(self, modelname="ESM1v_1"):
+        """
+        Initialize ESM1v model; currently using #1 of 5 models in ensemble.
+
+        Parameters:
+        modelname (str): Name of the model, default is "ESM1v_1".
+
+        """
+        super().__init__(modelname=modelname)
         self.model, self.alphabet = pretrained.load_model_and_alphabet(
             "esm1v_t33_650M_UR90S_1"
         )
         self.model.eval()
         self.model = self.model.to(self.device)
-        self.modelname = modelname
+        self.aa_idxs = [self.alphabet.get_idx(aa) for aa in AA_STR_SORTED]
 
     def prob_matrix_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
         """
@@ -326,9 +339,7 @@ class ESM1v(BaseModel):
             batch_tokens = batch_tokens.to(self.device)
             token_probs_pre_softmax = self.model(batch_tokens)["logits"]
 
-        aa_idxs = [self.alphabet.get_idx(aa) for aa in AA_STR_SORTED]
-
-        aa_probs = torch.softmax(token_probs_pre_softmax[..., aa_idxs], dim=-1)
+        aa_probs = torch.softmax(token_probs_pre_softmax[..., self.aa_idxs], dim=-1)
 
         aa_probs_np = aa_probs.cpu().numpy().squeeze()
 
