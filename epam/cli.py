@@ -5,7 +5,7 @@ from epam import evaluation, models
 
 def aaprob(model_name, model_args, in_path, out_path):
     """
-    Generate probability matrices using the specified model.
+    Generate amino acid probability matrices using the specified model.
 
     Args:
         model_name (str): Name of the model class to use.
@@ -14,7 +14,7 @@ def aaprob(model_name, model_args, in_path, out_path):
         out_path (str): Path where the output file will be written.
 
     Examples:
-        epam probmat SHMple '{"weights_directory":"data/shmple_weights/my_shmoof"}' in_path out_path
+        epam aaprob SHMple '{"weights_directory":"data/shmple_weights/my_shmoof"}' in_path out_path
     """
     ModelClass = getattr(models, model_name)
     model = ModelClass(**model_args)

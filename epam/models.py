@@ -128,7 +128,7 @@ class AbLang(BaseModel):
 
         Parameters:
         chain (str): Name of the chain, default is "heavy".
-        modelname (str): Name of the model, default is "AbLang_heavy".
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
 
         """
         super().__init__(model_name=model_name)
@@ -191,6 +191,7 @@ class SHMple(BaseModel):
 
         Parameters:
         weights_directory (str): directory path to trained model weights.
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
         """
         super().__init__(model_name=model_name)
         self.model = shmple.AttentionModel(
@@ -518,14 +519,15 @@ class RandomMutSel(MutSel):
 
 
 class TorchModel(BaseModel):
-    def __init__(self, modelname="TorchModel"):
+    def __init__(self, model_name=None):
         """
         Initialize a pytorch model and select device.
 
         Parameters:
-        modelname (str): Name of the model, default is "TorchModel".
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
 
         """
+        super().__init__(model_name=model_name)
         if torch.backends.cudnn.is_available():
             print("Using CUDA")
             self.device = torch.device("cuda")
@@ -535,19 +537,17 @@ class TorchModel(BaseModel):
         else:
             self.device = torch.device("cpu")
 
-        self.modelname = modelname
-
 
 class ESM1v(TorchModel):
-    def __init__(self, modelname="ESM1v_1"):
+    def __init__(self, model_name=None):
         """
         Initialize ESM1v model; currently using #1 of 5 models in ensemble.
 
         Parameters:
-        modelname (str): Name of the model, default is "ESM1v_1".
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
 
         """
-        super().__init__(modelname=modelname)
+        super().__init__(model_name=model_name)
         self.model, self.alphabet = pretrained.load_model_and_alphabet(
             "esm1v_t33_650M_UR90S_1"
         )

@@ -37,7 +37,11 @@ def translate_sequences(nt_sequences):
     return aa_sequences
 
 def truncate_sequence_at_codon_boundary(seq):
-    """Truncate a sequence to the nearest codon boundary."""
+    """Truncate a nucleotide sequence to the nearest codon boundary, assuming
+    it's already in the correct reading frame.
+    
+   This should just be temporary, see issue #22. 
+    """
     if len(seq) % 3 == 0:
         return seq
     else:
