@@ -22,6 +22,7 @@ from epam.sequences import (
     AA_STR_SORTED,
     CODON_AA_INDICATOR_MATRIX,
     truncate_sequence_at_codon_boundary,
+    translate_sequences,
 )
 import epam.utils as utils
 
@@ -180,7 +181,7 @@ class AbLang(BaseModel):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        parent_aa = sequences.translate_sequences([parent])[0]
+        parent_aa = translate_sequences([parent])[0]
         return self.probability_array_of_seq(parent_aa)
 
 
