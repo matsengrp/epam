@@ -5,25 +5,25 @@ from epam.models import AbLang, SHMple
 from epam.evaluation import *
 
 example_pcp_path = "data/parent-child-example.csv"
-example_prob_mat_path_ab = "tests/matrices_ablang.hdf5"
-example_prob_mat_path_shm = "tests/matrices_shmple.hdf5"
+example_aaprobs_path_ab = "tests/matrices_ablang.hdf5"
+example_aaprobs_path_shm = "tests/matrices_shmple.hdf5"
 example_model_eval_path = "tests/model-performance.csv"
 
 
 def test_evaluate():
     ablang_heavy = AbLang(chain="heavy")
-    ablang_heavy.write_probability_matrices(example_pcp_path, example_prob_mat_path_ab)
+    ablang_heavy.write_aaprobs(example_pcp_path, example_aaprobs_path_ab)
 
     shmple = SHMple(
         weights_directory="data/shmple_weights/my_shmoof", model_name="my_shmoof"
     )
-    shmple.write_probability_matrices(example_pcp_path, example_prob_mat_path_shm)
+    shmple.write_aaprobs(example_pcp_path, example_aaprobs_path_shm)
 
     # check model name
     assert ablang_heavy.model_name == "AbLang"
     assert shmple.model_name == "my_shmoof"
 
-    test_sets = [example_prob_mat_path_ab, example_prob_mat_path_shm]
+    test_sets = [example_aaprobs_path_ab, example_aaprobs_path_shm]
     evaluate(test_sets, example_model_eval_path)
 
     # check that evalution output exists and contains the correct number of lines

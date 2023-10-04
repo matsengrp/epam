@@ -11,6 +11,10 @@ Getting SHMple weights:
     mkdir data/shmple_weights
     scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/my_shmoof data/shmple_weights/
 
+## Terminology
+
+* An "aaprob" matrix is a matrix that expresses the probability of various child amino acid substitutions for each site.
+
 ## Use
 
 Running it to get matrices:

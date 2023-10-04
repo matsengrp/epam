@@ -10,7 +10,7 @@ outfilename = "tests/matrices.hdf5"
 def test_encode_decode():
     # encode
     ablang_heavy = AbLang(chain="heavy")
-    ablang_heavy.write_probability_matrices(infilename, outfilename)
+    ablang_heavy.write_aaprobs(infilename, outfilename)
 
     # decode
     with h5py.File(outfilename, "r") as testfile:

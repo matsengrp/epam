@@ -63,7 +63,7 @@ class BaseModel(ABC):
             [prob_arr[AA_STR_SORTED.index(aa), i] for i, aa in enumerate(child_seq)]
         )
 
-    def write_probability_matrices(self, pcp_path, output_path):
+    def write_aaprobs(self, pcp_path, output_path):
         """
         Produce a probability matrix for each parent-child pair (PCP) of nucleotide sequences with a substitution model.
 

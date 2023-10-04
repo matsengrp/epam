@@ -18,12 +18,12 @@ def aaprob(model_name, model_args, in_path, out_path):
     """
     ModelClass = getattr(models, model_name)
     model = ModelClass(**model_args)
-    model.write_probability_matrices(in_path, out_path)
+    model.write_aaprobs(in_path, out_path)
 
 
-def evaluate(prob_mat_paths_str, model_performance_path):
-    prob_mat_paths = prob_mat_paths_str.split(",")
-    evaluation.evaluate(prob_mat_paths, model_performance_path)
+def evaluate(aaprob_paths_str, model_performance_path):
+    aaprob_paths = aaprob_paths_str.split(",")
+    evaluation.evaluate(aaprob_paths, model_performance_path)
 
 
 def concatenate_csvs(

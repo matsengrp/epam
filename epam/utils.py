@@ -24,22 +24,22 @@ def generate_file_checksum(filename, buf_size=65536):
     return sha256.hexdigest()
 
 
-def pcp_path_of_prob_mat_path(prob_mat_path):
+def pcp_path_of_aaprob_path(aaprob_path):
     """
-    Return the path to the PCP file that matches the probability matrix.
-    Check SHAs to ensure the PCP file matches the probability matrix.
+    Return the path to the PCP file that matches the aaprob matrix.
+    Check SHAs to ensure the PCP file matches the aaprob matrix.
 
     Parameters:
-    prob_mat_path (str): path to probability matrix for parent-child pairs.
+    aaprob_path (str): path to aaprob matrix for parent-child pairs.
 
     Returns:
     pcp_path (str): path to parent-child pairs.
 
     """
-    with h5py.File(prob_mat_path, "r") as prob_mat_file:
-        pcp_path = prob_mat_file.attrs["pcp_filename"]
+    with h5py.File(aaprob_path, "r") as aaprob_file:
+        pcp_path = aaprob_file.attrs["pcp_filename"]
 
-        if prob_mat_file.attrs["checksum"] != generate_file_checksum(pcp_path):
+        if aaprob_file.attrs["checksum"] != generate_file_checksum(pcp_path):
             raise ValueError(f"checksum failed for {pcp_path}.")
 
     return pcp_path

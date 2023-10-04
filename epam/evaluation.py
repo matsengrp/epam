@@ -4,22 +4,22 @@ import h5py
 import pandas as pd
 import numpy as np
 from epam.sequences import AA_STR_SORTED
-from epam.utils import pcp_path_of_prob_mat_path
+from epam.utils import pcp_path_of_aaprob_path
 from epam.sequences import translate_sequences
 
 
-def evaluate(prob_mat_paths, model_performance_path):
+def evaluate(aaprob_paths, model_performance_path):
     """
-    Wrapper function for evaluate_dataset() that takes in a list of probability matrices and outputs a CSV of model performance metrics.
+    Wrapper function for evaluate_dataset() that takes in a list of aaprob matrices and outputs a CSV of model performance metrics.
     Outputs to CSV file with columns for the different metrics and a row per model/data set combo.
 
     Parameters:
-    prob_mat_paths (list): List of paths to evaluate. Each probability matrix corresponds to predictions for one model on a given data set.
+    aaprob_paths (list): List of paths to evaluate. Each aaprob matrix corresponds to predictions for one model on a given data set.
     model_performance_path (str): Path to output for model performance metrics.
 
     """
     model_performances = [
-        evaluate_dataset(prob_mat_path) for prob_mat_path in prob_mat_paths
+        evaluate_dataset(aaprob_path) for aaprob_path in aaprob_paths
     ]
 
     all_model_performances = pd.DataFrame(model_performances)
@@ -27,20 +27,20 @@ def evaluate(prob_mat_paths, model_performance_path):
     all_model_performances.to_csv(model_performance_path, index=False)
 
 
-def evaluate_dataset(prob_mat_path):
+def evaluate_dataset(aaprob_path):
     """
     Evaluate model predictions against reality for a set of parent-child pairs (PCPs).
     Function is model-agnositic and currently calculates substitution accuracy, r-precision, and cross entropy loss.
-    Returns evaluation metrics for a single probability matrix (generated from one model on one data set).
+    Returns evaluation metrics for a single aaprob matrix (generated from one model on one data set).
 
     Parameters:
-    prob_mat_path (str): Path to probability matrix for parent-child pairs.
+    aaprob_path (str): Path to aaprob matrix for parent-child pairs.
 
     Returns:
-    model_performance (dict): Dictionary of model performance metrics for a single probability matrix.
+    model_performance (dict): Dictionary of model performance metrics for a single aaprob matrix.
 
     """
-    pcp_path = pcp_path_of_prob_mat_path(prob_mat_path)
+    pcp_path = pcp_path_of_aaprob_path(aaprob_path)
 
     pcp_df = pd.read_csv(pcp_path, index_col=0)
 
@@ -66,7 +66,7 @@ def evaluate_dataset(prob_mat_path):
     site_sub_probs = []
     model_sub_aa_ids = []
 
-    with h5py.File(prob_mat_path, "r") as matfile:
+    with h5py.File(aaprob_path, "r") as matfile:
         model_name = matfile.attrs["model_name"]
         for i in range(len(pcp_df)):
             grp = matfile[
@@ -147,12 +147,12 @@ def identify_child_substitutions(parent_aa, child_aa):
     return child_aa_subs
 
 
-def calculate_site_substitution_probabilities(prob_matrix, parent_aa):
+def calculate_site_substitution_probabilities(aaprobs, parent_aa):
     """
     Calculate the probability of substitution at each site for a parent sequence.
 
     Parameters:
-    prob_matrix (np.ndarray): A 2D array containing the normalized probabilities of the amino acids by site for a parent sequence.
+    aaprobs (np.ndarray): A 2D array containing the normalized probabilities of the amino acids by site for a parent sequence.
     parent_aa (str): Amino acid sequence of parent.
 
     Returns:
@@ -160,7 +160,7 @@ def calculate_site_substitution_probabilities(prob_matrix, parent_aa):
 
     """
     site_sub_probs = [
-        1.0 - prob_matrix[:, i][AA_STR_SORTED.index(parent_aa[i])]
+        1.0 - aaprobs[:, i][AA_STR_SORTED.index(parent_aa[i])]
         for i in range(len(parent_aa))
     ]
 
@@ -178,7 +178,7 @@ def highest_ranked_substitution(matrix_i, parent_aa, i):
     Return the highest ranked substitution for site i in a given parent-child pair.
 
     Parameters:
-    matrix_i (np.array): Probability matrix for parent-child pair at aa site i.
+    matrix_i (np.array): aaprob matrix for parent-child pair at aa site i.
     parent_aa (str): Parent amino acid sequence.
     i (int): Index of amino acid site substituted.
 
