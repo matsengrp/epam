@@ -4,6 +4,7 @@ jax
 jaxlib
 jaxopt
 pytest
+snakemake
 typing_extensions
 tensorboardX
 h5py

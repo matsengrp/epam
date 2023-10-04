@@ -14,6 +14,8 @@ setup(
         "matplotlib >= 3.4.3",
         "pandas >= 1.3.3",
         "biopython >= 1.79",
+        "statsmodels",
+        "fire",
     ],
     python_requires="==3.9.*",
     classifiers=[
@@ -23,4 +25,7 @@ setup(
         "Natural Language :: English",
         "Programming Language :: Python :: 3.9",
     ],
+    entry_points={
+        "console_scripts": ["epam=epam.cli:main"],
+    },
 )
