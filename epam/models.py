@@ -40,7 +40,7 @@ class BaseModel(ABC):
         self.model_name = model_name
 
     @abstractmethod
-    def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         pass
 
     def probability_vector_of_child_seq(self, prob_arr, child_seq):
@@ -65,7 +65,7 @@ class BaseModel(ABC):
 
     def write_aaprobs(self, pcp_path, output_path):
         """
-        Produce a probability matrix for each parent-child pair (PCP) of nucleotide sequences with a substitution model.
+        Write an aaprob matrix for each parent-child pair (PCP) of nucleotide sequences with a substitution model.
 
         An HDF5 output file is created that includes the file path to the PCP data and a checksum for verification.
 
@@ -87,7 +87,7 @@ class BaseModel(ABC):
                 # NOTE: this shouldn't be necessary after Kevin fixes the data
                 parent = truncate_sequence_at_codon_boundary(row["parent"])
                 child = truncate_sequence_at_codon_boundary(row["child"])
-                matrix = self.prob_matrix_of_parent_child_pair(parent, child)
+                matrix = self.aaprobs_of_parent_child_pair(parent, child)
 
                 # create a group for each matrix
                 grp = outfile.create_group(f"matrix{i}")
@@ -167,7 +167,7 @@ class AbLang(BaseModel):
 
         return arr_sorted
 
-    def prob_matrix_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
 
@@ -328,7 +328,7 @@ class SHMple(BaseModel):
         aa_probs /= aa_probs.sum()
         return aa_probs
 
-    def _prob_matrix_of_parent_and_branch_length(
+    def _aaprobs_of_parent_and_branch_length(
         self, parent, branch_length
     ) -> np.ndarray:
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
@@ -339,7 +339,7 @@ class SHMple(BaseModel):
         mut_probs = 1.0 - np.exp(-rates)
 
         # keep track of probabilities as a row per amino acid site, then take transpose before returning output
-        prob_matrix = []
+        aaprobs = []
 
         for i in range(0, len(parent), 3):
             parent_codon = parent[i : i + 3]
@@ -349,11 +349,11 @@ class SHMple(BaseModel):
             site_probs = self.codon_to_aa_probabilities(
                 parent_codon, codon_mut_probs, codon_subs
             )
-            prob_matrix.append(site_probs)
+            aaprobs.append(site_probs)
 
-        return np.array(prob_matrix).transpose()
+        return np.array(aaprobs).transpose()
 
-    def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to a SHMple model.
 
@@ -367,7 +367,7 @@ class SHMple(BaseModel):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
         """
         branch_length = np.mean([a != b for a, b in zip(parent, child)])
-        return self._prob_matrix_of_parent_and_branch_length(parent, branch_length)
+        return self._aaprobs_of_parent_and_branch_length(parent, branch_length)
 
 
 class OptimizableSHMple(SHMple):
@@ -432,9 +432,9 @@ class OptimizableSHMple(SHMple):
         optimized_branch_scaling_log = result.x[0]
         return np.exp(optimized_branch_scaling_log) * base_branch_length
 
-    def prob_matrix_of_parent_child_pair(self, parent, child) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         branch_length = self._find_optimal_branch_length(parent, child)
-        return self._prob_matrix_of_parent_and_branch_length(parent, branch_length)
+        return self._aaprobs_of_parent_and_branch_length(parent, branch_length)
 
 
 class MutSel(OptimizableSHMple):
@@ -556,7 +556,7 @@ class ESM1v(TorchModel):
         self.model = self.model.to(self.device)
         self.aa_idxs = [self.alphabet.get_idx(aa) for aa in AA_STR_SORTED]
 
-    def prob_matrix_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the ESM-1v_1 model.
 

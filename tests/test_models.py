@@ -25,20 +25,20 @@ weights_path = "data/shmple_weights/my_shmoof"
 
 def test_shmple():
     shmple_shmoof = SHMple(weights_directory=weights_path)
-    prob_matrix = shmple_shmoof.prob_matrix_of_parent_child_pair(
+    aaprobs = shmple_shmoof.aaprobs_of_parent_child_pair(
         parent_nt_seq, child_nt_seq
     )
     child_aa_seq = translate_sequences([child_nt_seq])[0]
-    prob_vec = shmple_shmoof.probability_vector_of_child_seq(prob_matrix, child_aa_seq)
+    prob_vec = shmple_shmoof.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 
     # When we optimize the branch length, we should have a higher probability overall.
     optimizable_shmple = OptimizableSHMple(weights_directory=weights_path)
-    opt_prob_matrix = optimizable_shmple.prob_matrix_of_parent_child_pair(
+    opt_aaprobs = optimizable_shmple.aaprobs_of_parent_child_pair(
         parent_nt_seq, child_nt_seq
     )
     opt_prob_vec = optimizable_shmple.probability_vector_of_child_seq(
-        opt_prob_matrix, child_aa_seq
+        opt_aaprobs, child_aa_seq
     )
     assert opt_prob_vec.prod() > prob_vec.prod()
 
@@ -131,7 +131,7 @@ def test_codon_to_aa_probabilities():
 
 def test_mutsel():
     mutsel = RandomMutSel(weights_directory=weights_path)
-    opt_prob_matrix = mutsel.prob_matrix_of_parent_child_pair(
+    opt_aaprobs = mutsel.aaprobs_of_parent_child_pair(
         parent_nt_seq, child_nt_seq
     )
 
@@ -166,7 +166,7 @@ def test_mut_sel_probability():
 
 def test_esm():
     esm_v1 = ESM1v()
-    prob_matrix = esm_v1.prob_matrix_of_parent_child_pair(parent_nt_seq)
+    aaprobs = esm_v1.aaprobs_of_parent_child_pair(parent_nt_seq)
     child_aa_seq = translate_sequences([child_nt_seq])[0]
-    prob_vec = esm_v1.probability_vector_of_child_seq(prob_matrix, child_aa_seq)
+    prob_vec = esm_v1.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
