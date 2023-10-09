@@ -594,3 +594,20 @@ class ESM1v(TorchModel):
         assert prob_matrix.shape[1] == len(parent_aa)
 
         return prob_matrix
+
+
+class SHMpleESM(MutSel, ESM1v):
+    def __init__(self, weights_directory, model_name=None):
+        """
+        Initialize a mutation-selection model using SHMple for the mutation part and ESM-1v_1 for the selection part.
+        
+        Parameters:
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
+
+        """
+        super().__init__(weights_directory, model_name)
+
+    def build_selection_matrix_from_parent(self, parent):
+        matrix = np.random.rand(len(parent) // 3, 20)
+        matrix /= matrix.sum(axis=1, keepdims=True)
+        return matrix
