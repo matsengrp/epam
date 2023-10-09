@@ -30,22 +30,26 @@ def read_fasta_sequences(file_path):
 def translate_sequences(nt_sequences):
     aa_sequences = []
     for seq in nt_sequences:
+        if len(seq) % 3 != 0:
+            raise ValueError(f"The sequence '{seq}' is not a multiple of 3.")
         aa_seq = str(Seq(seq).translate())
         if "*" in aa_seq:
             raise ValueError(f"The sequence '{seq}' contains a stop codon.")
         aa_sequences.append(aa_seq)
     return aa_sequences
 
-def truncate_sequence_at_codon_boundary(seq):
-    """Truncate a nucleotide sequence to the nearest codon boundary, assuming
-    it's already in the correct reading frame.
-    
-   This should just be temporary, see issue #22. 
+
+def assert_pcp_lengths(parent, child):
+    """Assert that the lengths of the parent and child sequences are
+    the same and that they are multiples of 3.
     """
-    if len(seq) % 3 == 0:
-        return seq
-    else:
-        return seq[:-(len(seq) % 3)]
+    if len(parent) != len(child):
+        raise ValueError(
+            f"The parent and child sequences are not the same length: "
+            f"{len(parent)} != {len(child)}"
+        )
+    if len(parent) % 3 != 0:
+        raise ValueError(f"Found a PCP with length not a multiple of 3: {len(parent)}")
 
 
 def generate_codon_aa_indicator_matrix():
