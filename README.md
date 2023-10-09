@@ -6,6 +6,8 @@
     conda activate epam
     make install
 
+Note: MacOS requires a conda-forge or mamba install of datrie before running `make install`. 
+
 Getting SHMple weights:
 
     mkdir data/shmple_weights
