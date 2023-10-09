@@ -597,6 +597,7 @@ class ESM1v(TorchModel):
 
 
 class SHMpleESM(MutSel, ESM1v):
+    # this seems not right - check
     def __init__(self, weights_directory, model_name=None):
         """
         Initialize a mutation-selection model using SHMple for the mutation part and ESM-1v_1 for the selection part.
