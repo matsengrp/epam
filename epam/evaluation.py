@@ -18,9 +18,7 @@ def evaluate(aaprob_paths, model_performance_path):
     model_performance_path (str): Path to output for model performance metrics.
 
     """
-    model_performances = [
-        evaluate_dataset(aaprob_path) for aaprob_path in aaprob_paths
-    ]
+    model_performances = [evaluate_dataset(aaprob_path) for aaprob_path in aaprob_paths]
 
     all_model_performances = pd.DataFrame(model_performances)
 

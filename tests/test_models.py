@@ -25,9 +25,7 @@ weights_path = "data/shmple_weights/my_shmoof"
 
 def test_shmple():
     shmple_shmoof = SHMple(weights_directory=weights_path)
-    aaprobs = shmple_shmoof.aaprobs_of_parent_child_pair(
-        parent_nt_seq, child_nt_seq
-    )
+    aaprobs = shmple_shmoof.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
     child_aa_seq = translate_sequences([child_nt_seq])[0]
     prob_vec = shmple_shmoof.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
@@ -131,9 +129,7 @@ def test_codon_to_aa_probabilities():
 
 def test_mutsel():
     mutsel = RandomMutSel(weights_directory=weights_path)
-    opt_aaprobs = mutsel.aaprobs_of_parent_child_pair(
-        parent_nt_seq, child_nt_seq
-    )
+    opt_aaprobs = mutsel.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
 
 
 class MutSelThreonine(MutSel):
