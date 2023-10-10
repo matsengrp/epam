@@ -4,6 +4,7 @@ import subprocess
 model_info = [
     ("AbLang_heavy", "AbLang", {"chain": "heavy"}),
     ("SHMple_default", "SHMple", {"weights_directory": "data/shmple_weights/my_shmoof"})
+    ("SHMple_productive", "SHMple", {"weights_directory": "data/shmple_weights/prod_shmple"})
 ]
 
 model_name_to_spec = {
