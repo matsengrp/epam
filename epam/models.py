@@ -526,7 +526,16 @@ class TorchModel(BaseModel):
 
         """
         super().__init__(model_name=model_name)
-        if torch.backends.cudnn.is_available():
+
+        # check that CUDA is usable
+        def check_CUDA():
+            try:
+                torch._C._cuda_init()
+                return True
+            except:
+                return False
+
+        if torch.backends.cudnn.is_available() and check_CUDA():
             print("Using CUDA")
             self.device = torch.device("cuda")
         elif torch.backends.mps.is_available():
