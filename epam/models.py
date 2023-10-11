@@ -21,7 +21,7 @@ from epam.sequences import (
     NT_STR_SORTED,
     AA_STR_SORTED,
     CODON_AA_INDICATOR_MATRIX,
-    truncate_sequence_at_codon_boundary,
+    assert_pcp_lengths,
     translate_sequences,
 )
 import epam.utils as utils
@@ -84,9 +84,9 @@ class BaseModel(ABC):
             outfile.attrs["model_name"] = self.model_name
 
             for i, row in pcp_df.iterrows():
-                # NOTE: this shouldn't be necessary after Kevin fixes the data
-                parent = truncate_sequence_at_codon_boundary(row["parent"])
-                child = truncate_sequence_at_codon_boundary(row["child"])
+                parent = row["parent"]
+                child = row["child"]
+                assert_pcp_lengths(parent, child)
                 matrix = self.aaprobs_of_parent_child_pair(parent, child)
 
                 # create a group for each matrix
@@ -328,9 +328,7 @@ class SHMple(BaseModel):
         aa_probs /= aa_probs.sum()
         return aa_probs
 
-    def _aaprobs_of_parent_and_branch_length(
-        self, parent, branch_length
-    ) -> np.ndarray:
+    def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
 
         # This `mut_probs` is the probability of at least one mutation at each site.
@@ -518,7 +516,6 @@ class RandomMutSel(MutSel):
         return matrix
 
 
-
 class TorchModel(BaseModel):
     def __init__(self, model_name=None):
         """
@@ -529,7 +526,16 @@ class TorchModel(BaseModel):
 
         """
         super().__init__(model_name=model_name)
-        if torch.backends.cudnn.is_available():
+
+        # check that CUDA is usable
+        def check_CUDA():
+            try:
+                torch._C._cuda_init()
+                return True
+            except:
+                return False
+
+        if torch.backends.cudnn.is_available() and check_CUDA():
             print("Using CUDA")
             self.device = torch.device("cuda")
         elif torch.backends.mps.is_available():
