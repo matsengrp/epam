@@ -6,7 +6,7 @@
     conda activate epam
     make install
 
-Note: MacOS requires a conda-forge or mamba install of datrie before running `make install`. 
+Note: Depending on OS, a conda-forge or mamba install of [datrie](https://github.com/conda-forge/datrie-feedstock) may be required before running `make install`. 
 
 Getting SHMple weights:
 
