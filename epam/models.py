@@ -602,19 +602,19 @@ class ESM1v(TorchModel):
         return prob_matrix
 
 
-class SHMpleESM(MutSel, ESM1v):
-    # this seems not right - check
+class SHMpleESM(MutSel):
     def __init__(self, weights_directory, model_name=None):
         """
         Initialize a mutation-selection model using SHMple for the mutation part and ESM-1v_1 for the selection part.
-        
+
         Parameters:
+        weights_directory (str): Directory path to trained SHMple model weights.
         model_name (str, optional): The name of the model. If not specified, the class name is used.
 
         """
         super().__init__(weights_directory, model_name)
+        self.selection_model = ESM1v()
 
     def build_selection_matrix_from_parent(self, parent):
-        matrix = np.random.rand(len(parent) // 3, 20)
-        matrix /= matrix.sum(axis=1, keepdims=True)
-        return matrix
+        matrix = self.selection_model.aaprobs_of_parent_child_pair(parent)
+        return matrix.transpose()
