@@ -5,6 +5,7 @@
     conda create -n epam python=3.9
     conda activate epam
     make install
+Note: Depending on OS, a conda-forge or mamba install of [datrie](https://github.com/conda-forge/datrie-feedstock) may be required before running `make install`.
 
 Getting SHMple weights:
 

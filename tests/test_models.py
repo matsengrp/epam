@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from epam.sequences import translate_sequences, AA_STR_SORTED, CODONS, NT_STR_SORTED
-from epam.models import AbLang, SHMple, OptimizableSHMple, RandomMutSel, MutSel, ESM1v
+from epam.models import AbLang, SHMple, OptimizableSHMple, RandomMutSel, MutSel, ESM1v, SHMpleESM
 
 parent_seqs = [
     "EVQLVESGPGLVQPGKSLRLSCVASGFTFSGYGMHWVRQAPGKGLEWIALIIYDESNKYYADSVKGRFTISRDNSKNTLYLQMSSLRAEDTAVFYCAKVKFYDPTAPNDYWGQGTLVTVSS",
@@ -165,4 +165,11 @@ def test_esm():
     aaprobs = esm_v1.aaprobs_of_parent_child_pair(parent_nt_seq)
     child_aa_seq = translate_sequences([child_nt_seq])[0]
     prob_vec = esm_v1.probability_vector_of_child_seq(aaprobs, child_aa_seq)
+    assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
+
+def test_shmple_esm():
+    shmple_esm = SHMpleESM(weights_directory=weights_path)
+    aaprobs = shmple_esm.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
+    child_aa_seq = translate_sequences([child_nt_seq])[0]
+    prob_vec = shmple_esm.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
