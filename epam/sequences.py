@@ -14,7 +14,7 @@ CODONS = [
     "".join(codon_list)
     for codon_list in itertools.product(["A", "C", "G", "T"], repeat=3)
 ]
-STOP_CODONS = ['TAA', 'TAG', 'TGA']
+STOP_CODONS = ["TAA", "TAG", "TGA"]
 
 
 def nucleotide_indices_of_codon(codon):
