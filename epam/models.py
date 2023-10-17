@@ -324,12 +324,26 @@ class SHMple(BaseModel):
         """
         mut_matrix = SHMple._build_mutation_matrix(parent_codon, mut_probs, sub_probs)
         codon_probs = SHMple._codon_probs_of_mutation_matrix(mut_matrix)
+        # reshape(-1) flattens the array
         aa_probs = codon_probs.reshape(-1) @ CODON_AA_INDICATOR_MATRIX
         aa_probs /= aa_probs.sum()
         return aa_probs
 
-    def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
-        rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
+    @staticmethod
+    def aaprobs_t_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarray:
+        """Calculate per-site amino acid probabilities from per-site rates and
+        substitution probabilities.
+
+        Args:
+            rates (np.ndarray): Poisson rates of mutation per site.
+            sub_probs (np.ndarray): Substitution probabilities per site: a 2D
+                                    array with rows corresponding to sites and
+                                    columns corresponding to nucleotides.
+
+        Returns:
+            np.ndarray: A 2D array with rows corresponding to sites and columns
+                        corresponding to sites.
+        """
 
         # This `mut_probs` is the probability of at least one mutation at each site.
         # So here we are interpreting the probability in the correctly-specified way rather than the mis-specified
@@ -342,14 +356,22 @@ class SHMple(BaseModel):
         for i in range(0, len(parent), 3):
             parent_codon = parent[i : i + 3]
             codon_mut_probs = mut_probs[i : i + 3]
-            codon_subs = subs[i : i + 3]
+            codon_subs = sub_probs[i : i + 3]
 
-            site_probs = self.codon_to_aa_probabilities(
+            site_probs = SHMple.codon_to_aa_probabilities(
                 parent_codon, codon_mut_probs, codon_subs
             )
             aaprobs.append(site_probs)
 
-        return np.array(aaprobs).transpose()
+        return np.array(aaprobs)
+
+    def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
+        rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
+        aaprobs_transpose = self.aaprobs_t_of_parent_rates_and_sub_probs(
+            parent, rates, subs
+        )
+
+        return aaprobs_transpose.transpose()
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         """
