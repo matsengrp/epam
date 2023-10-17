@@ -5,6 +5,7 @@ from Bio.Data import CodonTable
 from epam.sequences import (
     AA_STR_SORTED,
     CODONS,
+    STOP_CODONS,
     nucleotide_indices_of_codon,
     translate_sequences,
     CODON_AA_INDICATOR_MATRIX,
@@ -40,3 +41,21 @@ def test_indicator_matrix():
     table = CodonTable.unambiguous_dna_by_id[1]  # 1 is for the standard table
 
     assert reconstructed_codon_table == table.forward_table
+
+
+def test_indicator_matrix_again():
+    """Check that the indicator matrix maps a normalized probability
+    distribution on non-stop codons to a probability distribution on amino
+    acids."""
+    # Initialize a random vector of size 64
+    random_vector = np.random.rand(64)
+
+    # Set the entries corresponding to stop codons to zero
+    for stop_codon in STOP_CODONS:
+        index = CODONS.index(stop_codon)
+        random_vector[index] = 0.0
+
+    # Normalize the remaining entries so that they sum to 1
+    random_vector /= random_vector.sum()
+
+    assert np.isclose((random_vector @ CODON_AA_INDICATOR_MATRIX).sum(), 1)
