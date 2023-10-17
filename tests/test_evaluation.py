@@ -86,7 +86,7 @@ def test_calculate_site_substitution_probabilities():
             [0, 0],
             [0, 0],
         ]
-    )
+    ).T
 
     parent_aa = "AQ"
 
@@ -120,15 +120,15 @@ def test_highest_ranked_substitution():
             [0, 0],
             [0, 0],
         ]
-    )
+    ).T
 
     parent_aa = "AQ"
 
     # case when highest predicted aa is parent aa, select next highest
-    assert highest_ranked_substitution(example_matrix[:, 0], parent_aa, 0) == "D"
+    assert highest_ranked_substitution(example_matrix[0, :], parent_aa, 0) == "D"
 
     # case when highest predicted aa is not parent aa, select highest
-    assert highest_ranked_substitution(example_matrix[:, 1], parent_aa, 1) == "G"
+    assert highest_ranked_substitution(example_matrix[1, :], parent_aa, 1) == "G"
 
 
 def test_locate_top_k_substitutions():

@@ -59,11 +59,11 @@ class BaseModel(ABC):
 
         """
         assert (
-            len(child_seq) == prob_arr.shape[1]
+            len(child_seq) == prob_arr.shape[0]
         ), "The child sequence length does not match the probability array length."
 
         return np.array(
-            [prob_arr[AA_STR_SORTED.index(aa), i] for i, aa in enumerate(child_seq)]
+            [prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
         )
 
     def write_aaprobs(self, pcp_path, output_path):
@@ -162,11 +162,11 @@ class AbLang(BaseModel):
 
         # Apply softmax to the second dimension, and skip the first and last
         # elements (which are the probability of the start and end token).
-        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1]).T
+        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1])
 
-        # Sort rows according to the sorted amino acid string.
-        arr_sorted = arr[self.aa_str_sorted_indices]
-        assert len(seq) == arr_sorted.shape[1]
+        # Sort the second dimension according to the sorted amino acid string.
+        arr_sorted = arr[:, self.aa_str_sorted_indices]
+        assert len(seq) == arr_sorted.shape[0]
 
         return arr_sorted
 
@@ -225,11 +225,9 @@ class SHMple(BaseModel):
 
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
-        aaprobs_transpose = molevol.aaprobs_t_of_parent_rates_and_sub_probs(
+        return molevol.aaprobs_of_parent_rates_and_sub_probs(
             parent, rates, subs
         )
-
-        return aaprobs_transpose.transpose()
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         """
@@ -383,6 +381,8 @@ class MutSel(OptimizableSHMple):
 
         return neg_pcp_probability
 
+    # TODO: don't we need to rewrite _aaprobs_of_parent_and_branch_length(parent, branch_length) ?? 
+    
 
 class RandomMutSel(MutSel):
     """A mutation selection model with a random selection matrix."""
@@ -475,9 +475,9 @@ class ESM1v(TorchModel):
         aa_probs_np = aa_probs.cpu().numpy().squeeze()
 
         # drop first and last elements, which are the probability of the start and end token
-        prob_matrix = aa_probs_np[1:-1, :].transpose()
+        prob_matrix = aa_probs_np[1:-1, :]
 
-        assert prob_matrix.shape[1] == len(parent_aa)
+        assert prob_matrix.shape[0] == len(parent_aa)
 
         return prob_matrix
 
@@ -494,5 +494,4 @@ class SHMpleESM(MutSel):
         self.selection_model = ESM1v()
 
     def build_selection_matrix_from_parent(self, parent):
-        matrix = self.selection_model.aaprobs_of_parent_child_pair(parent)
-        return matrix.transpose()
+        return self.selection_model.aaprobs_of_parent_child_pair(parent)

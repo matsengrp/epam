@@ -120,7 +120,7 @@ def codon_to_aa_probabilities(parent_codon, mut_probs, sub_probs):
     return aa_probs
 
 
-def aaprobs_t_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarray:
+def aaprobs_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarray:
     """Calculate per-site amino acid probabilities from per-site rates and
     substitution probabilities.
 
@@ -132,7 +132,7 @@ def aaprobs_t_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndar
 
     Returns:
         np.ndarray: A 2D array with rows corresponding to sites and columns
-                    corresponding to sites.
+                    corresponding to amino acids.
     """
 
     # This `mut_probs` is the probability of at least one mutation at each site.

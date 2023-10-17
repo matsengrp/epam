@@ -15,7 +15,7 @@ Getting SHMple weights:
 
 ## Terminology
 
-* An "aaprob" matrix is a matrix that expresses the probability of various child amino acid substitutions for each site.
+* An "aaprob" matrix is a matrix that expresses the probability of various child amino acid substitutions for each site, laid out with sites on the rows and amino acids on the columns.
 
 ## Use
 
