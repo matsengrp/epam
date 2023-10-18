@@ -1,4 +1,4 @@
-"""Routines for molecular evolution computation.
+"""Free functions for molecular evolution computation.
 
 We will follow terminology from Yaari et al 2013, where "mutability" refers to
 the probability of a nucleotide mutating at a given site, while "substitution"
@@ -49,8 +49,7 @@ def build_mutation_matrix(parent_codon, mut_probs, sub_probs):
     site in a given parent codon. So, the ijth entry of the matrix is the
     probability of the ith position mutating to the jth nucleotide.
 
-    See codon_to_aa_probabilities for a description of the arguments, and
-    tests for an example."""
+    See tests for an example."""
 
     result_matrix = np.empty((len(parent_codon), len(NT_STR_SORTED)))
 
