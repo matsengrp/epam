@@ -346,16 +346,14 @@ class MutSel(OptimizableSHMple):
             child_prob = 1.0
 
             for i in range(0, len(parent), 3):
-                parent_codon = parent[i : i + 3]
-                child_codon = child[i : i + 3]
-                codon_mut_probs = mut_probs[i : i + 3]
-                codon_sub_probs = sub_probs[i : i + 3]
-                aa_sel_matrix = sel_matrix[i // 3]
-
                 codon_mutsel = molevol.build_codon_mutsel(
-                    parent_codon, codon_mut_probs, codon_sub_probs, aa_sel_matrix
+                    parent[i : i + 3],
+                    mut_probs[i : i + 3],
+                    sub_probs[i : i + 3],
+                    sel_matrix[i // 3],
                 )
 
+                child_codon = child[i : i + 3]
                 [chi0, chi1, chi2] = sequences.nucleotide_indices_of_codon(child_codon)
                 child_prob *= codon_mutsel[chi0, chi1, chi2]
 

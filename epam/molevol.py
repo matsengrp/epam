@@ -157,7 +157,9 @@ def aaprobs_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarra
 def build_codon_mutsel(
     parent_codon, codon_mut_probs, codon_sub_probs, aa_sel_matrix
 ):
-    """Build a codon mutation-selection matrix.
+    """Build a codon mutation-selection matrix from mutation and substitution
+    matrices on the nucleotide level, as well as a selection matrix on the amino
+    acid level.
 
     Args:
         parent_codon (string): The parent codon.
@@ -192,3 +194,5 @@ def build_codon_mutsel(
     codon_mutsel[par0, par1, par2] = 1.0 - codon_mutsel.sum()
 
     return codon_mutsel
+
+
