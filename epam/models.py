@@ -225,9 +225,7 @@ class SHMple(BaseModel):
 
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
-        return molevol.aaprobs_of_parent_rates_and_sub_probs(
-            parent, rates, subs
-        )
+        return molevol.aaprobs_of_parent_rates_and_sub_probs(parent, rates, subs)
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         """
@@ -348,31 +346,15 @@ class MutSel(OptimizableSHMple):
             child_prob = 1.0
 
             for i in range(0, len(parent), 3):
-                # This implementation is somewhat inefficient because we do the
-                # calculation for all of the possible codons every time even
-                # though we only use it for the indicated child codon. However,
-                # most of the time the parent and the child codons will be the
-                # same, and we need to calculate probabilities for every codon
-                # in that case (see below).
-
                 parent_codon = parent[i : i + 3]
                 child_codon = child[i : i + 3]
                 codon_mut_probs = mut_probs[i : i + 3]
                 codon_sub_probs = sub_probs[i : i + 3]
+                codon_sel_matrix = sel_matrix[i // 3]
 
-                mut_matrix = molevol.build_mutation_matrix(
-                    parent_codon, codon_mut_probs, codon_sub_probs
+                codon_mutsel = molevol.build_codon_mutsel(
+                    parent_codon, codon_mut_probs, codon_sub_probs, codon_sel_matrix
                 )
-                codon_probs = molevol.codon_probs_of_mutation_matrix(mut_matrix)
-
-                # Note that because there are no nonzero entries that correspond to stop, these will have selection probability 0.
-                codon_sel_matrix = CODON_AA_INDICATOR_MATRIX @ sel_matrix[i // 3]
-                codon_mutsel = codon_probs * codon_sel_matrix.reshape(4, 4, 4)
-
-                # Now we need to calculate the probability of no change in the codon.
-                [par0, par1, par2] = sequences.nucleotide_indices_of_codon(parent_codon)
-                codon_mutsel[par0, par1, par2] = 0.0
-                codon_mutsel[par0, par1, par2] = 1.0 - codon_mutsel.sum()
 
                 [chi0, chi1, chi2] = sequences.nucleotide_indices_of_codon(child_codon)
                 child_prob *= codon_mutsel[chi0, chi1, chi2]
@@ -381,8 +363,8 @@ class MutSel(OptimizableSHMple):
 
         return neg_pcp_probability
 
-    # TODO: don't we need to rewrite _aaprobs_of_parent_and_branch_length(parent, branch_length) ?? 
-    
+    # TODO: don't we need to rewrite _aaprobs_of_parent_and_branch_length(parent, branch_length) ??
+
 
 class RandomMutSel(MutSel):
     """A mutation selection model with a random selection matrix."""

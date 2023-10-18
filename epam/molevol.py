@@ -6,10 +6,8 @@ import numpy as np
 
 from epam.sequences import (
     NT_STR_SORTED,
-    AA_STR_SORTED,
     CODON_AA_INDICATOR_MATRIX,
-    assert_pcp_lengths,
-    translate_sequences,
+    nucleotide_indices_of_codon,
 )
 
 
@@ -154,3 +152,32 @@ def aaprobs_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarra
         aaprobs.append(site_probs)
 
     return np.array(aaprobs)
+
+
+def build_codon_mutsel(
+    parent_codon, codon_mut_probs, codon_sub_probs, codon_sel_matrix
+):
+    """Build a codon mutation-selection model."""
+    # This implementation is somewhat inefficient because we do the
+    # calculation for all of the possible codons every time even
+    # though we only use it for the indicated child codon. However,
+    # most of the time the parent and the child codons will be the
+    # same, and we need to calculate probabilities for every codon
+    # in that case (see below).
+
+    mut_matrix = build_mutation_matrix(parent_codon, codon_mut_probs, codon_sub_probs)
+    codon_probs = codon_probs_of_mutation_matrix(mut_matrix)
+
+    # Note that because there are no nonzero entries that correspond
+    # to stop, these will have selection probability 0.
+    codon_sel_matrix = CODON_AA_INDICATOR_MATRIX @ codon_sel_matrix
+    codon_mutsel = codon_probs * codon_sel_matrix.reshape(4, 4, 4)
+
+    # Now we need to calculate the probability of no change in the
+    # codon so that we can normalize to get a probability
+    # distribution.
+    [par0, par1, par2] = nucleotide_indices_of_codon(parent_codon)
+    codon_mutsel[par0, par1, par2] = 0.0
+    codon_mutsel[par0, par1, par2] = 1.0 - codon_mutsel.sum()
+
+    return codon_mutsel
