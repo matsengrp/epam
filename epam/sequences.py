@@ -14,6 +14,7 @@ CODONS = [
     "".join(codon_list)
     for codon_list in itertools.product(["A", "C", "G", "T"], repeat=3)
 ]
+STOP_CODONS = ["TAA", "TAG", "TGA"]
 
 
 def nucleotide_indices_of_codon(codon):
@@ -37,6 +38,12 @@ def translate_sequences(nt_sequences):
             raise ValueError(f"The sequence '{seq}' contains a stop codon.")
         aa_sequences.append(aa_seq)
     return aa_sequences
+
+
+def aa_index_of_codon(codon):
+    """Return the index of the amino acid encoded by a codon."""
+    aa = translate_sequences([codon])[0]
+    return AA_STR_SORTED.index(aa)
 
 
 def assert_pcp_lengths(parent, child):

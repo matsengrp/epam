@@ -3,6 +3,8 @@ import logging
 import ablang
 import shmple
 import torch
+
+# TODO: Cleanup these imports
 from esm import (
     Alphabet,
     FastaBatchedDataset,
@@ -16,6 +18,7 @@ import pandas as pd
 from scipy.special import softmax
 from scipy.optimize import minimize
 import matplotlib.pyplot as plt
+import epam.molevol as molevol
 import epam.sequences as sequences
 from epam.sequences import (
     NT_STR_SORTED,
@@ -56,11 +59,11 @@ class BaseModel(ABC):
 
         """
         assert (
-            len(child_seq) == prob_arr.shape[1]
+            len(child_seq) == prob_arr.shape[0]
         ), "The child sequence length does not match the probability array length."
 
         return np.array(
-            [prob_arr[AA_STR_SORTED.index(aa), i] for i, aa in enumerate(child_seq)]
+            [prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
         )
 
     def write_aaprobs(self, pcp_path, output_path):
@@ -159,11 +162,11 @@ class AbLang(BaseModel):
 
         # Apply softmax to the second dimension, and skip the first and last
         # elements (which are the probability of the start and end token).
-        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1]).T
+        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1])
 
-        # Sort rows according to the sorted amino acid string.
-        arr_sorted = arr[self.aa_str_sorted_indices]
-        assert len(seq) == arr_sorted.shape[1]
+        # Sort the second dimension according to the sorted amino acid string.
+        arr_sorted = arr[:, self.aa_str_sorted_indices]
+        assert len(seq) == arr_sorted.shape[0]
 
         return arr_sorted
 
@@ -199,32 +202,6 @@ class SHMple(BaseModel):
             weights_dir=weights_directory, log_level=logging.WARNING
         )
 
-    @staticmethod
-    def _normalize_sub_probs(parent: str, sub_probs: np.ndarray) -> np.ndarray:
-        """
-        Normalize substitution probabilities.
-
-        Given a parent DNA sequence and a 2D numpy array representing substitution
-        probabilities, this function sets the probability of the actual nucleotide
-        in the parent sequence to zero and then normalizes each row to form a valid
-        probability distribution.
-
-        Parameters:
-        parent (str): The parent sequence.
-        sub_probs (np.ndarray): A 2D numpy array representing substitution
-                                probabilities. Rows correspond to sites, and columns
-                                correspond to "ACGT" bases.
-
-        Returns:
-        np.ndarray: A 2D numpy array with normalized substitution probabilities.
-        """
-        for i, base in enumerate(parent):
-            idx = NT_STR_SORTED.index(base)
-            sub_probs[i, idx] = 0.0
-
-        row_sums = np.sum(sub_probs, axis=1, keepdims=True)
-        return sub_probs / row_sums
-
     def predict_rates_and_normed_sub_probs(self, parent, branch_length):
         """
         A wrapper for the predict_mutabilities_and_substitutions method of the
@@ -244,112 +221,13 @@ class SHMple(BaseModel):
         [rates], [subs] = self.model.predict_mutabilities_and_substitutions(
             [parent], [branch_length]
         )
-        return rates.squeeze(), self._normalize_sub_probs(parent, subs)
-
-    @staticmethod
-    def _build_mutation_matrix(parent_codon, mut_probs, sub_probs):
-        """Generate a matrix that represents the mutation probability for each
-        site in a given parent codon. So, the ijth entry of the matrix is the
-        probability of the ith position mutating to the jth nucleotide.
-
-        See codon_to_aa_probabilities for a description of the arguments, and
-        tests for an example."""
-
-        result_matrix = np.empty((len(parent_codon), len(NT_STR_SORTED)))
-
-        for site, nucleotide in enumerate(parent_codon):
-            try:
-                parent_nt_idx = NT_STR_SORTED.index(nucleotide)
-            except ValueError:
-                raise ValueError(
-                    f"Invalid nucleotide {nucleotide} in codon {parent_codon}"
-                )
-
-            for j, nt in enumerate(NT_STR_SORTED):
-                if j == parent_nt_idx:
-                    result_matrix[site, j] = 1 - mut_probs[site]
-                else:
-                    result_matrix[site, j] = mut_probs[site] * sub_probs[site][j]
-
-        return result_matrix
-
-    @staticmethod
-    def _codon_probs_of_mutation_matrix(mut_matrix):
-        """
-        Compute the probability tensor for mutating to the codon ijk.
-
-        This method calculates the tensor where the ijk-th entry represents
-        the probability of mutating to the codon formed by the i-th, j-th,
-        and k-th nucleotide in the nucleotide list. It uses numpy outer
-        products to construct this tensor.
-
-        Parameters:
-        mut_matrix (numpy.ndarray): A 3D array representing the mutation
-                                    matrix. The mutation matrix should be
-                                    formatted as per _build_mutation_matrix.
-
-        Returns:
-        numpy.ndarray: A 3D array where the ijk-th entry is the probability
-                    of mutating to the codon ijk.
-        """
-        return (
-            mut_matrix[0][:, np.newaxis, np.newaxis]
-            * mut_matrix[1][np.newaxis, :, np.newaxis]
-            * mut_matrix[2][np.newaxis, np.newaxis, :]
-        )
-
-    @staticmethod
-    def codon_to_aa_probabilities(parent_codon, mut_probs, sub_probs):
-        """
-        For a specified codon and given nucleotide mutability and substitution probabilities,
-        compute the amino acid substitution probabilities.
-
-        Following terminology from Yaari et al 2013, "mutability" refers to the probability
-        of a nucleotide mutating at a given site, while "substitution" refers to the probability
-        of a nucleotide mutating to another nucleotide at a given site conditional on having
-        a mutation.
-
-        We assume that the mutation and substitution probabilities already take branch length
-        into account. Here we translate those into amino acid probabilities, which are normalized.
-        Probabilities to stop codons are dropped, but self probabilities are kept.
-
-        Parameters:
-        parent_codon (str): The specified codon.
-        mut_probs (list): The mutability probabilities for each site in the codon.
-        sub_probs (list): The substitution probabilities for each site in the codon.
-
-        Returns:
-        list: An array of probabilities for all 20 amino acids.
-
-        """
-        mut_matrix = SHMple._build_mutation_matrix(parent_codon, mut_probs, sub_probs)
-        codon_probs = SHMple._codon_probs_of_mutation_matrix(mut_matrix)
-        aa_probs = codon_probs.reshape(-1) @ CODON_AA_INDICATOR_MATRIX
-        aa_probs /= aa_probs.sum()
-        return aa_probs
+        return rates.squeeze(), molevol.normalize_sub_probs(parent, subs)
 
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
+        """This is the key function that we need to override in order to
+        implement a new model."""
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
-
-        # This `mut_probs` is the probability of at least one mutation at each site.
-        # So here we are interpreting the probability in the correctly-specified way rather than the mis-specified
-        # way. This is helpful because we'd like normalized probabilities.
-        mut_probs = 1.0 - np.exp(-rates)
-
-        # keep track of probabilities as a row per amino acid site, then take transpose before returning output
-        aaprobs = []
-
-        for i in range(0, len(parent), 3):
-            parent_codon = parent[i : i + 3]
-            codon_mut_probs = mut_probs[i : i + 3]
-            codon_subs = subs[i : i + 3]
-
-            site_probs = self.codon_to_aa_probabilities(
-                parent_codon, codon_mut_probs, codon_subs
-            )
-            aaprobs.append(site_probs)
-
-        return np.array(aaprobs).transpose()
+        return molevol.aaprobs_of_parent_rates_and_sub_probs(parent, rates, subs)
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         """
@@ -470,38 +348,42 @@ class MutSel(OptimizableSHMple):
             child_prob = 1.0
 
             for i in range(0, len(parent), 3):
-                # This implementation is somewhat inefficient because we do the
-                # calculation for all of the possible codons every time even
-                # though we only use it for the indicated child codon. However,
-                # most of the time the parent and the child codons will be the
-                # same, and we need to calculate probabilities for every codon
-                # in that case (see below).
-
-                parent_codon = parent[i : i + 3]
-                child_codon = child[i : i + 3]
-                codon_mut_probs = mut_probs[i : i + 3]
-                codon_sub_probs = sub_probs[i : i + 3]
-
-                mut_matrix = SHMple._build_mutation_matrix(
-                    parent_codon, codon_mut_probs, codon_sub_probs
+                codon_mutsel = molevol.build_codon_mutsel(
+                    parent[i : i + 3],
+                    mut_probs[i : i + 3],
+                    sub_probs[i : i + 3],
+                    sel_matrix[i // 3],
                 )
-                codon_probs = SHMple._codon_probs_of_mutation_matrix(mut_matrix)
 
-                # Note that because there are no nonzero entries that correspond to stop, these will have selection probability 0.
-                codon_sel_matrix = CODON_AA_INDICATOR_MATRIX @ sel_matrix[i // 3]
-                codon_mutsel = codon_probs * codon_sel_matrix.reshape(4, 4, 4)
-
-                # Now we need to calculate the probability of no change in the codon.
-                [par0, par1, par2] = sequences.nucleotide_indices_of_codon(parent_codon)
-                codon_mutsel[par0, par1, par2] = 0.0
-                codon_mutsel[par0, par1, par2] = 1.0 - codon_mutsel.sum()
-
+                child_codon = child[i : i + 3]
                 [chi0, chi1, chi2] = sequences.nucleotide_indices_of_codon(child_codon)
                 child_prob *= codon_mutsel[chi0, chi1, chi2]
 
             return -child_prob  # Return the negative probability
 
         return neg_pcp_probability
+
+    def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
+        rates, sub_probs = self.predict_rates_and_normed_sub_probs(
+            parent, branch_length
+        )
+
+        sel_matrix = self.build_selection_matrix_from_parent(parent)
+        mut_probs = 1.0 - np.exp(-rates)
+
+        aaprobs = []
+
+        for i in range(0, len(parent), 3):
+            codon_mutsel = molevol.build_codon_mutsel(
+                parent[i : i + 3],
+                mut_probs[i : i + 3],
+                sub_probs[i : i + 3],
+                sel_matrix[i // 3],
+            )
+
+            aaprobs.append(molevol.aaprobs_of_codon_probs(codon_mutsel))
+
+        return np.array(aaprobs)
 
 
 class RandomMutSel(MutSel):
@@ -519,7 +401,7 @@ class RandomMutSel(MutSel):
 class TorchModel(BaseModel):
     def __init__(self, model_name=None):
         """
-        Initialize a pytorch model and select device.
+        Initialize a PyTorch model and select device.
 
         Parameters:
         model_name (str, optional): The name of the model. If not specified, the class name is used.
@@ -595,9 +477,9 @@ class ESM1v(TorchModel):
         aa_probs_np = aa_probs.cpu().numpy().squeeze()
 
         # drop first and last elements, which are the probability of the start and end token
-        prob_matrix = aa_probs_np[1:-1, :].transpose()
+        prob_matrix = aa_probs_np[1:-1, :]
 
-        assert prob_matrix.shape[1] == len(parent_aa)
+        assert prob_matrix.shape[0] == len(parent_aa)
 
         return prob_matrix
 
@@ -614,5 +496,4 @@ class SHMpleESM(MutSel):
         self.selection_model = ESM1v()
 
     def build_selection_matrix_from_parent(self, parent):
-        matrix = self.selection_model.aaprobs_of_parent_child_pair(parent)
-        return matrix.transpose()
+        return self.selection_model.aaprobs_of_parent_child_pair(parent)

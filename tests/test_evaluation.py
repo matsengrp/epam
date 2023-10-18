@@ -64,27 +64,9 @@ def test_identify_child_substitutions():
 
 def test_calculate_site_substitution_probabilities():
     example_matrix = np.array(
-        [
-            [0.8, 0.1],  # A
-            [0, 0],
-            [0.1, 0],  # D
-            [0, 0],
-            [0, 0],
-            [0, 0.5],  # G
-            [0, 0],
-            [0, 0],
-            [0.05, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0.4],  # Q
-            [0, 0],
-            [0.05, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
+        [  # A       D          G                            Q
+            [0.8, 0, 0.1, 0, 0, 0.0, 0, 0, 0.05, 0, 0, 0, 0, 0.0, 0, 0.05, 0, 0, 0, 0],
+            [0.1, 0, 0.0, 0, 0, 0.5, 0, 0, 0.00, 0, 0, 0, 0, 0.4, 0, 0.00, 0, 0, 0, 0],
         ]
     )
 
@@ -99,36 +81,19 @@ def test_calculate_site_substitution_probabilities():
 def test_highest_ranked_substitution():
     example_matrix = np.array(
         [
-            [0.6, 0.1],  # A
-            [0, 0],
-            [0.3, 0],  # D
-            [0, 0],
-            [0, 0],
-            [0.1, 0.5],  # G
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0.4],  # Q
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
-            [0, 0],
+            # A       D          G                         Q
+            [0.6, 0, 0.3, 0, 0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0.0, 0, 0, 0, 0, 0, 0],
+            [0.1, 0, 0.0, 0, 0, 0.5, 0, 0, 0, 0, 0, 0, 0, 0.4, 0, 0, 0, 0, 0, 0],
         ]
     )
 
     parent_aa = "AQ"
 
     # case when highest predicted aa is parent aa, select next highest
-    assert highest_ranked_substitution(example_matrix[:, 0], parent_aa, 0) == "D"
+    assert highest_ranked_substitution(example_matrix[0, :], parent_aa, 0) == "D"
 
     # case when highest predicted aa is not parent aa, select highest
-    assert highest_ranked_substitution(example_matrix[:, 1], parent_aa, 1) == "G"
+    assert highest_ranked_substitution(example_matrix[1, :], parent_aa, 1) == "G"
 
 
 def test_locate_top_k_substitutions():

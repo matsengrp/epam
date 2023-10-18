@@ -78,7 +78,7 @@ def evaluate_dataset(aaprob_path):
             )
 
             pred_aa_sub = [
-                highest_ranked_substitution(matrix[:, j], parent_aa_seqs[index], j)
+                highest_ranked_substitution(matrix[j, :], parent_aa_seqs[index], j)
                 for j in range(len(parent_aa_seqs[index]))
                 if parent_aa_seqs[index][j] != child_aa_seqs[index][j]
             ]
@@ -158,7 +158,7 @@ def calculate_site_substitution_probabilities(aaprobs, parent_aa):
 
     """
     site_sub_probs = [
-        1.0 - aaprobs[:, i][AA_STR_SORTED.index(parent_aa[i])]
+        1.0 - aaprobs[i, :][AA_STR_SORTED.index(parent_aa[i])]
         for i in range(len(parent_aa))
     ]
 
@@ -212,6 +212,7 @@ def locate_top_k_substitutions(site_sub_probs, k_sub):
     if k_sub == 0:
         return []
 
+    # np.argpartition returns indices of top k elements in unsorted order
     pred_sub_sites = np.argpartition(site_sub_probs, -k_sub)[-k_sub:]
 
     assert (
