@@ -155,9 +155,20 @@ def aaprobs_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarra
 
 
 def build_codon_mutsel(
-    parent_codon, codon_mut_probs, codon_sub_probs, codon_sel_matrix
+    parent_codon, codon_mut_probs, codon_sub_probs, aa_sel_matrix
 ):
-    """Build a codon mutation-selection model."""
+    """Build a codon mutation-selection matrix.
+
+    Args:
+        parent_codon (string): The parent codon.
+        codon_mut_probs (np.ndarray): The mutation probabilities for each site in the codon.
+        codon_sub_probs (np.ndarray): The substitution matrices for each site in the codon.
+        aa_sel_matrix (n.ndarray): The amino-acid selection matrix.
+
+    Returns:
+        np.ndarray: The probability of mutating to each codon, expressed as a 4x4x4 array.
+    """
+    
     # This implementation is somewhat inefficient because we do the
     # calculation for all of the possible codons every time even
     # though we only use it for the indicated child codon. However,
@@ -170,7 +181,7 @@ def build_codon_mutsel(
 
     # Note that because there are no nonzero entries that correspond
     # to stop, these will have selection probability 0.
-    codon_sel_matrix = CODON_AA_INDICATOR_MATRIX @ codon_sel_matrix
+    codon_sel_matrix = CODON_AA_INDICATOR_MATRIX @ aa_sel_matrix
     codon_mutsel = codon_probs * codon_sel_matrix.reshape(4, 4, 4)
 
     # Now we need to calculate the probability of no change in the

@@ -350,10 +350,10 @@ class MutSel(OptimizableSHMple):
                 child_codon = child[i : i + 3]
                 codon_mut_probs = mut_probs[i : i + 3]
                 codon_sub_probs = sub_probs[i : i + 3]
-                codon_sel_matrix = sel_matrix[i // 3]
+                aa_sel_matrix = sel_matrix[i // 3]
 
                 codon_mutsel = molevol.build_codon_mutsel(
-                    parent_codon, codon_mut_probs, codon_sub_probs, codon_sel_matrix
+                    parent_codon, codon_mut_probs, codon_sub_probs, aa_sel_matrix
                 )
 
                 [chi0, chi1, chi2] = sequences.nucleotide_indices_of_codon(child_codon)
@@ -381,7 +381,7 @@ class RandomMutSel(MutSel):
 class TorchModel(BaseModel):
     def __init__(self, model_name=None):
         """
-        Initialize a pytorch model and select device.
+        Initialize a PyTorch model and select device.
 
         Parameters:
         model_name (str, optional): The name of the model. If not specified, the class name is used.
