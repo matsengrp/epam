@@ -1,5 +1,12 @@
 """Routines for molecular evolution computation.
 
+We will follow terminology from Yaari et al 2013, where "mutability" refers to
+the probability of a nucleotide mutating at a given site, while "substitution"
+refers to the probability of a nucleotide mutating to another nucleotide at a
+given site conditional on having a mutation.
+
+We assume that the mutation and substitution probabilities already take branch
+length into account.  
 """
 
 import numpy as np
@@ -87,18 +94,31 @@ def codon_probs_of_mutation_matrix(mut_matrix):
     )
 
 
-def codon_to_aa_probabilities(parent_codon, mut_probs, sub_probs):
+def aaprobs_of_codon_probs(codon_probs):
+    """
+    Compute the probability of each amino acid from the probability of each codon.
+
+    Parameters:
+    codon_probs (numpy.ndarray): A 3D array representing the probability of mutating
+                                to each codon. The codon probability array should
+                                be formatted as per _codon_probs_of_mutation_matrix.
+
+    Returns:
+    numpy.ndarray: A 2D array where the ij-th entry is the probability of mutating
+                to the amino acid j from the codon i.
+    """
+    # reshape(-1) flattens the array
+    aaprobs = codon_probs.reshape(-1) @ CODON_AA_INDICATOR_MATRIX
+    aaprobs /= aaprobs.sum()
+    return aaprobs
+
+
+def aaprob_of_mut_and_sub(parent_codon, mut_probs, sub_probs):
     """
     For a specified codon and given nucleotide mutability and substitution probabilities,
     compute the amino acid substitution probabilities.
 
-    Following terminology from Yaari et al 2013, "mutability" refers to the probability
-    of a nucleotide mutating at a given site, while "substitution" refers to the probability
-    of a nucleotide mutating to another nucleotide at a given site conditional on having
-    a mutation.
-
-    We assume that the mutation and substitution probabilities already take branch length
-    into account. Here we translate those into amino acid probabilities, which are normalized.
+    Here we translate those into amino acid probabilities, which are normalized.
     Probabilities to stop codons are dropped, but self probabilities are kept.
 
     Parameters:
@@ -107,15 +127,12 @@ def codon_to_aa_probabilities(parent_codon, mut_probs, sub_probs):
     sub_probs (list): The substitution probabilities for each site in the codon.
 
     Returns:
-    list: An array of probabilities for all 20 amino acids.
+    np.ndarray: An array of probabilities for all 20 amino acids.
 
     """
     mut_matrix = build_mutation_matrix(parent_codon, mut_probs, sub_probs)
     codon_probs = codon_probs_of_mutation_matrix(mut_matrix)
-    # reshape(-1) flattens the array
-    aa_probs = codon_probs.reshape(-1) @ CODON_AA_INDICATOR_MATRIX
-    aa_probs /= aa_probs.sum()
-    return aa_probs
+    return aaprobs_of_codon_probs(codon_probs)
 
 
 def aaprobs_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarray:
@@ -146,17 +163,13 @@ def aaprobs_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarra
         codon_mut_probs = mut_probs[i : i + 3]
         codon_subs = sub_probs[i : i + 3]
 
-        site_probs = codon_to_aa_probabilities(
-            parent_codon, codon_mut_probs, codon_subs
-        )
+        site_probs = aaprob_of_mut_and_sub(parent_codon, codon_mut_probs, codon_subs)
         aaprobs.append(site_probs)
 
     return np.array(aaprobs)
 
 
-def build_codon_mutsel(
-    parent_codon, codon_mut_probs, codon_sub_probs, aa_sel_matrix
-):
+def build_codon_mutsel(parent_codon, codon_mut_probs, codon_sub_probs, aa_sel_matrix):
     """Build a codon mutation-selection matrix from mutation and substitution
     matrices on the nucleotide level, as well as a selection matrix on the amino
     acid level.
@@ -170,7 +183,7 @@ def build_codon_mutsel(
     Returns:
         np.ndarray: The probability of mutating to each codon, expressed as a 4x4x4 array.
     """
-    
+
     # This implementation is somewhat inefficient because we do the
     # calculation for all of the possible codons every time even
     # though we only use it for the indicated child codon. However,
@@ -194,5 +207,3 @@ def build_codon_mutsel(
     codon_mutsel[par0, par1, par2] = 1.0 - codon_mutsel.sum()
 
     return codon_mutsel
-
-

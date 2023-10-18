@@ -45,7 +45,7 @@ def test_normalize_sub_probs():
     ), "Unexpected normalized values"
 
 
-def iterative_codon_to_aa_probabilities(parent_codon, mut_probs, sub_probs):
+def iterative_aaprob_of_mut_and_sub(parent_codon, mut_probs, sub_probs):
     """
     Original version of codon_to_aa_probabilities, used for testing.
     """
@@ -78,7 +78,7 @@ def iterative_codon_to_aa_probabilities(parent_codon, mut_probs, sub_probs):
     return np.array([aa_probs[aa] / psum for aa in AA_STR_SORTED])
 
 
-def test_codon_to_aa_probabilities():
+def test_aaprob_of_mut_and_sub():
     shmple_shmoof = SHMple(weights_directory=weights_path)
     [rates], [subs] = shmple_shmoof.model.predict_mutabilities_and_substitutions(
         [parent_nt_seq], [0.1]
@@ -89,6 +89,6 @@ def test_codon_to_aa_probabilities():
     codon_subs = subs[0:3]
 
     assert np.allclose(
-        iterative_codon_to_aa_probabilities(parent_codon, codon_mut_probs, codon_subs),
-        molevol.codon_to_aa_probabilities(parent_codon, codon_mut_probs, codon_subs),
+        iterative_aaprob_of_mut_and_sub(parent_codon, codon_mut_probs, codon_subs),
+        molevol.aaprob_of_mut_and_sub(parent_codon, codon_mut_probs, codon_subs),
     )

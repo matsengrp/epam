@@ -224,6 +224,8 @@ class SHMple(BaseModel):
         return rates.squeeze(), molevol.normalize_sub_probs(parent, subs)
 
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
+        """This is the key function that we need to override in order to
+        implement a new model."""
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
         return molevol.aaprobs_of_parent_rates_and_sub_probs(parent, rates, subs)
 
@@ -361,7 +363,27 @@ class MutSel(OptimizableSHMple):
 
         return neg_pcp_probability
 
-    # TODO: don't we need to rewrite _aaprobs_of_parent_and_branch_length(parent, branch_length) ??
+    def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
+        rates, sub_probs = self.predict_rates_and_normed_sub_probs(
+            parent, branch_length
+        )
+
+        sel_matrix = self.build_selection_matrix_from_parent(parent)
+        mut_probs = 1.0 - np.exp(-rates)
+
+        aaprobs = []
+
+        for i in range(0, len(parent), 3):
+            codon_mutsel = molevol.build_codon_mutsel(
+                parent[i : i + 3],
+                mut_probs[i : i + 3],
+                sub_probs[i : i + 3],
+                sel_matrix[i // 3],
+            )
+
+            aaprobs.append(molevol.aaprobs_of_codon_probs(codon_mutsel))
+
+        return np.array(aaprobs)
 
 
 class RandomMutSel(MutSel):
