@@ -154,7 +154,6 @@ def aaprobs_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarra
     # way. This is helpful because we'd like normalized probabilities.
     mut_probs = 1.0 - np.exp(-rates)
 
-    # keep track of probabilities as a row per amino acid site, then take transpose before returning output
     aaprobs = []
 
     for i in range(0, len(parent), 3):
