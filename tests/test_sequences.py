@@ -5,16 +5,16 @@ from Bio.Data import CodonTable
 from epam.sequences import (
     AA_STR_SORTED,
     CODONS,
-    nucleotide_indices_of_codon,
+    nt_idx_array_of_str,
     translate_sequences,
     CODON_AA_INDICATOR_MATRIX,
 )
 
 
 def test_nucleotide_indices_of_codon():
-    assert nucleotide_indices_of_codon("AAA") == [0, 0, 0]
-    assert nucleotide_indices_of_codon("TAC") == [3, 0, 1]
-    assert nucleotide_indices_of_codon("GCG") == [2, 1, 2]
+    assert nt_idx_array_of_str("AAA").tolist() == [0, 0, 0]
+    assert nt_idx_array_of_str("TAC").tolist() == [3, 0, 1]
+    assert nt_idx_array_of_str("GCG").tolist() == [2, 1, 2]
 
 
 def test_translate_sequences():

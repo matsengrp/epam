@@ -1,16 +1,12 @@
 from abc import ABC, abstractmethod
+from importlib import resources
 import logging
 import ablang
 import shmple
 import torch
 
-# TODO: Cleanup these imports
 from esm import (
-    Alphabet,
-    FastaBatchedDataset,
-    ProteinBertModel,
     pretrained,
-    MSATransformer,
 )
 import h5py
 import numpy as np
@@ -23,11 +19,35 @@ import epam.sequences as sequences
 from epam.sequences import (
     NT_STR_SORTED,
     AA_STR_SORTED,
-    CODON_AA_INDICATOR_MATRIX,
     assert_pcp_lengths,
     translate_sequences,
 )
 import epam.utils as utils
+
+with resources.path("epam", "__init__.py") as p:
+    DATA_DIR = str(p.parent.parent) + "/data/"
+
+# Here's a list of the models and configurations we will use in our tests and pipeline.
+
+FULLY_SPECIFIED_MODELS = [
+    ("AbLang_heavy", "AbLang", {"chain": "heavy"}),
+    (
+        "SHMple_default",
+        "SHMple",
+        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
+    ),
+    (
+        "SHMple_productive",
+        "SHMple",
+        {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
+    ),
+    ("ESM1v_default", "ESM1v", {}),
+    (
+        "SHMple_ESM1v",
+        "SHMpleESM",
+        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
+    ),
+]
 
 
 class BaseModel(ABC):
@@ -221,13 +241,15 @@ class SHMple(BaseModel):
         [rates], [subs] = self.model.predict_mutabilities_and_substitutions(
             [parent], [branch_length]
         )
-        return rates.squeeze(), molevol.normalize_sub_probs(parent, subs)
+        parent_idxs = sequences.nt_idx_array_of_str(parent)
+        return rates.squeeze(), molevol.normalize_sub_probs(parent_idxs, subs)
 
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
         """This is the key function that we need to override in order to
         implement a new model."""
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
-        return molevol.aaprobs_of_parent_rates_and_sub_probs(parent, rates, subs)
+        parent_idxs = sequences.nt_idx_array_of_str(parent)
+        return molevol.aaprobs_of_parent_rates_and_sub_probs(parent_idxs, rates, subs)
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         """
@@ -250,27 +272,29 @@ class OptimizableSHMple(SHMple):
     def __init__(self, weights_directory, model_name=None):
         super().__init__(weights_directory, model_name)
 
-    def _build_neg_pcp_probability(self, parent, child, rates, sub_probs):
+    def _build_neg_pcp_probability(
+        self, parent: str, child: str, rates: np.ndarray, sub_probs: np.ndarray
+    ):
         """Constructs the neg_pcp_probability function specific to given rates and sub_probs.
 
         This function takes log_branch_scaling as input and returns the negative
         probability of the child sequence. It uses log of branch scaling to
         ensure non-negativity of the branch length."""
 
+        parent_idxs = sequences.nt_idx_array_of_str(parent)
+        child_idxs = sequences.nt_idx_array_of_str(child)
+
         def neg_pcp_probability(log_branch_scaling):
             branch_scaling = np.exp(log_branch_scaling)
             mut_probs = 1.0 - np.exp(-rates * branch_scaling)
+            no_mutation_sites = parent_idxs == child_idxs
 
-            child_prob = 1.0
-
-            for isite in range(len(parent)):
-                if parent[isite] == child[isite]:
-                    child_prob *= 1.0 - mut_probs[isite]
-                else:
-                    child_prob *= (
-                        mut_probs[isite]
-                        * sub_probs[isite][NT_STR_SORTED.index(child[isite])]
-                    )
+            same_probs = 1.0 - mut_probs[no_mutation_sites]
+            diff_probs = (
+                mut_probs[~no_mutation_sites]
+                * sub_probs[~no_mutation_sites, child_idxs[~no_mutation_sites]]
+            )
+            child_prob = np.concatenate([same_probs, diff_probs]).prod()
 
             return -child_prob  # Return the negative probability
 
@@ -341,6 +365,8 @@ class MutSel(OptimizableSHMple):
         assert len(parent) % 3 == 0
         sel_matrix = self.build_selection_matrix_from_parent(parent)
         assert sel_matrix.shape == (len(parent) // 3, 20)
+        parent_idxs = sequences.nt_idx_array_of_str(parent)
+        child_idxs = sequences.nt_idx_array_of_str(child)
 
         def neg_pcp_probability(log_branch_scaling):
             branch_scaling = np.exp(log_branch_scaling)
@@ -349,15 +375,13 @@ class MutSel(OptimizableSHMple):
 
             for i in range(0, len(parent), 3):
                 codon_mutsel = molevol.build_codon_mutsel(
-                    parent[i : i + 3],
+                    parent_idxs[i : i + 3],
                     mut_probs[i : i + 3],
                     sub_probs[i : i + 3],
                     sel_matrix[i // 3],
                 )
 
-                child_codon = child[i : i + 3]
-                [chi0, chi1, chi2] = sequences.nucleotide_indices_of_codon(child_codon)
-                child_prob *= codon_mutsel[chi0, chi1, chi2]
+                child_prob *= codon_mutsel[tuple(child_idxs[i : i + 3])]
 
             return -child_prob  # Return the negative probability
 
@@ -372,10 +396,11 @@ class MutSel(OptimizableSHMple):
         mut_probs = 1.0 - np.exp(-rates)
 
         aaprobs = []
+        parent_idxs = sequences.nt_idx_array_of_str(parent)
 
         for i in range(0, len(parent), 3):
             codon_mutsel = molevol.build_codon_mutsel(
-                parent[i : i + 3],
+                parent_idxs[i : i + 3],
                 mut_probs[i : i + 3],
                 sub_probs[i : i + 3],
                 sel_matrix[i // 3],

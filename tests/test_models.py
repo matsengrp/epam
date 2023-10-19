@@ -1,5 +1,7 @@
+import h5py
 import numpy as np
 import pytest
+import epam.models
 from epam.sequences import translate_sequences
 from epam.models import (
     AbLang,
@@ -103,3 +105,34 @@ def test_shmple_esm():
     child_aa_seq = translate_sequences([child_nt_seq])[0]
     prob_vec = shmple_esm.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
+
+
+def hdf5_files_identical(path_1, path_2, tol=1e-6):
+    """Return if two HDF5 files are identical."""
+    with h5py.File(path_1, "r") as f1, h5py.File(path_2, "r") as f2:
+        for key in f1.keys():
+            if key not in f2:
+                print(f"Key {key} not in second file")
+                return False
+
+            d1 = f1[key]["data"]
+            d2 = f2[key]["data"]
+
+            if not np.allclose(d1, d2, atol=tol):
+                print(f"Data for key {key} not matching")
+                return False
+
+    return True
+
+
+def test_snapshot():
+    """Test that the current code produces the same results as a previously-built snapshot."""
+    for model_name, model_class_str, model_args in epam.models.FULLY_SPECIFIED_MODELS:
+        print(f"Snapshot testing {model_name}")
+        source = "10-random-from-10x"
+        ModelClass = getattr(epam.models, model_class_str)
+        model = ModelClass(**model_args)
+        out_file = f"_ignore/{source}-{model_name}.hdf5"
+        model.write_aaprobs(f"data/{source}.csv", out_file)
+        compare_file = f"tests/test-data/{source}-{model_name}.hdf5"
+        assert hdf5_files_identical(out_file, compare_file)
