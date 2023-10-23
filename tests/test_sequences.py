@@ -30,9 +30,10 @@ def test_translate_sequences():
 
 def test_indicator_matrix():
     reconstructed_codon_table = {}
+    indicator_matrix = CODON_AA_INDICATOR_MATRIX.numpy()
 
     for i, codon in enumerate(CODONS):
-        row = CODON_AA_INDICATOR_MATRIX[i]
+        row = indicator_matrix[i]
         if np.any(row):
             amino_acid = AA_STR_SORTED[np.argmax(row)]
             reconstructed_codon_table[codon] = amino_acid

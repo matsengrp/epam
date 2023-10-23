@@ -2,11 +2,11 @@
 
 import itertools
 
+import torch
 import numpy as np
 
 from Bio import SeqIO
 from Bio.Seq import Seq
-from Bio.Data import CodonTable
 
 AA_STR_SORTED = "ACDEFGHIKLMNPQRSTVWY"
 NT_STR_SORTED = "ACGT"
@@ -75,4 +75,4 @@ def generate_codon_aa_indicator_matrix():
     return matrix
 
 
-CODON_AA_INDICATOR_MATRIX = generate_codon_aa_indicator_matrix()
+CODON_AA_INDICATOR_MATRIX = torch.tensor(generate_codon_aa_indicator_matrix())
