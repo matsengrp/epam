@@ -371,14 +371,11 @@ class MutSel(OptimizableSHMple):
         def neg_pcp_probability(log_branch_scaling):
             branch_scaling = np.exp(log_branch_scaling)
             mut_probs = 1.0 - np.exp(-rates * branch_scaling)
-
-            reshaped_parent_idxs = parent_idxs.reshape(-1, 3)
-            reshaped_mut_probs = mut_probs.reshape(-1, 3)
-            reshaped_sub_probs = sub_probs.reshape(-1, 3, 4)
-
-            # Call the vectorized build_codon_mutsel_v function
             codon_mutsel_v = molevol.build_codon_mutsel_v(
-                reshaped_parent_idxs, reshaped_mut_probs, reshaped_sub_probs, sel_matrix
+                parent_idxs.reshape(-1, 3),
+                mut_probs.reshape(-1, 3),
+                sub_probs.reshape(-1, 3, 4),
+                sel_matrix,
             )
 
             # Index into codon_mutsel_v using reshaped_child_idxs to get probabilities
@@ -409,14 +406,11 @@ class MutSel(OptimizableSHMple):
         aaprobs = []
         parent_idxs = sequences.nt_idx_array_of_str(parent)
 
-        # TODO code duplication with above
-        reshaped_parent_idxs = parent_idxs.reshape(-1, 3)
-        reshaped_mut_probs = mut_probs.reshape(-1, 3)
-        reshaped_sub_probs = sub_probs.reshape(-1, 3, 4)
-
-        # Call the vectorized build_codon_mutsel_v function
         codon_mutsel_v = molevol.build_codon_mutsel_v(
-            reshaped_parent_idxs, reshaped_mut_probs, reshaped_sub_probs, sel_matrix
+            parent_idxs.reshape(-1, 3),
+            mut_probs.reshape(-1, 3),
+            sub_probs.reshape(-1, 3, 4),
+            sel_matrix,
         )
 
         return molevol.aaprobs_of_codon_probs_v(codon_mutsel_v)
