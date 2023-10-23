@@ -179,12 +179,12 @@ def aaprob_of_mut_and_sub_v(
     compute the amino acid substitution probabilities for each codon along the sequence.
 
     Parameters:
-    parent_codon_idxs_v (np.ndarray): A 2D array where each row contains indices representing 
+    parent_codon_idxs_v (np.ndarray): A 2D array where each row contains indices representing
                                       the parent codon's nucleotides at each site along the sequence.
                                       Shape should be (codon_count, 3).
     mut_probs_v (np.ndarray): A 2D array representing the mutation probabilities for each site in the codon,
                               for each codon along the sequence. Shape should be (codon_count, 3).
-    sub_probs_v (np.ndarray): A 3D array representing substitution probabilities for each codon along the 
+    sub_probs_v (np.ndarray): A 3D array representing substitution probabilities for each codon along the
                               sequence for each site.
                               Shape should be (codon_count, 3, 4).
 

@@ -33,7 +33,11 @@ def test_build_mutation_matrix():
     )
     assert np.allclose(
         correct_tensor,
-        molevol.build_mutation_matrix(ex_parent_codon_idxs, ex_mut_probs, ex_sub_probs),
+        molevol.build_mutation_matrices(
+            ex_parent_codon_idxs[np.newaxis, ...],
+            ex_mut_probs[np.newaxis, ...],
+            ex_sub_probs[np.newaxis, ...],
+        ).squeeze(),
     )
 
 
@@ -91,12 +95,15 @@ def test_aaprob_of_mut_and_sub():
     )
     mut_probs = 1.0 - np.exp(-rates.squeeze())
     parent_codon = parent_nt_seq[0:3]
+    parent_codon_idxs = nt_idx_array_of_str(parent_codon)
     codon_mut_probs = mut_probs[0:3]
     codon_subs = subs[0:3]
 
     assert np.allclose(
         iterative_aaprob_of_mut_and_sub(parent_codon, codon_mut_probs, codon_subs),
-        molevol.aaprob_of_mut_and_sub(
-            nt_idx_array_of_str(parent_codon), codon_mut_probs, codon_subs
-        ),
+        molevol.aaprob_of_mut_and_sub_v(
+            parent_codon_idxs[np.newaxis, ...],
+            codon_mut_probs[np.newaxis, ...],
+            codon_subs[np.newaxis, ...],
+        ).squeeze(),
     )
