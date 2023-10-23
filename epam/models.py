@@ -63,10 +63,10 @@ class BaseModel(ABC):
         self.model_name = model_name
 
     @abstractmethod
-    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         pass
 
-    def probability_vector_of_child_seq(self, prob_arr, child_seq):
+    def probability_vector_of_child_seq(self, prob_arr: np.ndarray, child_seq: str):
         """
         Calculate the sitewise probability of a child sequence given a probability array.
 
@@ -86,7 +86,7 @@ class BaseModel(ABC):
             [prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
         )
 
-    def write_aaprobs(self, pcp_path, output_path):
+    def write_aaprobs(self, pcp_path: str, output_path: str):
         """
         Write an aaprob matrix for each parent-child pair (PCP) of nucleotide sequences with a substitution model.
 
@@ -121,29 +121,6 @@ class BaseModel(ABC):
                     "data", data=matrix, compression="gzip", compression_opts=4
                 )
 
-    def plot_sequences(self, seqs):
-        """
-        Plot the normalized probabilities of the various amino acids by site for
-        each sequence in seqs.
-
-        Parameters:
-        seqs (list): List of sequences to plot.
-
-        """
-        plt.figure(figsize=(10, 6))
-
-        for seq in seqs:
-            # get probability array for this sequence
-            arr = self.probability_array_of_seq(seq)
-            # create a line plot for this sequence
-            plt.plot(self.probability_vector_of_child_seq(arr, seq), label=seq)
-
-        plt.legend()
-        plt.xlabel("Site")
-        plt.ylabel("Probability")
-        plt.title("Sequence Probabilities")
-        plt.show()
-
 
 class AbLang(BaseModel):
     def __init__(self, chain="heavy", model_name=None):
@@ -165,7 +142,7 @@ class AbLang(BaseModel):
             np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
 
-    def probability_array_of_seq(self, seq):
+    def probability_array_of_seq(self, seq: str):
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
 
@@ -190,7 +167,7 @@ class AbLang(BaseModel):
 
         return arr_sorted
 
-    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(self, parent: str, child=None) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
 
@@ -209,7 +186,7 @@ class AbLang(BaseModel):
 
 
 class SHMple(BaseModel):
-    def __init__(self, weights_directory, model_name=None):
+    def __init__(self, weights_directory: str, model_name=None):
         """
         Initialize a SHMple model with specified directory to trained model weights.
 
@@ -222,7 +199,7 @@ class SHMple(BaseModel):
             weights_dir=weights_directory, log_level=logging.WARNING
         )
 
-    def predict_rates_and_normed_sub_probs(self, parent, branch_length):
+    def predict_rates_and_normed_sub_probs(self, parent: str, branch_length):
         """
         A wrapper for the predict_mutabilities_and_substitutions method of the
         SHMple model that normalizes the substitution probabilities, as well as
@@ -251,7 +228,7 @@ class SHMple(BaseModel):
         parent_idxs = sequences.nt_idx_array_of_str(parent)
         return molevol.aaprobs_of_parent_rates_and_sub_probs(parent_idxs, rates, subs)
 
-    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to a SHMple model.
 
@@ -403,7 +380,6 @@ class MutSel(OptimizableSHMple):
         sel_matrix = self.build_selection_matrix_from_parent(parent)
         mut_probs = 1.0 - np.exp(-rates)
 
-        aaprobs = []
         parent_idxs = sequences.nt_idx_array_of_str(parent)
 
         codon_mutsel_v = molevol.build_codon_mutsel_v(
