@@ -119,7 +119,7 @@ def hdf5_files_identical(path_1, path_2, tol=1e-6):
             d2 = f2[key]["data"]
 
             if not np.allclose(d1, d2, atol=tol):
-                print(f"Data for key {key} not matching")
+                print(f"Data for key {key} not matching: {d1[...] - d2[...]}")
                 return False
 
     return True
