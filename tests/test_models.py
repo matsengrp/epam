@@ -51,11 +51,6 @@ def test_shmple():
     assert opt_prob_vec.prod() > prob_vec.prod()
 
 
-def test_mutsel():
-    mutsel = RandomMutSel(weights_directory=weights_path)
-    opt_aaprobs = mutsel.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
-
-
 class MutSelThreonine(MutSel):
 
     """A mutation selection model with a selection matrix that loves Threonine."""

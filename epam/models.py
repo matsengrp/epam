@@ -13,11 +13,9 @@ import numpy as np
 import pandas as pd
 from scipy.special import softmax
 from scipy.optimize import minimize
-import matplotlib.pyplot as plt
 import epam.molevol as molevol
 import epam.sequences as sequences
 from epam.sequences import (
-    NT_STR_SORTED,
     AA_STR_SORTED,
     assert_pcp_lengths,
     translate_sequences,
@@ -27,7 +25,8 @@ import epam.utils as utils
 with resources.path("epam", "__init__.py") as p:
     DATA_DIR = str(p.parent.parent) + "/data/"
 
-# Here's a list of the models and configurations we will use in our tests and pipeline.
+# Here's a list of the models and configurations we will use in our tests and
+# pipeline.
 
 FULLY_SPECIFIED_MODELS = [
     ("AbLang_heavy", "AbLang", {"chain": "heavy"}),
@@ -115,8 +114,6 @@ class BaseModel(ABC):
                 # create a group for each matrix
                 grp = outfile.create_group(f"matrix{i}")
                 grp.attrs["pcp_index"] = i
-
-                # enable gzip compression
                 grp.create_dataset(
                     "data", data=matrix, compression="gzip", compression_opts=4
                 )
@@ -175,7 +172,7 @@ class AbLang(BaseModel):
 
         Parameters:
         parent (str): The parent sequence for which we want the array of probabilities.
-        child (str): The child sequence (ignored for AbLang model)
+        child (str): The child sequence (ignored for AbLang model).
 
         Returns:
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
@@ -199,7 +196,7 @@ class SHMple(BaseModel):
             weights_dir=weights_directory, log_level=logging.WARNING
         )
 
-    def predict_rates_and_normed_sub_probs(self, parent: str, branch_length):
+    def predict_rates_and_normed_sub_probs(self, parent: str, branch_length: float):
         """
         A wrapper for the predict_mutabilities_and_substitutions method of the
         SHMple model that normalizes the substitution probabilities, as well as
@@ -221,9 +218,23 @@ class SHMple(BaseModel):
         parent_idxs = sequences.nt_idx_array_of_str(parent)
         return rates.squeeze(), molevol.normalize_sub_probs(parent_idxs, subs)
 
-    def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
-        """This is the key function that we need to override in order to
-        implement a new model."""
+    def _aaprobs_of_parent_and_branch_length(
+        self, parent: str, branch_length: float
+    ) -> np.ndarray:
+        """
+        Calculate the amino acid probabilities for a given parent and branch length.
+
+        This is the key function that needs to be overridden for implementing a new model.
+
+        Parameters:
+        parent : str
+            The parent nucleotide sequence.
+        branch_length : float
+            The length of the branch.
+
+        Returns:
+        np.ndarray: The aaprobs for every codon of the parent sequence.
+        """
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
         parent_idxs = sequences.nt_idx_array_of_str(parent)
         return molevol.aaprobs_of_parent_rates_and_sub_probs(parent_idxs, rates, subs)
@@ -355,8 +366,6 @@ class MutSel(OptimizableSHMple):
                 sel_matrix,
             )
 
-            # Index into codon_mutsel_v using reshaped_child_idxs to get probabilities
-            # You may need to adjust this indexing based on how exactly your arrays are shaped
             reshaped_child_idxs = child_idxs.reshape(-1, 3)
             child_prob_vector = codon_mutsel_v[
                 np.arange(len(reshaped_child_idxs)),
@@ -365,10 +374,7 @@ class MutSel(OptimizableSHMple):
                 reshaped_child_idxs[:, 2],
             ]
 
-            # Take the product of all child probabilities to get the final result
-            child_prob = np.prod(child_prob_vector)
-
-            return -child_prob  # Return the negative probability
+            return -np.prod(child_prob_vector)  # Return the negative probability
 
         return neg_pcp_probability
 
@@ -473,7 +479,8 @@ class ESM1v(TorchModel):
 
         batch_tokens = batch_converter(data)[2]
 
-        # get token probabilities before softmax so we can restrict to 20 amino acids in softmax calculation
+        # Get token probabilities before softmax so we can restrict to 20 amino
+        # acids in softmax calculation.
         with torch.no_grad():
             batch_tokens = batch_tokens.to(self.device)
             token_probs_pre_softmax = self.model(batch_tokens)["logits"]
@@ -482,7 +489,8 @@ class ESM1v(TorchModel):
 
         aa_probs_np = aa_probs.cpu().numpy().squeeze()
 
-        # drop first and last elements, which are the probability of the start and end token
+        # Drop first and last elements, which are the probability of the start
+        # and end token.
         prob_matrix = aa_probs_np[1:-1, :]
 
         assert prob_matrix.shape[0] == len(parent_aa)
