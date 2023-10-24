@@ -109,7 +109,6 @@ def build_mutation_matrices(
     result_matrices[mask_diff_nt] = (mut_probs_v[:, :, None] * sub_probs_v)[
         mask_diff_nt
     ]
-    # TODO check that this is a normalized probability distribution.
 
     return result_matrices
 
