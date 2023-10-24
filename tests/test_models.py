@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 import torch
 import pytest
+import os
 import epam.models
 from epam.sequences import translate_sequences
 from epam.models import (
@@ -123,6 +124,7 @@ def hdf5_files_identical(path_1, path_2, tol=1e-4):
 
 def test_snapshot():
     """Test that the current code produces the same results as a previously-built snapshot."""
+    os.makedirs("_ignore", exist_ok=True)
     for model_name, model_class_str, model_args in epam.models.FULLY_SPECIFIED_MODELS:
         print(f"Snapshot testing {model_name}")
         source = "10-random-from-10x"
