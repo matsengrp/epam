@@ -274,7 +274,7 @@ class OptimizableSHMple(SHMple):
     ):
         """
         Initialize a SHMple model that optimizes branch length for each parent-child pair.
-        
+
         Parameters:
         weights_directory : str
             Directory containing the trained model weights.
