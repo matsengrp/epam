@@ -372,7 +372,6 @@ class MutSel(OptimizableSHMple):
         sel_matrix = self.build_selection_matrix_from_parent(parent)
         assert sel_matrix.shape == (len(parent) // 3, 20)
 
-        # Assuming that nt_idx_tensor_of_str returns a PyTorch tensor
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
         child_idxs = sequences.nt_idx_tensor_of_str(child)
 
