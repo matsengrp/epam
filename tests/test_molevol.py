@@ -2,7 +2,13 @@ import numpy as np
 import epam.molevol as molevol
 from epam.models import SHMple
 
-from epam.sequences import translate_sequences, AA_STR_SORTED, CODONS, NT_STR_SORTED
+from epam.sequences import (
+    nt_idx_array_of_str,
+    translate_sequences,
+    AA_STR_SORTED,
+    CODONS,
+    NT_STR_SORTED,
+)
 
 # These happen to be the same as some examples in test_models.py but that's fine.
 # If it was important that they were shared, we should put them in a conftest.py.
@@ -10,7 +16,7 @@ ex_mut_probs = np.array([0.01, 0.02, 0.03])
 ex_sub_probs = np.array(
     [[0.0, 0.3, 0.5, 0.2], [0.4, 0.0, 0.1, 0.5], [0.2, 0.3, 0.0, 0.5]]
 )
-ex_parent_codon = "ACG"
+ex_parent_codon_idxs = nt_idx_array_of_str("ACG")
 parent_nt_seq = "CAGGTGCAGCTGGTGGAG"  # QVQLVE
 weights_path = "data/shmple_weights/my_shmoof"
 
@@ -27,17 +33,21 @@ def test_build_mutation_matrix():
     )
     assert np.allclose(
         correct_tensor,
-        molevol.build_mutation_matrix(ex_parent_codon, ex_mut_probs, ex_sub_probs),
+        molevol.build_mutation_matrices(
+            ex_parent_codon_idxs[np.newaxis, ...],
+            ex_mut_probs[np.newaxis, ...],
+            ex_sub_probs[np.newaxis, ...],
+        ).squeeze(),
     )
 
 
 def test_normalize_sub_probs():
-    parent = "AC"
+    parent_idxs = nt_idx_array_of_str("AC")
     sub_probs = np.array([[0.2, 0.3, 0.4, 0.1], [0.1, 0.2, 0.3, 0.4]])
 
     expected_normalized = np.array([[0.0, 0.375, 0.5, 0.125], [0.125, 0.0, 0.375, 0.5]])
 
-    normalized_sub_probs = molevol.normalize_sub_probs(parent, sub_probs)
+    normalized_sub_probs = molevol.normalize_sub_probs(parent_idxs, sub_probs)
 
     assert normalized_sub_probs.shape == (2, 4), "Result has incorrect shape"
     np.testing.assert_allclose(
@@ -85,10 +95,15 @@ def test_aaprob_of_mut_and_sub():
     )
     mut_probs = 1.0 - np.exp(-rates.squeeze())
     parent_codon = parent_nt_seq[0:3]
+    parent_codon_idxs = nt_idx_array_of_str(parent_codon)
     codon_mut_probs = mut_probs[0:3]
     codon_subs = subs[0:3]
 
     assert np.allclose(
         iterative_aaprob_of_mut_and_sub(parent_codon, codon_mut_probs, codon_subs),
-        molevol.aaprob_of_mut_and_sub(parent_codon, codon_mut_probs, codon_subs),
+        molevol.aaprob_of_mut_and_sub_v(
+            parent_codon_idxs[np.newaxis, ...],
+            codon_mut_probs[np.newaxis, ...],
+            codon_subs[np.newaxis, ...],
+        ).squeeze(),
     )

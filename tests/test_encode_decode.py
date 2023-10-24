@@ -1,5 +1,4 @@
 import h5py
-import pandas as pd
 from epam.utils import generate_file_checksum
 from epam.models import AbLang
 

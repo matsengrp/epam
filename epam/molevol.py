@@ -11,14 +11,10 @@ length into account.
 
 import numpy as np
 
-from epam.sequences import (
-    NT_STR_SORTED,
-    CODON_AA_INDICATOR_MATRIX,
-    nucleotide_indices_of_codon,
-)
+from epam.sequences import CODON_AA_INDICATOR_MATRIX
 
 
-def normalize_sub_probs(parent: str, sub_probs: np.ndarray) -> np.ndarray:
+def normalize_sub_probs(parent_idxs: np.ndarray, sub_probs: np.ndarray) -> np.ndarray:
     """
     Normalize substitution probabilities.
 
@@ -28,7 +24,7 @@ def normalize_sub_probs(parent: str, sub_probs: np.ndarray) -> np.ndarray:
     probability distribution.
 
     Parameters:
-    parent (str): The parent sequence.
+    parent_idxs (np.ndarray): The parent sequence indices.
     sub_probs (np.ndarray): A 2D numpy array representing substitution
                             probabilities. Rows correspond to sites, and columns
                             correspond to "ACGT" bases.
@@ -36,172 +32,263 @@ def normalize_sub_probs(parent: str, sub_probs: np.ndarray) -> np.ndarray:
     Returns:
     np.ndarray: A 2D numpy array with normalized substitution probabilities.
     """
-    for i, base in enumerate(parent):
-        idx = NT_STR_SORTED.index(base)
-        sub_probs[i, idx] = 0.0
 
+    # Create an array of row indices that matches the shape of `parent_idxs`.
+    row_indices = np.arange(len(parent_idxs))
+
+    # Set the entries corresponding to the parent sequence to zero.
+    sub_probs[row_indices, parent_idxs] = 0.0
+
+    # Normalize the probabilities.
     row_sums = np.sum(sub_probs, axis=1, keepdims=True)
     return sub_probs / row_sums
 
 
-def build_mutation_matrix(parent_codon, mut_probs, sub_probs):
-    """Generate a matrix that represents the mutation probability for each
-    site in a given parent codon. So, the ijth entry of the matrix is the
-    probability of the ith position mutating to the jth nucleotide.
-
-    See tests for an example."""
-
-    result_matrix = np.empty((len(parent_codon), len(NT_STR_SORTED)))
-
-    for site, nucleotide in enumerate(parent_codon):
-        try:
-            parent_nt_idx = NT_STR_SORTED.index(nucleotide)
-        except ValueError:
-            raise ValueError(f"Invalid nucleotide {nucleotide} in codon {parent_codon}")
-
-        for j, nt in enumerate(NT_STR_SORTED):
-            if j == parent_nt_idx:
-                result_matrix[site, j] = 1 - mut_probs[site]
-            else:
-                result_matrix[site, j] = mut_probs[site] * sub_probs[site][j]
-
-    return result_matrix
-
-
-def codon_probs_of_mutation_matrix(mut_matrix):
+def build_mutation_matrices(
+    parent_codon_idxs_v: np.ndarray, mut_probs_v: np.ndarray, sub_probs_v: np.ndarray
+) -> np.ndarray:
     """
-    Compute the probability tensor for mutating to the codon ijk.
+    Generate a sequence of 3x4 mutation matrices for parent codons along a sequence.
 
-    This method calculates the tensor where the ijk-th entry represents
-    the probability of mutating to the codon formed by the i-th, j-th,
-    and k-th nucleotide in the nucleotide list. It uses numpy outer
-    products to construct this tensor.
+    Given indices for parent codons, mutation probabilities, and substitution probabilities for
+    each parent codon along the sequence, this function constructs a sequence of 3x4 matrices. Each
+    matrix in the sequence represents the mutation probabilities for each nucleotide position in a parent
+    codon. The ijkth entry of the resulting tensor corresponds to the probability of the jth nucleotide
+    in the ith parent codon mutating to the kth nucleotide (in indices).
 
     Parameters:
-    mut_matrix (numpy.ndarray): A 3D array representing the mutation
-                                matrix. The mutation matrix should be
-                                formatted as per _build_mutation_matrix.
+    parent_codon_idxs_v (np.ndarray): 2D array with each row containing indices representing
+                                      the parent codon's nucleotides at each site along the sequence.
+                                      Shape should be (codon_count, 3).
+    mut_probs_v (np.ndarray): 2D array representing the mutation probabilities for each site in the codon,
+                              for each codon along the sequence. Shape should be (codon_count, 3).
+    sub_probs_v (np.ndarray): 3D array representing substitution probabilities for each codon along the
+                              sequence for each site.
+                              Shape should be (codon_count, 3, 4).
 
     Returns:
-    numpy.ndarray: A 3D array where the ijk-th entry is the probability
-                of mutating to the codon ijk.
+    np.ndarray: A 4D array with shape (codon_count, 3, 4) where the ijkth entry is the mutation probability
+                of the jth position in the ith parent codon mutating to the kth nucleotide.
     """
+    codon_count = parent_codon_idxs_v.shape[0]
+    assert parent_codon_idxs_v.shape[1] == 3, "Each parent codon must be of length 3"
+
+    result_matrices = np.empty((codon_count, 3, 4))
+
+    # Create a mask with the shape (codon_count, 3, 4) to identify where
+    # nucleotides in the parent codon are the same as the nucleotide positions
+    # in the new codon. Each row in the third dimension contains a boolean
+    # value, which is True if the nucleotide position matches the parent codon
+    # nucleotide. How it works: newaxis adds one more dimension to the array, so
+    # that the shape of the array is (codon_count, 3, 1) instead of
+    # (codon_count, 3). Then broadcasting automatically expands dimensions where
+    # needed. So the arange(4) array is automatically expanded to match the
+    # (codon_count, 3, 1) shape by implicitly turning it into a (1, 1, 4) shape
+    # array, where it is then broadcasted to the shape (codon_count, 3, 4) to
+    # match the shape of parent_codon_idxs_v[:, :, np.newaxis] for equality
+    # testing.
+    mask_same_nt = np.arange(4) == parent_codon_idxs_v[:, :, np.newaxis]
+
+    # Find the multi-dimensional indices where the nucleotide in the parent
+    # codon is the same as the nucleotide in the mutation outcome (i.e., no
+    # mutation occurs).
+    same_nt_indices = np.nonzero(mask_same_nt)
+
+    # Using the multi-dimensional indices obtained from the boolean mask, update
+    # the mutation probability in result_matrices to be "1.0 -
+    # mutation_probability" at these specific positions. This captures the
+    # probability of a given nucleotide not mutating.
+    result_matrices[same_nt_indices] = 1.0 - mut_probs_v[same_nt_indices[:-1]]
+
+    # Assign values where the nucleotide is different via broadcasting.
+    mask_diff_nt = ~mask_same_nt
+    # To understand this line, remember that * is element-wise multiplication.
+    # The newaxis repeats the array along a new axis, so that the shape of the
+    # array is (codon_count, 3, 4); the mut_probs don't depend on the new base.
+    result_matrices[mask_diff_nt] = (mut_probs_v[:, :, np.newaxis] * sub_probs_v)[
+        mask_diff_nt
+    ]
+
+    return result_matrices
+
+
+def codon_probs_of_mutation_matrices(mut_matrix: np.ndarray) -> np.ndarray:
+    """
+    Compute the probability tensor for mutating to the codon ijk along the entire sequence.
+
+    Parameters:
+    mut_matrix (numpy.ndarray): A 3D array representing the mutation matrix for the entire sequence.
+                                The shape should be (n_sites, 3, 4), where n_sites is the number of sites,
+                                3 is the number of positions in a codon, and 4 is the number of nucleotides.
+
+    Returns:
+    numpy.ndarray: A 4D array where the first axis represents different sites in the sequence and
+                   the ijk-th entry of the remaining 3D tensor is the probability of mutating to the codon ijk.
+    """
+    assert (
+        mut_matrix.shape[1] == 3
+    ), "The second dimension of the input mut_matrix should be 3 to represent the 3 positions in a codon"
+    assert (
+        mut_matrix.shape[2] == 4
+    ), "The last dimension of the input mut_matrix should be 4 to represent the 4 nucleotides"
+
+    # The key to understanding how this works is that when these arrays are
+    # multiplied, NumPy broadcasts them into a common shape (n_sites, 4, 4, 4),
+    # performing element-wise multiplication for each slice along the first axis
+    # (i.e., for each site).
     return (
-        mut_matrix[0][:, np.newaxis, np.newaxis]
-        * mut_matrix[1][np.newaxis, :, np.newaxis]
-        * mut_matrix[2][np.newaxis, np.newaxis, :]
+        mut_matrix[:, 0, :, np.newaxis, np.newaxis]
+        * mut_matrix[:, 1, np.newaxis, :, np.newaxis]
+        * mut_matrix[:, 2, np.newaxis, np.newaxis, :]
     )
 
 
-def aaprobs_of_codon_probs(codon_probs):
+def aaprobs_of_codon_probs_v(codon_probs_v: np.ndarray) -> np.ndarray:
     """
-    Compute the probability of each amino acid from the probability of each codon.
+    Compute the probability of each amino acid from the probability of each codon, for each parent codon along the sequence.
 
     Parameters:
-    codon_probs (numpy.ndarray): A 3D array representing the probability of mutating
-                                to each codon. The codon probability array should
-                                be formatted as per _codon_probs_of_mutation_matrix.
+    codon_probs_v (numpy.ndarray): A 4D array representing the probability of mutating
+                                   to each codon for each parent codon along the sequence.
+                                   Shape should be (codon_count, 4, 4, 4).
 
     Returns:
-    numpy.ndarray: A 2D array where the ij-th entry is the probability of mutating
-                to the amino acid j from the codon i.
+    numpy.ndarray: A 2D array with shape (codon_count, 20) where the ij-th entry is the probability
+                   of mutating to the amino acid j from the codon i for each parent codon along the sequence.
     """
-    # reshape(-1) flattens the array
-    aaprobs = codon_probs.reshape(-1) @ CODON_AA_INDICATOR_MATRIX
-    aaprobs /= aaprobs.sum()
+    codon_count = codon_probs_v.shape[0]
+    # Reshape such that we merge the last three dimensions into a single dimension while keeping
+    # the `codon_count` dimension intact. This prepares the tensor for matrix multiplication.
+    reshaped_probs = codon_probs_v.reshape(codon_count, -1)
+
+    # Perform matrix multiplication to get unnormalized amino acid probabilities.
+    aaprobs = reshaped_probs @ CODON_AA_INDICATOR_MATRIX
+
+    # Normalize probabilities along the amino acid dimension.
+    row_sums = aaprobs.sum(axis=1, keepdims=True)
+    aaprobs /= row_sums
+
     return aaprobs
 
 
-def aaprob_of_mut_and_sub(parent_codon, mut_probs, sub_probs):
+def aaprob_of_mut_and_sub_v(
+    parent_codon_idxs_v: np.ndarray, mut_probs_v: np.ndarray, sub_probs_v: np.ndarray
+) -> np.ndarray:
     """
-    For a specified codon and given nucleotide mutability and substitution probabilities,
-    compute the amino acid substitution probabilities.
-
-    Here we translate those into amino acid probabilities, which are normalized.
-    Probabilities to stop codons are dropped, but self probabilities are kept.
+    For a sequence of parent codons and given nucleotide mutability and substitution probabilities,
+    compute the amino acid substitution probabilities for each codon along the sequence.
 
     Parameters:
-    parent_codon (str): The specified codon.
-    mut_probs (list): The mutability probabilities for each site in the codon.
-    sub_probs (list): The substitution probabilities for each site in the codon.
+    parent_codon_idxs_v (np.ndarray): A 2D array where each row contains indices representing
+                                      the parent codon's nucleotides at each site along the sequence.
+                                      Shape should be (codon_count, 3).
+    mut_probs_v (np.ndarray): A 2D array representing the mutation probabilities for each site in the codon,
+                              for each codon along the sequence. Shape should be (codon_count, 3).
+    sub_probs_v (np.ndarray): A 3D array representing substitution probabilities for each codon along the
+                              sequence for each site.
+                              Shape should be (codon_count, 3, 4).
 
     Returns:
-    np.ndarray: An array of probabilities for all 20 amino acids.
-
+    np.ndarray: A 2D array with shape (codon_count, 20) where the ij-th entry is the probability
+                of mutating to the amino acid j from the codon i for each parent codon along the sequence.
     """
-    mut_matrix = build_mutation_matrix(parent_codon, mut_probs, sub_probs)
-    codon_probs = codon_probs_of_mutation_matrix(mut_matrix)
-    return aaprobs_of_codon_probs(codon_probs)
+    mut_matrices = build_mutation_matrices(
+        parent_codon_idxs_v, mut_probs_v, sub_probs_v
+    )
+    codon_probs = codon_probs_of_mutation_matrices(mut_matrices)
+    return aaprobs_of_codon_probs_v(codon_probs)
 
 
-def aaprobs_of_parent_rates_and_sub_probs(parent, rates, sub_probs) -> np.ndarray:
-    """Calculate per-site amino acid probabilities from per-site rates and
-    substitution probabilities.
+def reshape_for_codons(array):
+    """
+    Reshape an array to add a codon dimension by taking groups of 3 sites.
+
+    Parameters:
+    array (np.ndarray): Original array.
+
+    Returns:
+    np.ndarray: Reshaped array with an added codon dimension.
+    """
+    site_count = array.shape[0]
+    assert site_count % 3 == 0, "Site count must be a multiple of 3"
+    codon_count = site_count // 3
+    return array.reshape(codon_count, 3, *array.shape[1:])
+
+
+def aaprobs_of_parent_rates_and_sub_probs(
+    parent_idxs: np.ndarray, rates: np.ndarray, sub_probs: np.ndarray
+) -> np.ndarray:
+    """
+    Calculate per-site amino acid probabilities from per-site nucleotide rates
+    and substitution probabilities.
 
     Args:
-        rates (np.ndarray): Poisson rates of mutation per site.
+        parent_idxs (np.ndarray): Parent nucleotide indices. Shape should be (site_count,).
+        rates (np.ndarray): Poisson rates of mutation per site. Shape should be (site_count,).
         sub_probs (np.ndarray): Substitution probabilities per site: a 2D
-                                array with rows corresponding to sites and
-                                columns corresponding to nucleotides.
+                                array with shape (site_count, 4).
 
     Returns:
         np.ndarray: A 2D array with rows corresponding to sites and columns
                     corresponding to amino acids.
     """
-
-    # This `mut_probs` is the probability of at least one mutation at each site.
-    # So here we are interpreting the probability in the correctly-specified way rather than the mis-specified
-    # way. This is helpful because we'd like normalized probabilities.
+    # Calculate the probability of at least one mutation at each site.
     mut_probs = 1.0 - np.exp(-rates)
 
-    aaprobs = []
+    # Reshape the inputs to include a codon dimension.
+    parent_codon_idxs_v = reshape_for_codons(parent_idxs)
+    codon_mut_probs_v = reshape_for_codons(mut_probs)
+    codon_subs_v = reshape_for_codons(sub_probs)
 
-    for i in range(0, len(parent), 3):
-        parent_codon = parent[i : i + 3]
-        codon_mut_probs = mut_probs[i : i + 3]
-        codon_subs = sub_probs[i : i + 3]
-
-        site_probs = aaprob_of_mut_and_sub(parent_codon, codon_mut_probs, codon_subs)
-        aaprobs.append(site_probs)
-
-    return np.array(aaprobs)
+    # Vectorized calculation of amino acid probabilities.
+    return aaprob_of_mut_and_sub_v(parent_codon_idxs_v, codon_mut_probs_v, codon_subs_v)
 
 
-def build_codon_mutsel(parent_codon, codon_mut_probs, codon_sub_probs, aa_sel_matrix):
-    """Build a codon mutation-selection matrix from mutation and substitution
-    matrices on the nucleotide level, as well as a selection matrix on the amino
-    acid level.
+def build_codon_mutsel_v(
+    parent_codon_idxs_v: np.ndarray,
+    codon_mut_probs_v: np.ndarray,
+    codon_sub_probs_v: np.ndarray,
+    aa_sel_matrix_v: np.ndarray,
+) -> np.ndarray:
+    """
+    Build a sequence of codon mutation-selection matrices for codons along a sequence.
 
     Args:
-        parent_codon (string): The parent codon.
-        codon_mut_probs (np.ndarray): The mutation probabilities for each site in the codon.
-        codon_sub_probs (np.ndarray): The substitution matrices for each site in the codon.
-        aa_sel_matrix (n.ndarray): The amino-acid selection matrix.
+        parent_codon_idxs_v (np.ndarray): The parent codons for each sequence. Shape: (codon_count, 3)
+        codon_mut_probs_v (np.ndarray): The mutation probabilities for each site in each codon. Shape: (codon_count, 3)
+        codon_sub_probs_v (np.ndarray): The substitution probabilities for each site in each codon. Shape: (codon_count, 3, 4)
+        aa_sel_matrix_v (np.ndarray): The amino-acid selection matrices for each sequence. Shape: (codon_count, 20)
 
     Returns:
-        np.ndarray: The probability of mutating to each codon, expressed as a 4x4x4 array.
+        np.ndarray: The probability of mutating to each codon, for each sequence. Shape: (codon_count, 4, 4, 4)
     """
+    mut_matrix_v = build_mutation_matrices(
+        parent_codon_idxs_v, codon_mut_probs_v, codon_sub_probs_v
+    )
+    codon_probs_v = codon_probs_of_mutation_matrices(mut_matrix_v)
 
-    # This implementation is somewhat inefficient because we do the
-    # calculation for all of the possible codons every time even
-    # though we only use it for the indicated child codon. However,
-    # most of the time the parent and the child codons will be the
-    # same, and we need to calculate probabilities for every codon
-    # in that case (see below).
+    # Calculate the codon selection matrix for each sequence via Einstein
+    # summation, in which we sum over the repeated indices.
+    # So, for each site (s) and codon (c), sum over amino acids (a):
+    # codon_sel_matrix_v[s, c] = sum_a(CODON_AA_INDICATOR_MATRIX[c, a] * aa_sel_matrix_v[s, a])
+    # Resulting shape is (S, C) where S is the number of sites and C is the number of codons.
+    codon_sel_matrix_v = np.einsum(
+        "ca,sa->sc", CODON_AA_INDICATOR_MATRIX, aa_sel_matrix_v
+    )
 
-    mut_matrix = build_mutation_matrix(parent_codon, codon_mut_probs, codon_sub_probs)
-    codon_probs = codon_probs_of_mutation_matrix(mut_matrix)
+    # Multiply the codon probabilities by the selection matrices
+    codon_mutsel_v = codon_probs_v * codon_sel_matrix_v.reshape(-1, 4, 4, 4)
 
-    # Note that because there are no nonzero entries that correspond
-    # to stop, these will have selection probability 0.
-    codon_sel_matrix = CODON_AA_INDICATOR_MATRIX @ aa_sel_matrix
-    codon_mutsel = codon_probs * codon_sel_matrix.reshape(4, 4, 4)
+    # Normalize to get a probability distribution for each sequence
+    codon_count = parent_codon_idxs_v.shape[0]
 
-    # Now we need to calculate the probability of no change in the
-    # codon so that we can normalize to get a probability
-    # distribution.
-    [par0, par1, par2] = nucleotide_indices_of_codon(parent_codon)
-    codon_mutsel[par0, par1, par2] = 0.0
-    codon_mutsel[par0, par1, par2] = 1.0 - codon_mutsel.sum()
+    # Now we need to recalculate the probability of staying in the same codon.
+    # In our setup, this is the probability of nothing happening.
+    # To calculate this, we zero out the previously calculated probabilities...
+    codon_mutsel_v[(np.arange(codon_count), *parent_codon_idxs_v.T)] = 0.0
+    # sum together their probabilities...
+    sums = codon_mutsel_v.sum(axis=(1, 2, 3))
+    # then set the parent codon probabilities to 1 minus the sum.
+    codon_mutsel_v[(np.arange(codon_count), *parent_codon_idxs_v.T)] = 1.0 - sums
 
-    return codon_mutsel
+    return codon_mutsel_v

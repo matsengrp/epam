@@ -17,9 +17,9 @@ CODONS = [
 STOP_CODONS = ["TAA", "TAG", "TGA"]
 
 
-def nucleotide_indices_of_codon(codon):
-    """Return the indices of the nucleotides in a codon."""
-    return [NT_STR_SORTED.index(nt) for nt in codon]
+def nt_idx_array_of_str(nt_str):
+    """Return the indices of the nucleotides in a string."""
+    return np.array([NT_STR_SORTED.index(nt) for nt in nt_str])
 
 
 def read_fasta_sequences(file_path):

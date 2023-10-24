@@ -1,12 +1,12 @@
 ablang
 black
+fair-esm
+h5py
 jax
 jaxlib
 jaxopt
 pytest
-snakemake
-typing_extensions
-tensorboardX
-h5py
 shmple @ git+https://github.com/matsengrp/shmple@f1f3db0b67351bae7c23b96197b58c7674bb95bb
-fair-esm
+snakemake
+tensorboardX
+typing_extensions

@@ -1,17 +1,11 @@
+import epam.models
 import json
 import subprocess
 
-model_info = [
-    ("AbLang_heavy", "AbLang", {"chain": "heavy"}),
-    ("SHMple_default", "SHMple", {"weights_directory": "data/shmple_weights/my_shmoof"}),
-    ("SHMple_productive", "SHMple", {"weights_directory": "data/shmple_weights/prod_shmple"}),
-    ("ESM1v_default", "ESM1v", {}),
-    ("SHMple_ESM1v", "SHMpleESM", {"weights_directory": "data/shmple_weights/my_shmoof"})
-]
 
 model_name_to_spec = {
     model_name: [model_class, json.dumps({**model_params, "model_name": model_name})]
-    for model_name, model_class, model_params in model_info
+    for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS
 }
 
 pcp_inputs = glob_wildcards("pcp_inputs/{name}.csv").name
