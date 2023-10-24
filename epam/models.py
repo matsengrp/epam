@@ -15,7 +15,6 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.special import softmax
-from scipy.optimize import minimize
 import epam.molevol as molevol
 import epam.sequences as sequences
 from epam.sequences import (
@@ -322,7 +321,6 @@ class OptimizableSHMple(SHMple):
 
         optimizer = optim.SGD([log_branch_scaling], lr=0.01)
 
-        # TODO refine convergence criterion
         for _ in range(1000):
             optimizer.zero_grad()
 
@@ -407,7 +405,7 @@ class MutSel(OptimizableSHMple):
         )
 
         sel_matrix = self.build_selection_matrix_from_parent(parent)
-        mut_probs = 1.0 - np.exp(-rates)
+        mut_probs = 1.0 - torch.exp(-rates)
 
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
 
@@ -433,7 +431,6 @@ class RandomMutSel(MutSel):
         return matrix
 
 
-# TODO: fold this into BaseModel
 class TorchModel(BaseModel):
     def __init__(self, model_name=None):
         """
