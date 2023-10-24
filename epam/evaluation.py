@@ -66,7 +66,7 @@ def evaluate_dataset(aaprob_path):
 
     with h5py.File(aaprob_path, "r") as matfile:
         model_name = matfile.attrs["model_name"]
-        for i in range(len(pcp_df)):
+        for i in range(len(pcp_df)): #pcp_df.index:
             grp = matfile[
                 "matrix" + str(i)
             ]  # assumes that the keys are named "matrix0", "matrix1", etc.
