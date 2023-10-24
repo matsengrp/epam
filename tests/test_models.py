@@ -77,13 +77,13 @@ def test_mut_sel_probability():
     # Note we're dividing by two here
     ex_mut_rates = -torch.log(1.0 - ex_mut_probs) / 2.0
     # This is an ACG -> TGG mutation.
-    neg_pcp_prob = mutsel._build_neg_pcp_probability(
+    log_pcp_prob = mutsel._build_log_pcp_probability(
         ex_parent_codon, "TGG", ex_mut_rates, ex_sub_probs
     )
     #               A->T    C->G    G->G   P(Tryp)
-    correct_prob = -0.002 * 0.002 * 0.97 * 0.3
+    correct_prob = np.log(0.002 * 0.002 * 0.97 * 0.3)
     # Here we're using a branch scaling of two to accomodate the scaling by two above.
-    calculated_prob = neg_pcp_prob(torch.log(torch.tensor(2.0)))
+    calculated_prob = log_pcp_prob(torch.log(torch.tensor(2.0)))
     assert correct_prob == pytest.approx(calculated_prob, rel=1e-5)
 
 
@@ -128,6 +128,11 @@ def test_snapshot():
         source = "10-random-from-10x"
         ModelClass = getattr(epam.models, model_class_str)
         model = ModelClass(**model_args)
+        # Because we're using a snapshot, we don't want to optimize:
+        # optimization is fiddly and we want to be able to change it without
+        # breaking the snapshot test.
+        if isinstance(model, OptimizableSHMple):
+            model.max_optimization_steps = 0
         out_file = f"_ignore/{source}-{model_name}.hdf5"
         model.write_aaprobs(f"data/{source}.csv", out_file)
         compare_file = f"tests/test-data/{source}-{model_name}.hdf5"

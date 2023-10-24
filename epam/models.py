@@ -264,22 +264,47 @@ class SHMple(BaseModel):
 
 
 class OptimizableSHMple(SHMple):
-    def __init__(self, weights_directory, model_name=None):
+    def __init__(
+        self,
+        weights_directory,
+        model_name=None,
+        max_optimization_steps=1000,
+        optimization_tol=1e-4,
+        learning_rate=0.1,
+    ):
+        """
+        Initialize a SHMple model that optimizes branch length for each parent-child pair.
+        
+        Parameters:
+        weights_directory : str
+            Directory containing the trained model weights.
+        model_name : str, optional
+            Model name. Default is None, setting the model name to the class name.
+        max_optimization_steps : int, optional
+            Maximum number of gradient descent steps. Default is 1000.
+        optimization_tol : float, optional
+            Tolerance for optimization of log(branch length). Default is 1e-4.
+        learning_rate : float, optional
+            Learning rate for torch's SGD. Default is 0.1.
+        """
         super().__init__(weights_directory, model_name)
+        self.max_optimization_steps = max_optimization_steps
+        self.optimization_tol = optimization_tol
+        self.learning_rate = learning_rate
 
-    def _build_neg_pcp_probability(
+    def _build_log_pcp_probability(
         self, parent: str, child: str, rates: Tensor, sub_probs: Tensor
     ):
-        """Constructs the neg_pcp_probability function specific to given rates and sub_probs.
+        """Constructs the log_pcp_probability function specific to given rates and sub_probs.
 
-        This function takes log_branch_scaling as input and returns the negative
+        This function takes log_branch_scaling as input and returns the log
         probability of the child sequence. It uses log of branch scaling to
         ensure non-negativity of the branch length."""
 
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
         child_idxs = sequences.nt_idx_tensor_of_str(child)
 
-        def neg_pcp_probability(log_branch_scaling):
+        def log_pcp_probability(log_branch_scaling):
             branch_scaling = torch.exp(log_branch_scaling)
             mut_probs = 1.0 - torch.exp(-rates * branch_scaling)
             no_mutation_sites = parent_idxs == child_idxs
@@ -289,11 +314,11 @@ class OptimizableSHMple(SHMple):
                 mut_probs[~no_mutation_sites]
                 * sub_probs[~no_mutation_sites, child_idxs[~no_mutation_sites]]
             )
-            child_prob = torch.cat([same_probs, diff_probs]).prod()
+            child_log_prob = torch.log(torch.cat([same_probs, diff_probs])).sum()
 
-            return -child_prob  # Return the negative probability
+            return child_log_prob
 
-        return neg_pcp_probability
+        return log_pcp_probability
 
     def _find_optimal_branch_length(self, parent, child):
         """
@@ -313,29 +338,40 @@ class OptimizableSHMple(SHMple):
             parent, base_branch_length
         )
 
-        neg_pcp_probability = self._build_neg_pcp_probability(
+        log_pcp_probability = self._build_log_pcp_probability(
             parent, child, rates, sub_probs
         )
 
         log_branch_scaling = torch.tensor(0.0, requires_grad=True)
 
-        optimizer = optim.SGD([log_branch_scaling], lr=0.01)
+        optimizer = optim.SGD([log_branch_scaling], lr=self.learning_rate)
+        prev_log_branch_scaling = log_branch_scaling.clone()
 
-        for _ in range(1000):
+        for _ in range(self.max_optimization_steps):
             optimizer.zero_grad()
 
-            loss = neg_pcp_probability(log_branch_scaling)
+            loss = -log_pcp_probability(log_branch_scaling)
+            assert not torch.isnan(
+                loss
+            ), "Loss is NaN: perhaps selection has given a probability of zero?"
             loss.backward()
             optimizer.step()
 
-            if torch.abs(loss) < 1e-6:  # Convergence criterion
+            change_in_log_branch_scaling = torch.abs(
+                log_branch_scaling - prev_log_branch_scaling
+            )
+            if change_in_log_branch_scaling < self.optimization_tol:
                 break
 
-        optimized_branch_scaling_log = log_branch_scaling.detach()
-        return torch.exp(optimized_branch_scaling_log) * base_branch_length
+            prev_log_branch_scaling = log_branch_scaling.clone()
+
+        branch_scaling = torch.exp(log_branch_scaling.detach())
+        return branch_scaling * base_branch_length
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         branch_length = self._find_optimal_branch_length(parent, child)
+        if branch_length > 0.5:
+            print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
@@ -345,8 +381,8 @@ class MutSel(OptimizableSHMple):
     Note that stop codons are assumed to have zero selection probability.
     """
 
-    def __init__(self, weights_directory, model_name=None):
-        super().__init__(weights_directory, model_name)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     @abstractmethod
     def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
@@ -357,13 +393,13 @@ class MutSel(OptimizableSHMple):
         """
         pass
 
-    def _build_neg_pcp_probability(
+    def _build_log_pcp_probability(
         self, parent: str, child: str, rates: Tensor, sub_probs: Tensor
     ):
         """
-        Constructs the neg_pcp_probability function specific to given rates and sub_probs.
+        Constructs the log_pcp_probability function specific to given rates and sub_probs.
 
-        This function takes log_branch_scaling as input and returns the negative
+        This function takes log_branch_scaling as input and returns the log
         probability of the child sequence. It uses log of branch scaling to
         ensure non-negativity of the branch length.
         """
@@ -375,7 +411,7 @@ class MutSel(OptimizableSHMple):
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
         child_idxs = sequences.nt_idx_tensor_of_str(child)
 
-        def neg_pcp_probability(log_branch_scaling: torch.Tensor):
+        def log_pcp_probability(log_branch_scaling: torch.Tensor):
             branch_scaling = torch.exp(log_branch_scaling)
             mut_probs = 1.0 - torch.exp(-rates * branch_scaling)
 
@@ -394,9 +430,9 @@ class MutSel(OptimizableSHMple):
                 reshaped_child_idxs[:, 2],
             ]
 
-            return -torch.prod(child_prob_vector)  # Return the negative probability
+            return torch.sum(torch.log(child_prob_vector))
 
-        return neg_pcp_probability
+        return log_pcp_probability
 
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> Tensor:
         rates, sub_probs = self.predict_rates_and_normed_sub_probs(
@@ -421,8 +457,8 @@ class MutSel(OptimizableSHMple):
 class RandomMutSel(MutSel):
     """A mutation selection model with a random selection matrix."""
 
-    def __init__(self, weights_directory, model_name=None):
-        super().__init__(weights_directory, model_name)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
         matrix = torch.rand(len(parent) // 3, 20)
@@ -519,14 +555,14 @@ class ESM1v(TorchModel):
 
 
 class SHMpleESM(MutSel):
-    def __init__(self, weights_directory, model_name=None):
+    def __init__(self, *args, **kwargs):
         """
         Initialize a mutation-selection model using SHMple for the mutation part and ESM-1v_1 for the selection part.
         Parameters:
         weights_directory (str): Directory path to trained SHMple model weights.
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         """
-        super().__init__(weights_directory, model_name)
+        super().__init__(*args, **kwargs)
         self.selection_model = ESM1v()
 
     def build_selection_matrix_from_parent(self, parent):
