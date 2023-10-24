@@ -80,4 +80,6 @@ def generate_codon_aa_indicator_matrix():
     return matrix
 
 
-CODON_AA_INDICATOR_MATRIX = torch.tensor(generate_codon_aa_indicator_matrix())
+CODON_AA_INDICATOR_MATRIX = torch.tensor(
+    generate_codon_aa_indicator_matrix(), dtype=torch.float32
+)

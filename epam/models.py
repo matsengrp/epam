@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from importlib import resources
 import logging
+from typing import Tuple
 import ablang
 import shmple
 import torch
@@ -198,7 +199,9 @@ class SHMple(BaseModel):
             weights_dir=weights_directory, log_level=logging.WARNING
         )
 
-    def predict_rates_and_normed_sub_probs(self, parent: str, branch_length: float):
+    def predict_rates_and_normed_sub_probs(
+        self, parent: str, branch_length: float
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         A wrapper for the predict_mutabilities_and_substitutions method of the
         SHMple model that normalizes the substitution probabilities, as well as
@@ -212,13 +215,16 @@ class SHMple(BaseModel):
         branch_length (float): The branch length.
 
         Returns:
-        tuple: A tuple containing the rates and substitution probabilities.
+        Tuple[torch.Tensor, torch.Tensor]: A tuple containing the rates and
+            substitution probabilities as Torch tensors.
         """
         [rates], [subs] = self.model.predict_mutabilities_and_substitutions(
             [parent], [branch_length]
         )
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return rates.squeeze(), molevol.normalize_sub_probs(parent_idxs, subs).numpy()
+        return torch.tensor(rates.squeeze()), molevol.normalize_sub_probs(
+            parent_idxs, torch.tensor(subs)
+        )
 
     def _aaprobs_of_parent_and_branch_length(
         self, parent: str, branch_length: float
@@ -229,9 +235,9 @@ class SHMple(BaseModel):
         This is the key function that needs to be overridden for implementing a new model.
 
         Parameters:
-        parent : str
+        parent: str
             The parent nucleotide sequence.
-        branch_length : float
+        branch_length: float
             The length of the branch.
 
         Returns:
@@ -239,11 +245,9 @@ class SHMple(BaseModel):
         """
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return molevol.aaprobs_of_parent_rates_and_sub_probs(
-            parent_idxs, torch.tensor(rates), torch.tensor(subs)
-        )
+        return molevol.aaprobs_of_parent_rates_and_sub_probs(parent_idxs, rates, subs)
 
-    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> Tensor:
+    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to a SHMple model.
 
@@ -254,10 +258,10 @@ class SHMple(BaseModel):
         child (str): The child sequence.
 
         Returns:
-        torch.Tensor: A 2D tensor containing the normalized probabilities of the amino acids by site.
+        np.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
         """
         branch_length = np.mean([a != b for a, b in zip(parent, child)])
-        return self._aaprobs_of_parent_and_branch_length(parent, branch_length)
+        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
 class OptimizableSHMple(SHMple):
@@ -305,39 +309,36 @@ class OptimizableSHMple(SHMple):
         float: The optimal branch length.
         """
 
-        base_branch_length = torch.mean(
-            torch.tensor([a != b for a, b in zip(parent, child)], dtype=torch.float32)
-        )
+        base_branch_length = np.mean([a != b for a, b in zip(parent, child)])
         rates, sub_probs = self.predict_rates_and_normed_sub_probs(
-            parent, base_branch_length.item()
+            parent, base_branch_length
         )
 
         neg_pcp_probability = self._build_neg_pcp_probability(
             parent, child, rates, sub_probs
         )
 
-        initial_guess = torch.log(torch.tensor(1.0, requires_grad=True))
+        log_branch_scaling = torch.tensor(0.0, requires_grad=True)
 
-        optimizer = optim.SGD([initial_guess], lr=0.01)
+        optimizer = optim.SGD([log_branch_scaling], lr=0.01)
 
         # TODO refine convergence criterion
         for _ in range(1000):
             optimizer.zero_grad()
 
-            loss = neg_pcp_probability(initial_guess)
+            loss = neg_pcp_probability(log_branch_scaling)
             loss.backward()
             optimizer.step()
 
             if torch.abs(loss) < 1e-6:  # Convergence criterion
                 break
 
-        optimized_branch_scaling_log = initial_guess.detach()
+        optimized_branch_scaling_log = log_branch_scaling.detach()
         return torch.exp(optimized_branch_scaling_log) * base_branch_length
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         branch_length = self._find_optimal_branch_length(parent, child)
-        # TODO do I want to make branch_length a Tensor?
-        return self._aaprobs_of_parent_and_branch_length(parent, branch_length)
+        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
 class MutSel(OptimizableSHMple):
@@ -350,7 +351,7 @@ class MutSel(OptimizableSHMple):
         super().__init__(weights_directory, model_name)
 
     @abstractmethod
-    def build_selection_matrix_from_parent(self, parent):
+    def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
         """Build the selection matrix (i.e. F matrix) from a parent nucleotide
         sequence.
 
@@ -400,7 +401,7 @@ class MutSel(OptimizableSHMple):
 
         return neg_pcp_probability
 
-    def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> np.ndarray:
+    def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> Tensor:
         rates, sub_probs = self.predict_rates_and_normed_sub_probs(
             parent, branch_length
         )
@@ -408,7 +409,7 @@ class MutSel(OptimizableSHMple):
         sel_matrix = self.build_selection_matrix_from_parent(parent)
         mut_probs = 1.0 - np.exp(-rates)
 
-        parent_idxs = sequences.nt_idx_array_of_str(parent)
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
 
         codon_mutsel_v = molevol.build_codon_mutsel_v(
             parent_idxs.reshape(-1, 3),
@@ -426,12 +427,13 @@ class RandomMutSel(MutSel):
     def __init__(self, weights_directory, model_name=None):
         super().__init__(weights_directory, model_name)
 
-    def build_selection_matrix_from_parent(self, parent):
-        matrix = np.random.rand(len(parent) // 3, 20)
-        matrix /= matrix.sum(axis=1, keepdims=True)
+    def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
+        matrix = torch.rand(len(parent) // 3, 20)
+        matrix /= matrix.sum(dim=1, keepdim=True)
         return matrix
 
 
+# TODO: fold this into BaseModel
 class TorchModel(BaseModel):
     def __init__(self, model_name=None):
         """
@@ -532,4 +534,4 @@ class SHMpleESM(MutSel):
         self.selection_model = ESM1v()
 
     def build_selection_matrix_from_parent(self, parent):
-        return self.selection_model.aaprobs_of_parent_child_pair(parent)
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
