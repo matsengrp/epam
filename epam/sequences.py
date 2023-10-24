@@ -2,11 +2,11 @@
 
 import itertools
 
+import torch
 import numpy as np
 
 from Bio import SeqIO
 from Bio.Seq import Seq
-from Bio.Data import CodonTable
 
 AA_STR_SORTED = "ACDEFGHIKLMNPQRSTVWY"
 NT_STR_SORTED = "ACGT"
@@ -20,6 +20,11 @@ STOP_CODONS = ["TAA", "TAG", "TGA"]
 def nt_idx_array_of_str(nt_str):
     """Return the indices of the nucleotides in a string."""
     return np.array([NT_STR_SORTED.index(nt) for nt in nt_str])
+
+
+def nt_idx_tensor_of_str(nt_str):
+    """Return the indices of the nucleotides in a string."""
+    return torch.tensor([NT_STR_SORTED.index(nt) for nt in nt_str])
 
 
 def read_fasta_sequences(file_path):
@@ -75,4 +80,6 @@ def generate_codon_aa_indicator_matrix():
     return matrix
 
 
-CODON_AA_INDICATOR_MATRIX = generate_codon_aa_indicator_matrix()
+CODON_AA_INDICATOR_MATRIX = torch.tensor(
+    generate_codon_aa_indicator_matrix(), dtype=torch.float32
+)

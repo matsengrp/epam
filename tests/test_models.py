@@ -1,5 +1,6 @@
 import h5py
 import numpy as np
+import torch
 import pytest
 import epam.models
 from epam.sequences import translate_sequences
@@ -7,7 +8,6 @@ from epam.models import (
     AbLang,
     SHMple,
     OptimizableSHMple,
-    RandomMutSel,
     MutSel,
     ESM1v,
     SHMpleESM,
@@ -59,14 +59,14 @@ class MutSelThreonine(MutSel):
         super().__init__(weights_directory, modelname)
 
     def build_selection_matrix_from_parent(self, parent):
-        matrix = np.zeros((1, 20))
+        matrix = torch.zeros((1, 20))
         # Set just the entry for tryptophan to be 0.3
         matrix[0, 18] = 0.3
         return matrix
 
 
-ex_mut_probs = np.array([0.01, 0.02, 0.03])
-ex_sub_probs = np.array(
+ex_mut_probs = torch.tensor([0.01, 0.02, 0.03])
+ex_sub_probs = torch.tensor(
     [[0.0, 0.3, 0.5, 0.2], [0.4, 0.0, 0.1, 0.5], [0.2, 0.3, 0.0, 0.5]]
 )
 ex_parent_codon = "ACG"
@@ -75,7 +75,7 @@ ex_parent_codon = "ACG"
 def test_mut_sel_probability():
     mutsel = MutSelThreonine(weights_path)
     # Note we're dividing by two here
-    ex_mut_rates = -np.log(1.0 - ex_mut_probs) / 2.0
+    ex_mut_rates = -torch.log(1.0 - ex_mut_probs) / 2.0
     # This is an ACG -> TGG mutation.
     neg_pcp_prob = mutsel._build_neg_pcp_probability(
         ex_parent_codon, "TGG", ex_mut_rates, ex_sub_probs
@@ -83,7 +83,8 @@ def test_mut_sel_probability():
     #               A->T    C->G    G->G   P(Tryp)
     correct_prob = -0.002 * 0.002 * 0.97 * 0.3
     # Here we're using a branch scaling of two to accomodate the scaling by two above.
-    assert correct_prob == pytest.approx(neg_pcp_prob(np.log(2.0)))
+    calculated_prob = neg_pcp_prob(torch.log(torch.tensor(2.0)))
+    assert correct_prob == pytest.approx(calculated_prob, rel=1e-5)
 
 
 def test_esm():
