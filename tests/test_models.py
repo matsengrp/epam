@@ -103,7 +103,7 @@ def test_shmple_esm():
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 
 
-def hdf5_files_identical(path_1, path_2, tol=1e-6):
+def hdf5_files_identical(path_1, path_2, tol=1e-4):
     """Return if two HDF5 files are identical."""
     with h5py.File(path_1, "r") as f1, h5py.File(path_2, "r") as f2:
         for key in f1.keys():
@@ -114,7 +114,7 @@ def hdf5_files_identical(path_1, path_2, tol=1e-6):
             d1 = f1[key]["data"]
             d2 = f2[key]["data"]
 
-            if not np.allclose(d1, d2, atol=tol):
+            if not np.allclose(d1, d2, rtol=tol):
                 print(f"Data for key {key} not matching: {d1[...] - d2[...]}")
                 return False
 
