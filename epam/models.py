@@ -4,6 +4,8 @@ import logging
 import ablang
 import shmple
 import torch
+import torch.optim as optim
+from torch import Tensor
 
 from esm import (
     pretrained,
@@ -215,12 +217,12 @@ class SHMple(BaseModel):
         [rates], [subs] = self.model.predict_mutabilities_and_substitutions(
             [parent], [branch_length]
         )
-        parent_idxs = sequences.nt_idx_array_of_str(parent)
-        return rates.squeeze(), molevol.normalize_sub_probs(parent_idxs, subs)
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
+        return rates.squeeze(), molevol.normalize_sub_probs(parent_idxs, subs).numpy()
 
     def _aaprobs_of_parent_and_branch_length(
         self, parent: str, branch_length: float
-    ) -> np.ndarray:
+    ) -> torch.Tensor:
         """
         Calculate the amino acid probabilities for a given parent and branch length.
 
@@ -236,10 +238,12 @@ class SHMple(BaseModel):
         np.ndarray: The aaprobs for every codon of the parent sequence.
         """
         rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
-        parent_idxs = sequences.nt_idx_array_of_str(parent)
-        return molevol.aaprobs_of_parent_rates_and_sub_probs(parent_idxs, rates, subs)
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
+        return molevol.aaprobs_of_parent_rates_and_sub_probs(
+            parent_idxs, torch.tensor(rates), torch.tensor(subs)
+        )
 
-    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> Tensor:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to a SHMple model.
 
@@ -250,7 +254,7 @@ class SHMple(BaseModel):
         child (str): The child sequence.
 
         Returns:
-        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+        torch.Tensor: A 2D tensor containing the normalized probabilities of the amino acids by site.
         """
         branch_length = np.mean([a != b for a, b in zip(parent, child)])
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length)
@@ -261,7 +265,7 @@ class OptimizableSHMple(SHMple):
         super().__init__(weights_directory, model_name)
 
     def _build_neg_pcp_probability(
-        self, parent: str, child: str, rates: np.ndarray, sub_probs: np.ndarray
+        self, parent: str, child: str, rates: Tensor, sub_probs: Tensor
     ):
         """Constructs the neg_pcp_probability function specific to given rates and sub_probs.
 
@@ -269,12 +273,12 @@ class OptimizableSHMple(SHMple):
         probability of the child sequence. It uses log of branch scaling to
         ensure non-negativity of the branch length."""
 
-        parent_idxs = sequences.nt_idx_array_of_str(parent)
-        child_idxs = sequences.nt_idx_array_of_str(child)
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
+        child_idxs = sequences.nt_idx_tensor_of_str(child)
 
         def neg_pcp_probability(log_branch_scaling):
-            branch_scaling = np.exp(log_branch_scaling)
-            mut_probs = 1.0 - np.exp(-rates * branch_scaling)
+            branch_scaling = torch.exp(log_branch_scaling)
+            mut_probs = 1.0 - torch.exp(-rates * branch_scaling)
             no_mutation_sites = parent_idxs == child_idxs
 
             same_probs = 1.0 - mut_probs[no_mutation_sites]
@@ -282,7 +286,7 @@ class OptimizableSHMple(SHMple):
                 mut_probs[~no_mutation_sites]
                 * sub_probs[~no_mutation_sites, child_idxs[~no_mutation_sites]]
             )
-            child_prob = np.concatenate([same_probs, diff_probs]).prod()
+            child_prob = torch.cat([same_probs, diff_probs]).prod()
 
             return -child_prob  # Return the negative probability
 
@@ -301,27 +305,38 @@ class OptimizableSHMple(SHMple):
         float: The optimal branch length.
         """
 
-        base_branch_length = np.mean([a != b for a, b in zip(parent, child)])
+        base_branch_length = torch.mean(
+            torch.tensor([a != b for a, b in zip(parent, child)], dtype=torch.float32)
+        )
         rates, sub_probs = self.predict_rates_and_normed_sub_probs(
-            parent, base_branch_length
+            parent, base_branch_length.item()
         )
 
         neg_pcp_probability = self._build_neg_pcp_probability(
             parent, child, rates, sub_probs
         )
 
-        initial_guess = np.log(1.0)
-        result = minimize(
-            neg_pcp_probability,
-            initial_guess,
-            method="BFGS",
-            options={"maxiter": 1000, "gtol": 1e-6},
-        )
-        optimized_branch_scaling_log = result.x[0]
-        return np.exp(optimized_branch_scaling_log) * base_branch_length
+        initial_guess = torch.log(torch.tensor(1.0, requires_grad=True))
+
+        optimizer = optim.SGD([initial_guess], lr=0.01)
+
+        # TODO refine convergence criterion
+        for _ in range(1000):
+            optimizer.zero_grad()
+
+            loss = neg_pcp_probability(initial_guess)
+            loss.backward()
+            optimizer.step()
+
+            if torch.abs(loss) < 1e-6:  # Convergence criterion
+                break
+
+        optimized_branch_scaling_log = initial_guess.detach()
+        return torch.exp(optimized_branch_scaling_log) * base_branch_length
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         branch_length = self._find_optimal_branch_length(parent, child)
+        # TODO do I want to make branch_length a Tensor?
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length)
 
 
@@ -343,22 +358,29 @@ class MutSel(OptimizableSHMple):
         """
         pass
 
-    def _build_neg_pcp_probability(self, parent, child, rates, sub_probs):
-        """Constructs the neg_pcp_probability function specific to given rates and sub_probs.
+    def _build_neg_pcp_probability(
+        self, parent: str, child: str, rates: Tensor, sub_probs: Tensor
+    ):
+        """
+        Constructs the neg_pcp_probability function specific to given rates and sub_probs.
 
         This function takes log_branch_scaling as input and returns the negative
         probability of the child sequence. It uses log of branch scaling to
-        ensure non-negativity of the branch length."""
+        ensure non-negativity of the branch length.
+        """
 
         assert len(parent) % 3 == 0
         sel_matrix = self.build_selection_matrix_from_parent(parent)
         assert sel_matrix.shape == (len(parent) // 3, 20)
-        parent_idxs = sequences.nt_idx_array_of_str(parent)
-        child_idxs = sequences.nt_idx_array_of_str(child)
 
-        def neg_pcp_probability(log_branch_scaling):
-            branch_scaling = np.exp(log_branch_scaling)
-            mut_probs = 1.0 - np.exp(-rates * branch_scaling)
+        # Assuming that nt_idx_tensor_of_str returns a PyTorch tensor
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
+        child_idxs = sequences.nt_idx_tensor_of_str(child)
+
+        def neg_pcp_probability(log_branch_scaling: torch.Tensor):
+            branch_scaling = torch.exp(log_branch_scaling)
+            mut_probs = 1.0 - torch.exp(-rates * branch_scaling)
+
             codon_mutsel_v = molevol.build_codon_mutsel_v(
                 parent_idxs.reshape(-1, 3),
                 mut_probs.reshape(-1, 3),
@@ -368,13 +390,13 @@ class MutSel(OptimizableSHMple):
 
             reshaped_child_idxs = child_idxs.reshape(-1, 3)
             child_prob_vector = codon_mutsel_v[
-                np.arange(len(reshaped_child_idxs)),
+                torch.arange(len(reshaped_child_idxs)),
                 reshaped_child_idxs[:, 0],
                 reshaped_child_idxs[:, 1],
                 reshaped_child_idxs[:, 2],
             ]
 
-            return -np.prod(child_prob_vector)  # Return the negative probability
+            return -torch.prod(child_prob_vector)  # Return the negative probability
 
         return neg_pcp_probability
 

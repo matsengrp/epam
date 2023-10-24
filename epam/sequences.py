@@ -22,6 +22,11 @@ def nt_idx_array_of_str(nt_str):
     return np.array([NT_STR_SORTED.index(nt) for nt in nt_str])
 
 
+def nt_idx_tensor_of_str(nt_str):
+    """Return the indices of the nucleotides in a string."""
+    return torch.tensor([NT_STR_SORTED.index(nt) for nt in nt_str])
+
+
 def read_fasta_sequences(file_path):
     with open(file_path, "r") as handle:
         sequences = [str(record.seq) for record in SeqIO.parse(handle, "fasta")]
