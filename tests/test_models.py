@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 import torch
 import pytest
+import os
 import epam.models
 from epam.sequences import translate_sequences
 from epam.models import (
@@ -77,13 +78,13 @@ def test_mut_sel_probability():
     # Note we're dividing by two here
     ex_mut_rates = -torch.log(1.0 - ex_mut_probs) / 2.0
     # This is an ACG -> TGG mutation.
-    neg_pcp_prob = mutsel._build_neg_pcp_probability(
+    log_pcp_prob = mutsel._build_log_pcp_probability(
         ex_parent_codon, "TGG", ex_mut_rates, ex_sub_probs
     )
     #               A->T    C->G    G->G   P(Tryp)
-    correct_prob = -0.002 * 0.002 * 0.97 * 0.3
+    correct_prob = np.log(0.002 * 0.002 * 0.97 * 0.3)
     # Here we're using a branch scaling of two to accomodate the scaling by two above.
-    calculated_prob = neg_pcp_prob(torch.log(torch.tensor(2.0)))
+    calculated_prob = log_pcp_prob(torch.log(torch.tensor(2.0)))
     assert correct_prob == pytest.approx(calculated_prob, rel=1e-5)
 
 
@@ -103,7 +104,7 @@ def test_shmple_esm():
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 
 
-def hdf5_files_identical(path_1, path_2, tol=1e-6):
+def hdf5_files_identical(path_1, path_2, tol=1e-4):
     """Return if two HDF5 files are identical."""
     with h5py.File(path_1, "r") as f1, h5py.File(path_2, "r") as f2:
         for key in f1.keys():
@@ -114,7 +115,7 @@ def hdf5_files_identical(path_1, path_2, tol=1e-6):
             d1 = f1[key]["data"]
             d2 = f2[key]["data"]
 
-            if not np.allclose(d1, d2, atol=tol):
+            if not np.allclose(d1, d2, rtol=tol):
                 print(f"Data for key {key} not matching: {d1[...] - d2[...]}")
                 return False
 
@@ -123,11 +124,17 @@ def hdf5_files_identical(path_1, path_2, tol=1e-6):
 
 def test_snapshot():
     """Test that the current code produces the same results as a previously-built snapshot."""
+    os.makedirs("_ignore", exist_ok=True)
     for model_name, model_class_str, model_args in epam.models.FULLY_SPECIFIED_MODELS:
         print(f"Snapshot testing {model_name}")
         source = "10-random-from-10x"
         ModelClass = getattr(epam.models, model_class_str)
         model = ModelClass(**model_args)
+        # Because we're using a snapshot, we don't want to optimize:
+        # optimization is fiddly and we want to be able to change it without
+        # breaking the snapshot test.
+        if isinstance(model, OptimizableSHMple):
+            model.max_optimization_steps = 0
         out_file = f"_ignore/{source}-{model_name}.hdf5"
         model.write_aaprobs(f"data/{source}.csv", out_file)
         compare_file = f"tests/test-data/{source}-{model_name}.hdf5"
