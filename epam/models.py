@@ -492,6 +492,7 @@ class TorchModel(BaseModel):
             print("Using Metal Performance Shaders")
             self.device = torch.device("mps")
         else:
+            print("Using CPU")
             self.device = torch.device("cpu")
 
 

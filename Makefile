@@ -4,6 +4,19 @@ install:
 	pip install -r requirements.txt
 	pip install -e .
 
+install-cuda:
+	# Set up cuda
+	scripts/install_cuda.sh
+	
+	# Install the main package
+	python -m pip install -r requirements.txt
+	python -m pip install -e .
+
+	# Warn about the environment variables
+	echo "###############################################################################################################"
+	echo "####  You should restart your conda environment to make sure the environment variables are set correctly.  ####"
+	echo "###############################################################################################################"
+
 test:
 	pytest tests
 

@@ -7,6 +7,12 @@
     make install
 Note: Depending on OS, a conda-forge or mamba install of [datrie](https://github.com/conda-forge/datrie-feedstock) may be required before running `make install`.
 
+Installing on GPU:
+    conda create -n epam-gpu python=3.9
+    conda activate epam-gpu
+    conda install datrie
+    make install-cuda
+
 Getting SHMple weights:
 
     mkdir data/shmple_weights
