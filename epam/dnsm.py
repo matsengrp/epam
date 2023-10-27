@@ -71,10 +71,11 @@ class TransformerBinarySelectionModel(nn.Module):
 
     def __init__(self, nhead, dim_feedforward, layer_count):
         super().__init__()
-        self.device = pick_device()
+        self.device = "cpu"
+        # self.device = pick_device()
         # batch_first means that we have data laid out in terms of (batch, sequence_length, features)
         self.encoder_layer = nn.TransformerEncoderLayer(
-            20, nhead, dim_feedforward, batch_first=True
+            d_model=20, nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True
         )
         # This just makes a stack of layer_count of the encoder_layer.
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
@@ -95,6 +96,10 @@ class TransformerBinarySelectionModel(nn.Module):
         out = self.linear(out)
         return torch.sigmoid(out).squeeze(-1)
 
+        # print(f"Input shape: {parent_onehots.shape}")  # Should be [B, L, 20]
+        # print(f"Encoder output shape: {out.shape}")  # Should also be [B, L, 20]
+        # print(f"Linear output shape: {out.shape}")  # Should be [B, L, 1]
+
     def p_substitution_of_aa_str(self, aa_str: str):
         """Do the forward method without gradients from an amino acid string and convert to numpy.
 
@@ -106,15 +111,18 @@ class TransformerBinarySelectionModel(nn.Module):
             the level of selection for each amino acid site.
         """
         aa_onehot = sequences.aa_one_hot_tensor(aa_str)
-        
+
         # Create a padding mask with False values (i.e., no padding)
         padding_mask = torch.zeros(len(aa_str), dtype=torch.bool).to(self.device)
 
         with torch.no_grad():
             aa_onehot = aa_onehot.to(self.device)
-            model_out = self.model(aa_onehot.unsqueeze(0), padding_mask.unsqueeze(0)).squeeze(0)
+            model_out = self.model(
+                aa_onehot.unsqueeze(0), padding_mask.unsqueeze(0)
+            ).squeeze(0)
 
         return model_out.cpu().numpy()[: len(aa_str)]
+
 
 def train_model(
     pcp_df,
@@ -138,7 +146,9 @@ def train_model(
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
-    model = TransformerBinarySelectionModel(nhead, dim_feedforward, layer_count)
+    model = TransformerBinarySelectionModel(
+        nhead=nhead, dim_feedforward=dim_feedforward, layer_count=layer_count
+    )
 
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
