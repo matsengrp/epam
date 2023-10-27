@@ -90,7 +90,7 @@ class TransformerBinarySelectionModel(nn.Module):
     """
     def __init__(self, nhead: int, dim_feedforward: int, layer_count: int, d_model: int = 20, dropout: float = 0.5):
         super().__init__()
-        self.device = "cpu" # pick_device()
+        self.device = pick_device()
         self.ntoken = 20
         self.d_model = d_model
         self.pos_encoder = PositionalEncoding(self.d_model, dropout)
@@ -122,7 +122,8 @@ class TransformerBinarySelectionModel(nn.Module):
         parent_onehots = parent_onehots * math.sqrt(self.d_model)
         parent_onehots = self.pos_encoder(parent_onehots)
 
-        out = self.encoder(parent_onehots, src_key_padding_mask=padding_mask)
+        # NOTE: not masking due to MPS bug
+        out = self.encoder(parent_onehots) #, src_key_padding_mask=padding_mask)
         out = self.linear(out)
         return torch.sigmoid(out).squeeze(-1)
 
@@ -144,7 +145,8 @@ class TransformerBinarySelectionModel(nn.Module):
         with torch.no_grad():
             aa_onehot = aa_onehot.to(self.device)
             model_out = self.model(
-                aa_onehot.unsqueeze(0), padding_mask.unsqueeze(0)
+            # NOTE: not masking due to MPS bug
+                aa_onehot.unsqueeze(0) # , padding_mask.unsqueeze(0)
             ).squeeze(0)
 
         return model_out.cpu().numpy()[: len(aa_str)]
