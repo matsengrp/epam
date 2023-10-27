@@ -8,8 +8,10 @@ We'll use these conventions:
 
 """
 
-import numpy as np
+import math
 import os
+
+import numpy as np
 
 import torch
 import torch.optim as optim
@@ -61,6 +63,24 @@ class PCPDataset(Dataset):
         }
 
 
+class PositionalEncoding(nn.Module):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+        super(PositionalEncoding, self).__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        pe = torch.zeros(max_len, d_model)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0).transpose(0, 1)
+        self.register_buffer('pe', pe)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = x + self.pe[:x.size(0), :]
+        return self.dropout(x)
+
+
 class TransformerBinarySelectionModel(nn.Module):
     """A transformer-based model for binary selection.
 
@@ -68,21 +88,27 @@ class TransformerBinarySelectionModel(nn.Module):
 
     See forward() for details.
     """
-
-    def __init__(self, nhead, dim_feedforward, layer_count):
+    def __init__(self, nhead: int, dim_feedforward: int, layer_count: int, d_model: int = 20, dropout: float = 0.5):
         super().__init__()
-        self.device = "cpu"
-        # self.device = pick_device()
-        # batch_first means that we have data laid out in terms of (batch, sequence_length, features)
+        self.device = "cpu" # You can also use pick_device() here
+        self.ntoken = 20
+        self.d_model = d_model
+        self.pos_encoder = PositionalEncoding(self.d_model, dropout)
         self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model=20, nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True
+            d_model=self.d_model, nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True
         )
-        # This just makes a stack of layer_count of the encoder_layer.
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
-        self.linear = nn.Linear(dim_feedforward, 1)
-        self.to(self.device)
+        self.linear = nn.Linear(self.d_model, 1) 
 
-    def forward(self, parent_onehots: Tensor, padding_mask: Tensor):
+        self.to(self.device)
+        self.init_weights()
+
+    def init_weights(self) -> None:
+        initrange = 0.1
+        self.linear.bias.data.zero_()
+        self.linear.weight.data.uniform_(-initrange, initrange)
+
+    def forward(self, parent_onehots: Tensor, padding_mask: Tensor) -> Tensor:
         """Build a binary selection matrix from a one-hot encoded parent sequence.
 
         Parameters:
@@ -92,13 +118,13 @@ class TransformerBinarySelectionModel(nn.Module):
         Returns:
             A tensor of shape (B, L, 1) representing the level of selection for each amino acid site.
         """
+
+        parent_onehots = parent_onehots * math.sqrt(self.d_model)
+        parent_onehots = self.pos_encoder(parent_onehots)
+
         out = self.encoder(parent_onehots, src_key_padding_mask=padding_mask)
         out = self.linear(out)
         return torch.sigmoid(out).squeeze(-1)
-
-        # print(f"Input shape: {parent_onehots.shape}")  # Should be [B, L, 20]
-        # print(f"Encoder output shape: {out.shape}")  # Should also be [B, L, 20]
-        # print(f"Linear output shape: {out.shape}")  # Should be [B, L, 1]
 
     def p_substitution_of_aa_str(self, aa_str: str):
         """Do the forward method without gradients from an amino acid string and convert to numpy.
@@ -140,12 +166,18 @@ def train_model(
     nt_children = pcp_df["child"]
     dataset = PCPDataset(nt_parents, nt_children)
 
-    train_len = int(0.8 * len(dataset))
-    val_len = len(dataset) - train_len
-    train_set, val_set = random_split(dataset, [train_len, val_len])
+    # Split data first
+    train_len = int(0.8 * len(nt_parents))
+    val_len = len(nt_parents) - train_len
+    train_parents, val_parents = nt_parents[:train_len], nt_parents[train_len:]
+    train_children, val_children = nt_children[:train_len], nt_children[train_len:]
+
+    train_set = PCPDataset(train_parents, train_children)
+    val_set = PCPDataset(val_parents, val_children)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
+
     model = TransformerBinarySelectionModel(
         nhead=nhead, dim_feedforward=dim_feedforward, layer_count=layer_count
     )
@@ -179,12 +211,11 @@ def train_model(
         model.eval()
         val_loss = 0
         with torch.no_grad():
-            for aa_onehot, aa_subs_indicator, padding_mask in val_loader:
-                aa_onehot, aa_subs_indicator, padding_mask = (
-                    aa_onehot.to(device),
-                    aa_subs_indicator.to(device),
-                    padding_mask.to(device),
-                )
+            for batch in val_loader:
+                aa_onehot = batch["aa_onehot"].to(device)
+                aa_subs_indicator = batch["subs_indicator"].to(device)
+                padding_mask = batch["padding_mask"].to(device)
+
                 outputs = model(aa_onehot, padding_mask)
                 val_loss += criterion(outputs, aa_subs_indicator).item()
 
