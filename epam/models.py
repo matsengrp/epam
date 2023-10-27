@@ -50,6 +50,24 @@ FULLY_SPECIFIED_MODELS = [
     ),
 ]
 
+def pick_device():
+    # check that CUDA is usable
+    def check_CUDA():
+        try:
+            torch._C._cuda_init()
+            return True
+        except:
+            return False
+
+    if torch.backends.cudnn.is_available() and check_CUDA():
+        print("Using CUDA")
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        print("Using Metal Performance Shaders")
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
 
 class BaseModel(ABC):
     def __init__(self, model_name=None):
@@ -476,23 +494,7 @@ class TorchModel(BaseModel):
 
         """
         super().__init__(model_name=model_name)
-
-        # check that CUDA is usable
-        def check_CUDA():
-            try:
-                torch._C._cuda_init()
-                return True
-            except:
-                return False
-
-        if torch.backends.cudnn.is_available() and check_CUDA():
-            print("Using CUDA")
-            self.device = torch.device("cuda")
-        elif torch.backends.mps.is_available():
-            print("Using Metal Performance Shaders")
-            self.device = torch.device("mps")
-        else:
-            self.device = torch.device("cpu")
+        self.device = pick_device()
 
 
 class ESM1v(TorchModel):
