@@ -22,6 +22,11 @@ def nt_idx_array_of_str(nt_str):
     return np.array([NT_STR_SORTED.index(nt) for nt in nt_str])
 
 
+def aa_idx_array_of_str(aa_str):
+    """Return the indices of the amino acids in a string."""
+    return np.array([AA_STR_SORTED.index(aa) for aa in aa_str])
+
+
 def nt_idx_tensor_of_str(nt_str):
     """Return the indices of the nucleotides in a string."""
     return torch.tensor([NT_STR_SORTED.index(nt) for nt in nt_str])

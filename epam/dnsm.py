@@ -13,12 +13,43 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.utils.data import Dataset
 from torch import Tensor
 
-from epam import molevol
 from epam.models import TorchModel, MutSel
-
 import epam.sequences as sequences
+from epam.sequences import translate_sequences
+
+
+class PCPDataset(Dataset):
+    def __init__(self, nt_parents, nt_children):
+        # skipping storing nt sequences and branch lengths for now; see issue #31
+        assert len(nt_parents) == len(nt_children), "Lengths of nt_parents and nt_children must be equal."
+        aa_parents = translate_sequences(self.nt_parents)
+        aa_children = translate_sequences(self.nt_children)
+
+        pcp_count = len(nt_parents)
+        self.max_aa_seq_len = max(len(seq) for seq in self.aa_parents)
+        self.aa_parents_onehot = torch.zeros((pcp_count, self.max_aa_seq_len, 20))
+        aa_subs_indicator_tensor = torch.zeros((pcp_count, self.max_aa_seq_len))
+        padding_mask = torch.ones((pcp_count, self.max_aa_seq_len), dtype=torch.bool)
+
+        for i, (parent, child) in enumerate(zip(aa_parents, aa_children)):
+            aa_indices_parent = sequences.aa_idx_array_of_str(parent)
+            seq_len = len(parent)
+            self.aa_parents_onehot[i, :seq_len, aa_indices_parent] = 1
+            aa_subs_indicator_tensor[i, :seq_len] = torch.tensor([p != c for p, c in zip(parent, child)], dtype=torch.float)
+            padding_mask[i, :seq_len] = False
+
+    def __len__(self):
+        return len(self.aa_parents_onehot)
+
+    def __getitem__(self, idx):
+        return {
+            'aa_onehot': self.aa_parents_onehot[idx],
+            'subs_indicator': self.aa_subs_indicator_tensor[idx],
+            'padding_mask': self.padding_mask[idx]
+        }
 
 
 class TransformerBinarySelectionModel(nn.Module, TorchModel):
