@@ -567,3 +567,32 @@ class SHMpleESM(MutSel):
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+
+
+class WrappedBinaryMutSel(MutSel):
+    """A mutation selection model that is built from a model that has a `p_substitution_of_aa_str` method."""
+
+    def __init__(self, model, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.model = model
+
+    def build_selection_matrix_from_parent(self, parent: str):
+        # We need to take our binary selection matrix and turn it into a selection matrix which gives the same weight to each off-diagonal element.
+        p_substitution = self.model.p_substitution_of_aa_str(parent)
+        parent_idxs = sequences.aa_idx_array_of_str(parent)
+
+        # make a np array with the same number of rows as the length of p_substitution
+        # and the same number of columns as the number of amino acids
+        selection_matrix = np.zeros((len(p_substitution), 20))
+
+        # Set each row to p_substitution/19, which is the probability of the
+        # corresponding site mutating to a given alternative amino acid.
+        selection_matrix[:, :] = p_substitution[:, np.newaxis] / 19.0
+
+        # Set "diagonal" elements to 1 - p_substitution for each corresponding amino
+        # acid in the parent, where "diagonal means keeping the same amino acid.
+        selection_matrix[np.arange(len(parent_idxs)), parent_idxs] = (
+            1.0 - p_substitution
+        )
+
+        return selection_matrix

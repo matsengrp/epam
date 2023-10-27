@@ -169,3 +169,7 @@ work/
 # local data
 pcp_inputs/
 output/
+
+# model training
+_checkpoints/
+_logs/

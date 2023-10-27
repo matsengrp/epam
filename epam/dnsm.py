@@ -9,12 +9,19 @@ We'll use these conventions:
 """
 
 import numpy as np
+import os
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
 from torch import Tensor
+import torch.optim as optim
+import torch.nn as nn
+from torch.utils.data import random_split
+
+from tensorboardX import SummaryWriter
 
 from epam.models import TorchModel, MutSel
 import epam.sequences as sequences
@@ -103,32 +110,59 @@ class TransformerBinarySelectionModel(nn.Module, TorchModel):
         return model_out.cpu().numpy()[: len(aa_str)]
 
 
-class WrappedBinaryMutSel(MutSel):
-    """A mutation selection model that is built from a model that has a `p_substitution_of_aa_str` method."""
+def train_model(pcp_df, nhead, dim_feedforward, layer_count, batch_size=32, num_epochs=10, learning_rate=0.001, checkpoint_dir="./_checkpoints", log_dir="./_logs"):
+    
+    nt_parents = pcp_df['parent']
+    nt_children = pcp_df['child']
+    dataset = PCPDataset(nt_parents, nt_children)
+    
+    train_len = int(0.8 * len(dataset))
+    val_len = len(dataset) - train_len
+    train_set, val_set = random_split(dataset, [train_len, val_len])
 
-    def __init__(self, model, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.model = model
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
+    model = TransformerBinarySelectionModel(nhead, dim_feedforward, layer_count)
 
-    def build_selection_matrix_from_parent(
-        self: TransformerBinarySelectionModel, parent: str
-    ):
-        # We need to take our binary selection matrix and turn it into a selection matrix which gives the same weight to each off-diagonal element.
-        p_substitution = self.model.p_substitution_of_aa_str(parent)
-        parent_idxs = sequences.aa_idx_array_of_str(parent)
+    criterion = nn.BCELoss()
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    device = model.device
+    writer = SummaryWriter(log_dir=log_dir)
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
 
-        # make a np array with the same number of rows as the length of p_substitution
-        # and the same number of columns as the number of amino acids
-        selection_matrix = np.zeros((len(p_substitution), 20))
+    for epoch in range(num_epochs):
+        model.train()
+        for i, (aa_onehot, aa_subs_indicator, padding_mask) in enumerate(train_loader):
+            aa_onehot, aa_subs_indicator, padding_mask = aa_onehot.to(device), aa_subs_indicator.to(device), padding_mask.to(device)
+            
+            optimizer.zero_grad()
+            outputs = model(aa_onehot, padding_mask)
+            loss = criterion(outputs, aa_subs_indicator)
+            loss.backward()
+            optimizer.step()
+            writer.add_scalar("Training Loss", loss.item(), epoch * len(train_loader) + i)
 
-        # Set each row to p_substitution/19, which is the probability of the
-        # corresponding site mutating to a given alternative amino acid.
-        selection_matrix[:, :] = p_substitution[:, np.newaxis] / 19.0
+        # Validation Loop
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for aa_onehot, aa_subs_indicator, padding_mask in val_loader:
+                aa_onehot, aa_subs_indicator, padding_mask = aa_onehot.to(device), aa_subs_indicator.to(device), padding_mask.to(device)
+                outputs = model(aa_onehot, padding_mask)
+                val_loss += criterion(outputs, aa_subs_indicator).item()
 
-        # Set "diagonal" elements to 1 - p_substitution for each corresponding amino
-        # acid in the parent, where "diagonal means keeping the same amino acid.
-        selection_matrix[np.arange(len(parent_idxs)), parent_idxs] = (
-            1.0 - p_substitution
-        )
+            avg_val_loss = val_loss / len(val_loader)
+            writer.add_scalar("Validation Loss", avg_val_loss, epoch)
 
-        return selection_matrix
+            # Save model checkpoint
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': avg_val_loss,
+            }, f"{checkpoint_dir}/model_epoch_{epoch}.pth")
+        
+        print(f'Epoch [{epoch + 1}/{num_epochs}], Training Loss: {loss.item()}, Validation Loss: {avg_val_loss}')
+
+    writer.close()
