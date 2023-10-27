@@ -90,7 +90,7 @@ class TransformerBinarySelectionModel(nn.Module):
     """
     def __init__(self, nhead: int, dim_feedforward: int, layer_count: int, d_model: int = 20, dropout: float = 0.5):
         super().__init__()
-        self.device = "cpu" # You can also use pick_device() here
+        self.device = "cpu" # pick_device()
         self.ntoken = 20
         self.d_model = d_model
         self.pos_encoder = PositionalEncoding(self.d_model, dropout)
@@ -164,14 +164,13 @@ def train_model(
     print("preparing data...")
     nt_parents = pcp_df["parent"]
     nt_children = pcp_df["child"]
-    dataset = PCPDataset(nt_parents, nt_children)
 
-    # Split data first
     train_len = int(0.8 * len(nt_parents))
-    val_len = len(nt_parents) - train_len
     train_parents, val_parents = nt_parents[:train_len], nt_parents[train_len:]
     train_children, val_children = nt_children[:train_len], nt_children[train_len:]
 
+    # It's important to make separate PCPDatasets for training and validation
+    # because the maximum sequence length can differ between those two.
     train_set = PCPDataset(train_parents, train_children)
     val_set = PCPDataset(val_parents, val_children)
 
