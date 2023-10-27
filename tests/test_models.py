@@ -7,14 +7,8 @@ from importlib import resources
 import epam.models
 from epam.esm_precompute import precompute_and_save
 from epam.esm_precompute import load_and_convert_to_dict
-from epam.sequences import translate_sequences
-from epam.models import (
-    AbLang,
-    SHMple,
-    OptimizableSHMple,
-    MutSel,
-    # CachedESM1v
-)
+from epam.sequences import translate_sequence
+from epam.models import AbLang, SHMple, OptimizableSHMple, MutSel, SHMpleESM
 
 parent_seqs = [
     "EVQLVESGPGLVQPGKSLRLSCVASGFTFSGYGMHWVRQAPGKGLEWIALIIYDESNKYYADSVKGRFTISRDNSKNTLYLQMSSLRAEDTAVFYCAKVKFYDPTAPNDYWGQGTLVTVSS",
@@ -39,7 +33,7 @@ weights_path = "data/shmple_weights/my_shmoof"
 def test_shmple():
     shmple_shmoof = SHMple(weights_directory=weights_path)
     aaprobs = shmple_shmoof.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
-    child_aa_seq = translate_sequences([child_nt_seq])[0]
+    child_aa_seq = translate_sequence(child_nt_seq)
     prob_vec = shmple_shmoof.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 
@@ -102,6 +96,16 @@ def test_cached_esm():
 
     for key in cached_esm_dict.keys():
         assert np.allclose(ref_esm_dict[key], cached_esm_dict[key])
+
+
+def test_nasty_shmple_esm():
+    bad_pcp_file = "data/wyatt_10x_loss_nan.csv"
+    bad_esm_file = "_ignore/wyatt_10x_loss_nan_cached_esm.hdf5"
+    bad_out_file = "_ignore/wyatt_10x_loss_nan.hdf5"
+    precompute_and_save(bad_pcp_file, bad_esm_file)
+    shmple_esm = SHMpleESM(weights_directory=weights_path)
+    shmple_esm.preload_esm_data(bad_esm_file)
+    shmple_esm.write_aaprobs(bad_pcp_file, bad_out_file)
 
 
 def hdf5_files_identical(path_1, path_2, tol=1e-4):

@@ -2,9 +2,6 @@ ablang
 black
 fair-esm
 h5py
-jax
-jaxlib
-jaxopt
 pytest
 shmple @ git+https://github.com/matsengrp/shmple@f1f3db0b67351bae7c23b96197b58c7674bb95bb
 snakemake

@@ -3,16 +3,18 @@ This module enables precomputation of ESM1v selection factors for a set of PCPs 
 """
 import numpy as np
 import pandas as pd
+import torch
 import h5py
-from epam.utils import load_and_filter_pcp_df, generate_file_checksum
+
+from esm import pretrained
+
 from epam.sequences import (
     AA_STR_SORTED,
     translate_sequences,
-    pcp_criteria_check,
     assert_pcp_lengths,
 )
-from esm import pretrained
-import torch
+from epam.torch_common import pick_device
+from epam.utils import load_and_filter_pcp_df, generate_file_checksum
 
 model_location = "esm1v_t33_650M_UR90S_1"
 
@@ -25,24 +27,7 @@ def precompute_and_save(pcp_path, output_hdf5):
     output_hdf5 (str): Path to the output HDF5 file.
     """
 
-    # Check that CUDA is usable
-    def check_CUDA():
-        try:
-            torch._C._cuda_init()
-            return True
-        except:
-            return False
-
-    # Set device based on system availability
-    if torch.backends.cudnn.is_available() and check_CUDA():
-        print("Using CUDA")
-        device = torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        print("Using Metal Performance Shaders")
-        device = torch.device("mps")
-    else:
-        print("Using CPU")
-        device = torch.device("cpu")
+    device = pick_device()
 
     # Initialize the model
     model, alphabet = pretrained.load_model_and_alphabet(model_location)

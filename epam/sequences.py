@@ -22,9 +22,21 @@ def nt_idx_array_of_str(nt_str):
     return np.array([NT_STR_SORTED.index(nt) for nt in nt_str])
 
 
+def aa_idx_array_of_str(aa_str):
+    """Return the indices of the amino acids in a string."""
+    return np.array([AA_STR_SORTED.index(aa) for aa in aa_str])
+
+
 def nt_idx_tensor_of_str(nt_str):
     """Return the indices of the nucleotides in a string."""
     return torch.tensor([NT_STR_SORTED.index(nt) for nt in nt_str])
+
+
+def aa_onehot_tensor_of_str(aa_str):
+    aa_onehot = torch.zeros((len(aa_str), 20))
+    aa_indices_parent = aa_idx_array_of_str(aa_str)
+    aa_onehot[torch.arange(len(aa_str)), aa_indices_parent] = 1
+    return aa_onehot
 
 
 def read_fasta_sequences(file_path):
@@ -45,10 +57,21 @@ def translate_sequences(nt_sequences):
     return aa_sequences
 
 
+def translate_sequence(nt_sequence):
+    return translate_sequences([nt_sequence])[0]
+
+
 def aa_index_of_codon(codon):
     """Return the index of the amino acid encoded by a codon."""
-    aa = translate_sequences([codon])[0]
+    aa = translate_sequence(codon)
     return AA_STR_SORTED.index(aa)
+
+
+def mutation_frequency(parent, child):
+    """Return the fraction of nucleotides that differ between the parent and child sequences."""
+    return sum(
+        1 for p, c in zip(parent, child) if p != c and p != "N" and c != "N"
+    ) / len(parent)
 
 
 def assert_pcp_lengths(parent, child):
@@ -68,7 +91,7 @@ def pcp_criteria_check(parent, child, max_mut_freq=0.3):
     """Check that parent child pair undergoes mutation at a reasonable rate."""
     if parent == child:
         return False
-    elif sum(1 for p, c in zip(parent, child) if p != c) / len(parent) > max_mut_freq:
+    elif mutation_frequency(parent, child) > max_mut_freq:
         return False
     else:
         return True

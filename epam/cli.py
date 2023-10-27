@@ -1,8 +1,12 @@
+import logging
+
 import fire
 import pandas as pd
+import numpy as np
 import h5py
+
 import os
-from epam import evaluation, models, esm_precompute
+from epam import evaluation, models, shmple_precompute, esm_precompute
 from epam.utils import generate_file_checksum
 
 
@@ -111,6 +115,18 @@ def esm_bulk_precompute(csv_path, output_hdf5_path):
     :param csv_path: Path to a CSV file containing PCP data.
     """
     esm_precompute.precompute_and_save(csv_path, output_hdf5_path)
+
+
+def shmplify(weights_path, csv_path):
+    """
+    This command precomputes SHMple rates and substitution probabilities, and then
+    saves those values in an HDF5 file along with the whole original df from the CSV.
+
+    :param weights_path: Path to the directory containing the SHMple weights.
+    :param csv_path: Path to the CSV file containing the parent sequences.
+    """
+    output_hdf5_path = csv_path.replace(".csv", ".shmple.hdf5")
+    shmple_precompute.precompute_and_save(weights_path, csv_path, output_hdf5_path)
 
 
 def main():
