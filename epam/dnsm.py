@@ -11,13 +11,11 @@ We'll use these conventions:
 import math
 import os
 
-import numpy as np
-
 import torch
 import torch.optim as optim
 import torch.nn as nn
 from torch import Tensor
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader
 
 from tensorboardX import SummaryWriter
 

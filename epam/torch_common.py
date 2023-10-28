@@ -23,6 +23,7 @@ def pick_device():
         return torch.device("cpu")
 
 
+# Reference: https://pytorch.org/tutorials/beginner/transformer_tutorial.html
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
         super().__init__()
