@@ -22,6 +22,7 @@ from epam.sequences import (
     assert_pcp_lengths,
     translate_sequences,
 )
+from epam.torch_common import pick_device
 import epam.utils as utils
 
 with resources.path("epam", "__init__.py") as p:
@@ -49,25 +50,6 @@ FULLY_SPECIFIED_MODELS = [
         {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
     ),
 ]
-
-def pick_device():
-    # check that CUDA is usable
-    def check_CUDA():
-        try:
-            torch._C._cuda_init()
-            return True
-        except:
-            return False
-
-    if torch.backends.cudnn.is_available() and check_CUDA():
-        print("Using CUDA")
-        return torch.device("cuda")
-    elif torch.backends.mps.is_available():
-        print("Using Metal Performance Shaders")
-        return torch.device("mps")
-    else:
-        return torch.device("cpu")
-
 
 class BaseModel(ABC):
     def __init__(self, model_name=None):

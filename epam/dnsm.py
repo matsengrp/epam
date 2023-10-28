@@ -21,7 +21,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from tensorboardX import SummaryWriter
 
-from epam.models import pick_device
+from epam.torch_common import pick_device, PositionalEncoding
 import epam.sequences as sequences
 from epam.sequences import translate_sequences
 
@@ -63,24 +63,6 @@ class PCPDataset(Dataset):
         }
 
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
-        super(PositionalEncoding, self).__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        pe = torch.zeros(max_len, d_model)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
-
-    def forward(self, x: Tensor) -> Tensor:
-        x = x + self.pe[:x.size(0), :]
-        return self.dropout(x)
-
-
 class TransformerBinarySelectionModel(nn.Module):
     """A transformer-based model for binary selection.
 
@@ -88,17 +70,28 @@ class TransformerBinarySelectionModel(nn.Module):
 
     See forward() for details.
     """
-    def __init__(self, nhead: int, dim_feedforward: int, layer_count: int, d_model: int = 20, dropout: float = 0.5):
+
+    def __init__(
+        self,
+        nhead: int,
+        dim_feedforward: int,
+        layer_count: int,
+        d_model: int = 20,
+        dropout: float = 0.5,
+    ):
         super().__init__()
         self.device = pick_device()
         self.ntoken = 20
         self.d_model = d_model
         self.pos_encoder = PositionalEncoding(self.d_model, dropout)
         self.encoder_layer = nn.TransformerEncoderLayer(
-            d_model=self.d_model, nhead=nhead, dim_feedforward=dim_feedforward, batch_first=True
+            d_model=self.d_model,
+            nhead=nhead,
+            dim_feedforward=dim_feedforward,
+            batch_first=True,
         )
         self.encoder = nn.TransformerEncoder(self.encoder_layer, layer_count)
-        self.linear = nn.Linear(self.d_model, 1) 
+        self.linear = nn.Linear(self.d_model, 1)
 
         self.to(self.device)
         self.init_weights()
@@ -123,7 +116,7 @@ class TransformerBinarySelectionModel(nn.Module):
         parent_onehots = self.pos_encoder(parent_onehots)
 
         # NOTE: not masking due to MPS bug
-        out = self.encoder(parent_onehots) #, src_key_padding_mask=padding_mask)
+        out = self.encoder(parent_onehots)  # , src_key_padding_mask=padding_mask)
         out = self.linear(out)
         return torch.sigmoid(out).squeeze(-1)
 
@@ -146,9 +139,9 @@ class TransformerBinarySelectionModel(nn.Module):
 
         with torch.no_grad():
             aa_onehot = aa_onehot.to(self.device)
-            model_out = self(
-                aa_onehot.unsqueeze(0), padding_mask.unsqueeze(0)
-            ).squeeze(0)
+            model_out = self(aa_onehot.unsqueeze(0), padding_mask.unsqueeze(0)).squeeze(
+                0
+            )
 
         return model_out.cpu().numpy()[: len(aa_str)]
 
