@@ -281,12 +281,10 @@ def build_codon_mutsel_v(
     # Multiply the codon probabilities by the selection matrices
     codon_mutsel_v = codon_probs_v * codon_sel_matrix_v.view(-1, 4, 4, 4)
 
-    # Normalize to get a probability distribution for each sequence
-    codon_count = parent_codon_idxs_v.shape[0]
-
     # Now we need to recalculate the probability of staying in the same codon.
     # In our setup, this is the probability of nothing happening.
     # To calculate this, we zero out the previously calculated probabilities...
+    codon_count = parent_codon_idxs_v.shape[0]
     codon_mutsel_v[(torch.arange(codon_count), *parent_codon_idxs_v.T)] = 0.0
     # sum together their probabilities...
     sums = codon_mutsel_v.sum(dim=(1, 2, 3))
@@ -294,3 +292,48 @@ def build_codon_mutsel_v(
     codon_mutsel_v[(torch.arange(codon_count), *parent_codon_idxs_v.T)] = 1.0 - sums
 
     return codon_mutsel_v
+
+
+def neutral_aa_mut_prob_v(
+    parent_codon_idxs_v: Tensor,
+    codon_mut_probs_v: Tensor,
+    codon_sub_probs_v: Tensor,
+) -> Tensor:
+    """
+    For every site, what is the probability that the amino acid will stay the
+    same under neutral evolution?
+
+    Args:
+        parent_codon_idxs_v (torch.Tensor): The parent codons for each sequence. Shape: (codon_count, 3)
+        codon_mut_probs_v (torch.Tensor): The mutation probabilities for each site in each codon. Shape: (codon_count, 3)
+        codon_sub_probs_v (torch.Tensor): The substitution probabilities for each site in each codon. Shape: (codon_count, 3, 4)
+
+    Returns:
+        torch.Tensor: The probability that each site will change amino acid.
+    """
+    
+    ## NOTE that this doesn't include the probability of mutating to a stop codon.
+
+    mut_matrix_v = build_mutation_matrices(
+        parent_codon_idxs_v, codon_mut_probs_v, codon_sub_probs_v
+    )
+    codon_probs_v = codon_probs_of_mutation_matrices(mut_matrix_v).view(-1, 64)
+
+    # Get the probability of mutating to each amino acid.
+    aa_probs_v = codon_probs_v @ CODON_AA_INDICATOR_MATRIX
+
+    # Next we build a table that will allow us to look up the amino acid index
+    # from the codon indices. Argmax gets the aa index.
+    codon_aa_table = CODON_AA_INDICATOR_MATRIX.argmax(dim=1).view(4, 4, 4)
+
+    # Get the amino acid index for each parent codon.
+    parent_aa_idxs_v = codon_aa_table[
+        (
+            parent_codon_idxs_v[:, 0],
+            parent_codon_idxs_v[:, 1],
+            parent_codon_idxs_v[:, 2],
+        )
+    ]
+    p_staying_same = aa_probs_v[(torch.arange(len(parent_aa_idxs_v)), parent_aa_idxs_v)]
+
+    return 1 - p_staying_same

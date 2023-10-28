@@ -41,6 +41,18 @@ def test_build_mutation_matrix():
     assert torch.allclose(correct_tensor, computed_tensor)
 
 
+def test_neutral_aa_mut_prob_v():
+    correct_tensor = torch.tensor([1 - 0.99*0.98])
+
+    computed_tensor = molevol.neutral_aa_mut_prob_v(
+        ex_parent_codon_idxs.unsqueeze(0),
+        ex_mut_probs.unsqueeze(0),
+        ex_sub_probs.unsqueeze(0),
+    ).squeeze()
+
+    assert torch.allclose(correct_tensor, computed_tensor)
+
+
 def test_normalize_sub_probs():
     parent_idxs = nt_idx_tensor_of_str("AC")
     sub_probs = torch.tensor([[0.2, 0.3, 0.4, 0.1], [0.1, 0.2, 0.3, 0.4]])
