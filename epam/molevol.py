@@ -300,8 +300,12 @@ def neutral_aa_mut_prob_v(
     codon_sub_probs_v: Tensor,
 ) -> Tensor:
     """
-    For every site, what is the probability that the amino acid will stay the
-    same under neutral evolution?
+    For every site, what is the probability that the amino acid will have a
+    substution or mutate to a stop under neutral evolution?
+
+    This code computes all the probabilities and then indexes into that tensor
+    to get the relevant probabilities. This isn't the most efficient way to do
+    this, but it's the cleanest. We could make it faster as needed.
 
     Args:
         parent_codon_idxs_v (torch.Tensor): The parent codons for each sequence. Shape: (codon_count, 3)
@@ -311,8 +315,6 @@ def neutral_aa_mut_prob_v(
     Returns:
         torch.Tensor: The probability that each site will change amino acid.
     """
-    
-    ## NOTE that this doesn't include the probability of mutating to a stop codon.
 
     mut_matrix_v = build_mutation_matrices(
         parent_codon_idxs_v, codon_mut_probs_v, codon_sub_probs_v
@@ -324,10 +326,10 @@ def neutral_aa_mut_prob_v(
 
     # Next we build a table that will allow us to look up the amino acid index
     # from the codon indices. Argmax gets the aa index.
-    codon_aa_table = CODON_AA_INDICATOR_MATRIX.argmax(dim=1).view(4, 4, 4)
+    aa_idx_from_codon = CODON_AA_INDICATOR_MATRIX.argmax(dim=1).view(4, 4, 4)
 
     # Get the amino acid index for each parent codon.
-    parent_aa_idxs_v = codon_aa_table[
+    parent_aa_idxs_v = aa_idx_from_codon[
         (
             parent_codon_idxs_v[:, 0],
             parent_codon_idxs_v[:, 1],

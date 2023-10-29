@@ -42,6 +42,10 @@ def test_build_mutation_matrix():
 
 
 def test_neutral_aa_mut_prob_v():
+    # This is the probability of a mutation to a codon that translates to the
+    # same. In this case, ACG is the codon, and it's fourfold degenerate. Thus
+    # we just multiply the probability of A and C staying the same from the
+    # correct_tensor just above.
     correct_tensor = torch.tensor([1 - 0.99*0.98])
 
     computed_tensor = molevol.neutral_aa_mut_prob_v(
