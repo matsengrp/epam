@@ -314,6 +314,7 @@ def neutral_aa_mut_prob_v(
 
     Returns:
         torch.Tensor: The probability that each site will change amino acid.
+                      Shape: (codon_count,)
     """
 
     mut_matrix_v = build_mutation_matrices(

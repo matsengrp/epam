@@ -55,6 +55,10 @@ def aa_index_of_codon(codon):
     aa = translate_sequences([codon])[0]
     return AA_STR_SORTED.index(aa)
 
+def mutation_frequency(parent, child):
+    """Return the fraction of nucleotides that differ between the parent and child sequences."""
+    # Issue #39
+    return sum([p != c for p, c in zip(parent, child)])/len(parent)
 
 def assert_pcp_lengths(parent, child):
     """Assert that the lengths of the parent and child sequences are
