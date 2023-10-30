@@ -28,6 +28,7 @@ from epam.sequences import translate_sequences
 
 from shmple import AttentionModel
 
+
 class PCPDataset(Dataset):
     def __init__(self, nt_parents, nt_children, shmple_model):
         assert len(nt_parents) == len(
@@ -35,12 +36,12 @@ class PCPDataset(Dataset):
         ), "Lengths of nt_parents and nt_children must be equal."
         pcp_count = len(nt_parents)
 
-        for parent, child in zip(nt_parents, nt_children):
-            if parent == child:
+        for aa_parent, aa_child in zip(nt_parents, nt_children):
+            if aa_parent == aa_child:
                 raise ValueError(
-                    f"Found an identical parent and child sequence: {parent}"
+                    f"Found an identical parent and child sequence: {aa_parent}"
                 )
-            
+
         aa_parents = translate_sequences(nt_parents)
         aa_children = translate_sequences(nt_children)
         self.max_aa_seq_len = max(len(seq) for seq in aa_parents)
@@ -53,8 +54,7 @@ class PCPDataset(Dataset):
         ]
 
         print("predicting mutabilities and substitutions...")
-        # TODO _v here is between sequences, so different use than other _v.
-        rates_v, subs_probs_v = shmple_model.predict_mutabilities_and_substitutions(
+        all_rates, all_subs_probs = shmple_model.predict_mutabilities_and_substitutions(
             nt_parents, mutation_freqs
         )
 
@@ -62,7 +62,7 @@ class PCPDataset(Dataset):
 
         neutral_aa_mut_prob_l = []
 
-        for nt_parent, rates, subs_probs in zip(nt_parents, rates_v, subs_probs_v):
+        for nt_parent, rates, subs_probs in zip(nt_parents, all_rates, all_subs_probs):
             parent_idxs = sequences.nt_idx_tensor_of_str(nt_parent)
 
             # Making sure the rates tensor is of float type for numerical stability.
@@ -94,15 +94,14 @@ class PCPDataset(Dataset):
             (pcp_count, self.max_aa_seq_len), dtype=torch.bool
         )
 
-        # TODO: use _aa suffices for parent child and seq_len
-        for i, (parent, child) in enumerate(zip(aa_parents, aa_children)):
-            aa_indices_parent = sequences.aa_idx_array_of_str(parent)
-            seq_len = len(parent)
-            self.aa_parents_onehot[i, :seq_len, aa_indices_parent] = 1
-            self.aa_subs_indicator_tensor[i, :seq_len] = torch.tensor(
-                [p != c for p, c in zip(parent, child)], dtype=torch.float
+        for i, (aa_parent, aa_child) in enumerate(zip(aa_parents, aa_children)):
+            aa_indices_parent = sequences.aa_idx_array_of_str(aa_parent)
+            aa_seq_len = len(aa_parent)
+            self.aa_parents_onehot[i, :aa_seq_len, aa_indices_parent] = 1
+            self.aa_subs_indicator_tensor[i, :aa_seq_len] = torch.tensor(
+                [p != c for p, c in zip(aa_parent, aa_child)], dtype=torch.float
             )
-            self.padding_mask[i, :seq_len] = False
+            self.padding_mask[i, :aa_seq_len] = False
 
     def __len__(self):
         return len(self.aa_parents_onehot)
@@ -205,6 +204,7 @@ class TransformerBinarySelectionModel(nn.Module):
 
 def train_model(
     pcp_df,
+    shmple_weights_directory,
     nhead,
     dim_feedforward,
     layer_count,
@@ -222,12 +222,9 @@ def train_model(
     train_parents, val_parents = nt_parents[:train_len], nt_parents[train_len:]
     train_children, val_children = nt_children[:train_len], nt_children[train_len:]
 
-    # TODO
-    weights_directory = "/Users/matsen/re/epam/data/shmple_weights/my_shmoof"
-
     shmple_model = AttentionModel(
-            weights_dir=weights_directory, log_level=logging.WARNING
-        )
+        weights_dir=shmple_weights_directory, log_level=logging.WARNING
+    )
 
     # It's important to make separate PCPDatasets for training and validation
     # because the maximum sequence length can differ between those two.
@@ -254,7 +251,8 @@ def train_model(
 
         # In the early stages of training, we can get probabilities > 1.0 because
         # of bad parameter initialization. We clamp the predictions to be between
-        # 0 and 0.999 to avoid this.
+        # 0 and 0.999 to avoid this: out of range predictions can make NaNs
+        # downstream.
         out_of_range_prediction_count = torch.sum(predictions > 1.0)
         if out_of_range_prediction_count > 0:
             print(f"{out_of_range_prediction_count}\tpredictions out of range.")
