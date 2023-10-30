@@ -58,36 +58,31 @@ def general_mutator(aa_seq, sub_count, mut_criterion):
         Mutated amino acid sequence.
     """
 
+    def draw_new_aa_for_pos(pos):
+        return random.choice([aa for aa in AA_STR_SORTED if aa != aa_seq_list[pos]])
+
     aa_seq_list = list(aa_seq)
 
-    target_positions = [
-        pos for pos, aa in enumerate(aa_seq) if mut_criterion(aa_seq, pos)
+    # find all positions that satisfy the mutation criterion
+    mut_positions = [
+        pos for pos, aa in enumerate(aa_seq_list) if mut_criterion(aa_seq, pos)
     ]
 
-    if len(target_positions) >= sub_count:
-        random.shuffle(target_positions)
-        for pos in target_positions[:sub_count]:
-            new_aa = random.choice(
-                [aa for aa in AA_STR_SORTED if aa != aa_seq_list[pos]]
-            )
-            aa_seq_list[pos] = new_aa
-        sub_count = 0
-    else:
-        for pos in target_positions:
-            new_aa = random.choice(
-                [aa for aa in AA_STR_SORTED if aa != aa_seq_list[pos]]
-            )
-            aa_seq_list[pos] = new_aa
-        sub_count -= len(target_positions)
+    # if fewer criterion-satisfying positions than required mutations, randomly add more
+    if len(mut_positions) < sub_count:
+        extra_positions = random.choices(
+            [pos for pos in range(len(aa_seq_list)) if pos not in mut_positions],
+            k=sub_count - len(mut_positions),
+        )
+        mut_positions += extra_positions
 
-    non_target_positions = [
-        pos for pos, aa in enumerate(aa_seq) if not mut_criterion(aa_seq, pos)
-    ]
-    random.shuffle(non_target_positions)
+    # if more criterion-satisfying positions than required mutations, randomly remove some
+    elif len(mut_positions) > sub_count:
+        mut_positions = random.sample(mut_positions, sub_count)
 
-    for pos in non_target_positions[:sub_count]:
-        new_aa = random.choice([aa for aa in AA_STR_SORTED if aa != aa_seq_list[pos]])
-        aa_seq_list[pos] = new_aa
+    # perform mutations
+    for pos in mut_positions:
+        aa_seq_list[pos] = draw_new_aa_for_pos(pos)
 
     return "".join(aa_seq_list)
 
