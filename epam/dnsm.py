@@ -35,6 +35,12 @@ class PCPDataset(Dataset):
         ), "Lengths of nt_parents and nt_children must be equal."
         pcp_count = len(nt_parents)
 
+        for parent, child in zip(nt_parents, nt_children):
+            if parent == child:
+                raise ValueError(
+                    f"Found an identical parent and child sequence: {parent}"
+                )
+            
         aa_parents = translate_sequences(nt_parents)
         aa_children = translate_sequences(nt_children)
         self.max_aa_seq_len = max(len(seq) for seq in aa_parents)
@@ -72,8 +78,7 @@ class PCPDataset(Dataset):
             )
 
             # Ensure that all values are positive before taking the log later
-            # TODO
-            # assert torch.all(neutral_aa_mut_prob > 0)
+            assert torch.all(neutral_aa_mut_prob > 0)
 
             pad_len = self.max_aa_seq_len - neutral_aa_mut_prob.shape[0]
             if pad_len > 0:
@@ -238,13 +243,22 @@ def train_model(
 
     bce_loss = nn.BCELoss()
 
-    def criterion(
+    def complete_loss_fn(
         log_neutral_aa_mut_probs, log_selection_factors, aa_subs_indicator, padding_mask
     ):
+        # Take the product of the neutral mutation probabilities and the selection factors.
         predictions = torch.exp(log_neutral_aa_mut_probs + log_selection_factors)
 
         predictions = predictions.masked_select(~padding_mask)
         aa_subs_indicator = aa_subs_indicator.masked_select(~padding_mask)
+
+        # In the early stages of training, we can get probabilities > 1.0 because
+        # of bad parameter initialization. We clamp the predictions to be between
+        # 0 and 0.999 to avoid this.
+        out_of_range_prediction_count = torch.sum(predictions > 1.0)
+        if out_of_range_prediction_count > 0:
+            print(f"{out_of_range_prediction_count}\tpredictions out of range.")
+        predictions = torch.clamp(predictions, min=0.0, max=0.999)
 
         return bce_loss(predictions, aa_subs_indicator)
 
@@ -266,7 +280,7 @@ def train_model(
 
             optimizer.zero_grad()
             log_selection_factors = model(aa_onehot, padding_mask)
-            loss = criterion(
+            loss = complete_loss_fn(
                 log_neutral_aa_mut_probs,
                 log_selection_factors,
                 aa_subs_indicator,
@@ -289,7 +303,7 @@ def train_model(
                 log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(device)
 
                 log_selection_factors = model(aa_onehot, padding_mask)
-                val_loss += criterion(
+                val_loss += complete_loss_fn(
                     log_neutral_aa_mut_probs,
                     log_selection_factors,
                     aa_subs_indicator,
