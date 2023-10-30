@@ -1,5 +1,5 @@
 """
-Here we define a mutation-selection model that is just about mutation vs no mutation, and is trainable.
+A silly amino acid prediction model.
 
 We'll use these conventions:
 
@@ -8,7 +8,6 @@ We'll use these conventions:
 
 """
 
-import logging
 import math
 import os
 
@@ -22,72 +21,23 @@ import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
 from epam.torch_common import pick_device, PositionalEncoding
-import epam.molevol as molevol
 import epam.sequences as sequences
-from epam.sequences import translate_sequences
-
-from shmple import AttentionModel
 
 
-class PCPDataset(Dataset):
-    def __init__(self, nt_parents, nt_children, shmple_model):
-        assert len(nt_parents) == len(
-            nt_children
-        ), "Lengths of nt_parents and nt_children must be equal."
-        pcp_count = len(nt_parents)
+class AAPCPDataset(Dataset):
+    def __init__(self, aa_parents, aa_children):
+        assert len(aa_parents) == len(aa_parents)
+        pcp_count = len(aa_parents)
 
-        for parent, child in zip(nt_parents, nt_children):
+        for parent, child in zip(aa_parents, aa_children):
             if parent == child:
                 raise ValueError(
                     f"Found an identical parent and child sequence: {parent}"
                 )
 
-        aa_parents = translate_sequences(nt_parents)
-        aa_children = translate_sequences(nt_children)
         self.max_aa_seq_len = max(len(seq) for seq in aa_parents)
         self.aa_parents_onehot = torch.zeros((pcp_count, self.max_aa_seq_len, 20))
         self.aa_subs_indicator_tensor = torch.zeros((pcp_count, self.max_aa_seq_len))
-
-        mutation_freqs = [
-            sequences.mutation_frequency(parent, child)
-            for parent, child in zip(nt_parents, nt_children)
-        ]
-
-        print("predicting mutabilities and substitutions...")
-        all_rates, all_subs_probs = shmple_model.predict_mutabilities_and_substitutions(
-            nt_parents, mutation_freqs
-        )
-
-        print("consolidating this into substitution probabilities...")
-
-        neutral_aa_mut_prob_l = []
-
-        for nt_parent, rates, subs_probs in zip(nt_parents, all_rates, all_subs_probs):
-            parent_idxs = sequences.nt_idx_tensor_of_str(nt_parent)
-
-            # Making sure the rates tensor is of float type for numerical stability.
-            mut_probs = 1.0 - torch.exp(-torch.tensor(rates).squeeze().float())
-            normed_subs_probs = molevol.normalize_sub_probs(
-                parent_idxs, torch.tensor(subs_probs).float()
-            )
-
-            neutral_aa_mut_prob = molevol.neutral_aa_mut_prob_v(
-                parent_idxs.reshape(-1, 3),
-                mut_probs.reshape(-1, 3),
-                normed_subs_probs.reshape(-1, 3, 4),
-            )
-
-            # Ensure that all values are positive before taking the log later
-            assert torch.all(neutral_aa_mut_prob > 0)
-
-            pad_len = self.max_aa_seq_len - neutral_aa_mut_prob.shape[0]
-            if pad_len > 0:
-                neutral_aa_mut_prob = F.pad(neutral_aa_mut_prob, (0, pad_len), value=1)
-
-            neutral_aa_mut_prob_l.append(neutral_aa_mut_prob)
-
-        # Stacking along a new first dimension (dimension 0)
-        self.log_neutral_aa_mut_probs = torch.log(torch.stack(neutral_aa_mut_prob_l))
 
         # padding_mask is True for padding positions.
         self.padding_mask = torch.ones(
@@ -111,11 +61,10 @@ class PCPDataset(Dataset):
             "aa_onehot": self.aa_parents_onehot[idx],
             "subs_indicator": self.aa_subs_indicator_tensor[idx],
             "padding_mask": self.padding_mask[idx],
-            "log_neutral_aa_mut_probs": self.log_neutral_aa_mut_probs[idx],
         }
 
 
-class TransformerBinarySelectionModel(nn.Module):
+class TransformerBinaryModel(nn.Module):
     """A transformer-based model for binary selection.
 
     This is a model that takes in a batch of one-hot encoded sequences and outputs a binary selection matrix.
@@ -176,35 +125,9 @@ class TransformerBinarySelectionModel(nn.Module):
         out = self.linear(out)
         return out.squeeze(-1)
 
-    def p_substitution_of_aa_str(self, aa_str: str):
-        """Do the forward method without gradients from an amino acid string and convert to numpy.
-
-        Parameters:
-            aa_str: A string of amino acids.
-
-        Returns:
-            A numpy array of the same length as the input string representing
-            the level of selection for each amino acid site.
-        """
-        aa_onehot = torch.zeros((len(aa_str), 20))
-        aa_indices_parent = sequences.aa_idx_array_of_str(aa_str)
-        aa_onehot[:, aa_indices_parent] = 1
-
-        # Create a padding mask with False values (i.e., no padding)
-        padding_mask = torch.zeros(len(aa_str), dtype=torch.bool).to(self.device)
-
-        with torch.no_grad():
-            aa_onehot = aa_onehot.to(self.device)
-            model_out = self(aa_onehot.unsqueeze(0), padding_mask.unsqueeze(0)).squeeze(
-                0
-            )
-
-        return model_out.cpu().numpy()[: len(aa_str)]
-
 
 def train_model(
     pcp_df,
-    shmple_weights_directory,
     nhead,
     dim_feedforward,
     layer_count,
@@ -215,36 +138,31 @@ def train_model(
     log_dir="./_logs",
 ):
     print("preparing data...")
-    nt_parents = pcp_df["parent"]
-    nt_children = pcp_df["child"]
+    parents = pcp_df["aa_parent"]
+    children = pcp_df["aa_child"]
 
-    train_len = int(0.8 * len(nt_parents))
-    train_parents, val_parents = nt_parents[:train_len], nt_parents[train_len:]
-    train_children, val_children = nt_children[:train_len], nt_children[train_len:]
-
-    shmple_model = AttentionModel(
-        weights_dir=shmple_weights_directory, log_level=logging.WARNING
-    )
+    train_len = int(0.8 * len(parents))
+    train_parents, val_parents = parents[:train_len], parents[train_len:]
+    train_children, val_children = children[:train_len], children[train_len:]
 
     # It's important to make separate PCPDatasets for training and validation
     # because the maximum sequence length can differ between those two.
-    train_set = PCPDataset(train_parents, train_children, shmple_model)
-    val_set = PCPDataset(val_parents, val_children, shmple_model)
+    train_set = AAPCPDataset(train_parents, train_children)
+    val_set = AAPCPDataset(val_parents, val_children)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
 
-    model = TransformerBinarySelectionModel(
+    model = TransformerBinaryModel(
         nhead=nhead, dim_feedforward=dim_feedforward, layer_count=layer_count
     )
 
     bce_loss = nn.BCELoss()
 
     def complete_loss_fn(
-        log_neutral_aa_mut_probs, log_selection_factors, aa_subs_indicator, padding_mask
+        log_aa_mut_probs, aa_subs_indicator, padding_mask
     ):
-        # Take the product of the neutral mutation probabilities and the selection factors.
-        predictions = torch.exp(log_neutral_aa_mut_probs + log_selection_factors)
+        predictions = torch.exp(log_aa_mut_probs)
 
         predictions = predictions.masked_select(~padding_mask)
         aa_subs_indicator = aa_subs_indicator.masked_select(~padding_mask)
@@ -274,13 +192,11 @@ def train_model(
             aa_onehot = batch["aa_onehot"].to(device)
             aa_subs_indicator = batch["subs_indicator"].to(device)
             padding_mask = batch["padding_mask"].to(device)
-            log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(device)
 
             optimizer.zero_grad()
-            log_selection_factors = model(aa_onehot, padding_mask)
+            log_aa_mut_probs = model(aa_onehot, padding_mask)
             loss = complete_loss_fn(
-                log_neutral_aa_mut_probs,
-                log_selection_factors,
+                log_aa_mut_probs,
                 aa_subs_indicator,
                 padding_mask,
             )
@@ -298,12 +214,10 @@ def train_model(
                 aa_onehot = batch["aa_onehot"].to(device)
                 aa_subs_indicator = batch["subs_indicator"].to(device)
                 padding_mask = batch["padding_mask"].to(device)
-                log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(device)
 
-                log_selection_factors = model(aa_onehot, padding_mask)
+                log_aa_mut_probs = model(aa_onehot, padding_mask)
                 val_loss += complete_loss_fn(
-                    log_neutral_aa_mut_probs,
-                    log_selection_factors,
+                    log_aa_mut_probs,
                     aa_subs_indicator,
                     padding_mask,
                 ).item()
