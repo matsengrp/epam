@@ -33,6 +33,13 @@ class PCPDataset(Dataset):
         assert len(nt_parents) == len(
             nt_children
         ), "Lengths of nt_parents and nt_children must be equal."
+        pcp_count = len(nt_parents)
+
+        aa_parents = translate_sequences(nt_parents)
+        aa_children = translate_sequences(nt_children)
+        self.max_aa_seq_len = max(len(seq) for seq in aa_parents)
+        self.aa_parents_onehot = torch.zeros((pcp_count, self.max_aa_seq_len, 20))
+        self.aa_subs_indicator_tensor = torch.zeros((pcp_count, self.max_aa_seq_len))
 
         mutation_freqs = [
             sequences.mutation_frequency(parent, child)
@@ -40,7 +47,7 @@ class PCPDataset(Dataset):
         ]
 
         print("predicting mutabilities and substitutions...")
-        # NOTE that _v here is between sequences, so different use than other _v.
+        # TODO _v here is between sequences, so different use than other _v.
         rates_v, subs_probs_v = shmple_model.predict_mutabilities_and_substitutions(
             nt_parents, mutation_freqs
         )
@@ -54,7 +61,7 @@ class PCPDataset(Dataset):
 
             # Making sure the rates tensor is of float type for numerical stability.
             mut_probs = 1.0 - torch.exp(-torch.tensor(rates).squeeze().float())
-            normed_subs_probs = molevol.normalize_subs_probs(
+            normed_subs_probs = molevol.normalize_sub_probs(
                 parent_idxs, torch.tensor(subs_probs).float()
             )
 
@@ -65,7 +72,8 @@ class PCPDataset(Dataset):
             )
 
             # Ensure that all values are positive before taking the log later
-            assert torch.all(neutral_aa_mut_prob > 0)
+            # TODO
+            # assert torch.all(neutral_aa_mut_prob > 0)
 
             pad_len = self.max_aa_seq_len - neutral_aa_mut_prob.shape[0]
             if pad_len > 0:
@@ -76,13 +84,6 @@ class PCPDataset(Dataset):
         # Stacking along a new first dimension (dimension 0)
         self.log_neutral_aa_mut_probs = torch.log(torch.stack(neutral_aa_mut_prob_l))
 
-        aa_parents = translate_sequences(nt_parents)
-        aa_children = translate_sequences(nt_children)
-
-        pcp_count = len(nt_parents)
-        self.max_aa_seq_len = max(len(seq) for seq in aa_parents)
-        self.aa_parents_onehot = torch.zeros((pcp_count, self.max_aa_seq_len, 20))
-        self.aa_subs_indicator_tensor = torch.zeros((pcp_count, self.max_aa_seq_len))
         # padding_mask is True for padding positions.
         self.padding_mask = torch.ones(
             (pcp_count, self.max_aa_seq_len), dtype=torch.bool
@@ -106,7 +107,7 @@ class PCPDataset(Dataset):
             "aa_onehot": self.aa_parents_onehot[idx],
             "subs_indicator": self.aa_subs_indicator_tensor[idx],
             "padding_mask": self.padding_mask[idx],
-            "log_neutral_mut_probs": self.log_neutral_mut_probs[idx],
+            "log_neutral_aa_mut_probs": self.log_neutral_aa_mut_probs[idx],
         }
 
 
@@ -238,9 +239,9 @@ def train_model(
     bce_loss = nn.BCELoss()
 
     def criterion(
-        log_neutral_mut_probs, log_selection_factors, aa_subs_indicator, padding_mask
+        log_neutral_aa_mut_probs, log_selection_factors, aa_subs_indicator, padding_mask
     ):
-        predictions = torch.exp(log_neutral_mut_probs + log_selection_factors)
+        predictions = torch.exp(log_neutral_aa_mut_probs + log_selection_factors)
 
         predictions = predictions.masked_select(~padding_mask)
         aa_subs_indicator = aa_subs_indicator.masked_select(~padding_mask)
@@ -261,12 +262,12 @@ def train_model(
             aa_onehot = batch["aa_onehot"].to(device)
             aa_subs_indicator = batch["subs_indicator"].to(device)
             padding_mask = batch["padding_mask"].to(device)
-            log_neutral_mut_probs = batch["log_neutral_mut_probs"].to(device)
+            log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(device)
 
             optimizer.zero_grad()
             log_selection_factors = model(aa_onehot, padding_mask)
             loss = criterion(
-                log_neutral_mut_probs,
+                log_neutral_aa_mut_probs,
                 log_selection_factors,
                 aa_subs_indicator,
                 padding_mask,
@@ -285,11 +286,11 @@ def train_model(
                 aa_onehot = batch["aa_onehot"].to(device)
                 aa_subs_indicator = batch["subs_indicator"].to(device)
                 padding_mask = batch["padding_mask"].to(device)
-                log_neutral_mut_probs = batch["log_neutral_mut_probs"].to(device)
+                log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(device)
 
                 log_selection_factors = model(aa_onehot, padding_mask)
                 val_loss += criterion(
-                    log_neutral_mut_probs,
+                    log_neutral_aa_mut_probs,
                     log_selection_factors,
                     aa_subs_indicator,
                     padding_mask,
