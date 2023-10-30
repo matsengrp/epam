@@ -1,0 +1,117 @@
+import pandas as pd
+import random
+
+from epam.sequences import AA_STR_SORTED
+
+
+def mimic_aa_mutations(sequence_mutator_fn, aa_parents, aa_sub_counts):
+    """
+    Mimics amino acid mutations for a series of parent sequences.
+
+    Parameters
+    ----------
+    sequence_mutator_fn : function
+        Function that takes an amino acid sequence and an integer, returns mutated sequence with that many mutations.
+    aa_parents : pd.Series
+        Series containing parent amino acid sequences as strings.
+    aa_sub_counts : pd.Series
+        Series containing the number of substitutions for each parent sequence.
+
+    Returns
+    -------
+    pd.Series
+        Series containing mutated sequences as strings.
+    """
+
+    mutated_sequences = []
+
+    for aa_seq, sub_count in zip(aa_parents, aa_sub_counts):
+        mutated_seq = sequence_mutator_fn(aa_seq, sub_count)
+        mutated_sequences.append(mutated_seq)
+
+    return pd.Series(mutated_sequences)
+
+
+def general_mutator(aa_seq, sub_count, mut_criterion):
+    """
+    General function to mutate an amino acid sequence based on a criterion function.
+    The function first identifies positions in the sequence that satisfy the criterion
+    specified by `mut_criterion`. If the number of such positions is less than or equal
+    to the number of mutations needed (`sub_count`), then mutations are made at those positions.
+    If `sub_count` is greater than the number of positions satisfying the criterion, the function
+    mutates all those positions and then randomly selects additional positions to reach `sub_count`
+    total mutations. All mutations change the amino acid to a randomly selected new amino acid,
+    avoiding a mutation to the same type.
+
+    Parameters
+    ----------
+    aa_seq : str
+        Original amino acid sequence.
+    sub_count : int
+        Number of substitutions to make.
+    mut_criterion : function
+        Function that takes a sequence and a position, returns True if position should be mutated.
+
+    Returns
+    -------
+    str
+        Mutated amino acid sequence.
+    """
+
+    aa_seq_list = list(aa_seq)
+
+    target_positions = [
+        pos for pos, aa in enumerate(aa_seq) if mut_criterion(aa_seq, pos)
+    ]
+
+    if len(target_positions) >= sub_count:
+        random.shuffle(target_positions)
+        for pos in target_positions[:sub_count]:
+            new_aa = random.choice(
+                [aa for aa in AA_STR_SORTED if aa != aa_seq_list[pos]]
+            )
+            aa_seq_list[pos] = new_aa
+        sub_count = 0
+    else:
+        for pos in target_positions:
+            new_aa = random.choice(
+                [aa for aa in AA_STR_SORTED if aa != aa_seq_list[pos]]
+            )
+            aa_seq_list[pos] = new_aa
+        sub_count -= len(target_positions)
+
+    non_target_positions = [
+        pos for pos, aa in enumerate(aa_seq) if not mut_criterion(aa_seq, pos)
+    ]
+    random.shuffle(non_target_positions)
+
+    for pos in non_target_positions[:sub_count]:
+        new_aa = random.choice([aa for aa in AA_STR_SORTED if aa != aa_seq_list[pos]])
+        aa_seq_list[pos] = new_aa
+
+    return "".join(aa_seq_list)
+
+
+# Criterion functions
+def tyrosine_mut_criterion(aa_seq, pos):
+    """
+    Criterion function that returns True if the amino acid at the given position is 'Y'.
+
+    Parameters
+    ----------
+    aa_seq : str
+        Amino acid sequence.
+    pos : int
+        Position to check.
+
+    Returns
+    -------
+    bool
+        True if amino acid at `pos` is 'Y', False otherwise.
+    """
+
+    return aa_seq[pos] == "Y"
+
+
+def tyrosine_mutator(aa_seq, sub_count):
+    return general_mutator(aa_seq, sub_count, tyrosine_mut_criterion)
