@@ -168,9 +168,11 @@ class TransformerBinarySelectionModel(nn.Module):
         """
 
         parent_onehots = parent_onehots * math.sqrt(self.d_model)
-        # Have to do the permutation because the positional encoding expects the 
+        # Have to do the permutation because the positional encoding expects the
         # sequence length to be the first dimension.
-        parent_onehots = self.pos_encoder(parent_onehots.permute(1, 0, 2)).permute(1, 0, 2)
+        parent_onehots = self.pos_encoder(parent_onehots.permute(1, 0, 2)).permute(
+            1, 0, 2
+        )
 
         # NOTE: not masking due to MPS bug
         out = self.encoder(parent_onehots)  # , src_key_padding_mask=padding_mask)
@@ -238,6 +240,11 @@ def train_model(
     model = TransformerBinarySelectionModel(
         nhead=nhead, dim_feedforward=dim_feedforward, layer_count=layer_count
     )
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    device = model.device
+    writer = SummaryWriter(log_dir=log_dir)
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
 
     bce_loss = nn.BCELoss()
 
@@ -255,36 +262,49 @@ def train_model(
         # 0 and 0.999 to avoid this: out of range predictions can make NaNs
         # downstream.
         out_of_range_prediction_count = torch.sum(predictions > 1.0)
-        if out_of_range_prediction_count > 0:
-            print(f"{out_of_range_prediction_count}\tpredictions out of range.")
+        # if out_of_range_prediction_count > 0:
+        #     print(f"{out_of_range_prediction_count}\tpredictions out of range.")
         predictions = torch.clamp(predictions, min=0.0, max=0.999)
 
         return bce_loss(predictions, aa_subs_indicator)
 
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    device = model.device
-    writer = SummaryWriter(log_dir=log_dir)
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
+    def loss_of_batch(batch):
+        aa_onehot = batch["aa_onehot"].to(device)
+        aa_subs_indicator = batch["subs_indicator"].to(device)
+        padding_mask = batch["padding_mask"].to(device)
+        log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(device)
+        log_selection_factors = model(aa_onehot, padding_mask)
+        return complete_loss_fn(
+            log_neutral_aa_mut_probs,
+            log_selection_factors,
+            aa_subs_indicator,
+            padding_mask,
+        )
+
+    def compute_avg_loss(data_loader):
+        total_loss = 0
+        with torch.no_grad():
+            for batch in data_loader:
+                total_loss += loss_of_batch(batch).item()
+        return total_loss / len(data_loader)
+
+    # Record epoch 0
+    model.eval()
+    avg_train_loss_epoch_zero = compute_avg_loss(train_loader)
+    avg_val_loss_epoch_zero = compute_avg_loss(val_loader)
+    writer.add_scalar("Training Loss", avg_train_loss_epoch_zero, 0)
+    writer.add_scalar("Validation Loss", avg_val_loss_epoch_zero, 0)
+    print(
+        f"Epoch [0/{num_epochs}], Training Loss: {avg_train_loss_epoch_zero}, Validation Loss: {avg_val_loss_epoch_zero}"
+    )
 
     print("training model...")
 
     for epoch in range(num_epochs):
         model.train()
         for i, batch in enumerate(train_loader):
-            aa_onehot = batch["aa_onehot"].to(device)
-            aa_subs_indicator = batch["subs_indicator"].to(device)
-            padding_mask = batch["padding_mask"].to(device)
-            log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(device)
-
             optimizer.zero_grad()
-            log_selection_factors = model(aa_onehot, padding_mask)
-            loss = complete_loss_fn(
-                log_neutral_aa_mut_probs,
-                log_selection_factors,
-                aa_subs_indicator,
-                padding_mask,
-            )
+            loss = loss_of_batch(batch)
             loss.backward()
             optimizer.step()
             writer.add_scalar(
@@ -296,18 +316,7 @@ def train_model(
         val_loss = 0
         with torch.no_grad():
             for batch in val_loader:
-                aa_onehot = batch["aa_onehot"].to(device)
-                aa_subs_indicator = batch["subs_indicator"].to(device)
-                padding_mask = batch["padding_mask"].to(device)
-                log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(device)
-
-                log_selection_factors = model(aa_onehot, padding_mask)
-                val_loss += complete_loss_fn(
-                    log_neutral_aa_mut_probs,
-                    log_selection_factors,
-                    aa_subs_indicator,
-                    padding_mask,
-                ).item()
+                val_loss += loss_of_batch(batch).item()
 
             avg_val_loss = val_loss / len(val_loader)
             writer.add_scalar("Validation Loss", avg_val_loss, epoch)
