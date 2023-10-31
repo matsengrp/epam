@@ -89,24 +89,15 @@ def general_mutator(aa_seq, sub_count, mut_criterion):
 
 # Criterion functions
 def tyrosine_mut_criterion(aa_seq, pos):
-    """
-    Criterion function that returns True if the amino acid at the given position is 'Y'.
-
-    Parameters
-    ----------
-    aa_seq : str
-        Amino acid sequence.
-    pos : int
-        Position to check.
-
-    Returns
-    -------
-    bool
-        True if amino acid at `pos` is 'Y', False otherwise.
-    """
-
     return aa_seq[pos] == "Y"
 
 
-def tyrosine_mutator(aa_seq, sub_count):
-    return general_mutator(aa_seq, sub_count, tyrosine_mut_criterion)
+def hydrophobic_mut_criterion(aa_seq, pos):
+    hydrophobic_aa = set("AILMFVWY")  
+    return aa_seq[pos] in hydrophobic_aa
+
+
+[tyrosine_mutator, hydrophobic_mutator] = [
+    lambda aa_seq, sub_count, crit=crit: general_mutator(aa_seq, sub_count, crit)
+    for crit in [tyrosine_mut_criterion, hydrophobic_mut_criterion]
+]

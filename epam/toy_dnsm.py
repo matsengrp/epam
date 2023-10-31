@@ -11,6 +11,8 @@ We'll use these conventions:
 import math
 import os
 
+import pandas as pd
+
 import torch
 import torch.optim as optim
 import torch.nn as nn
@@ -159,9 +161,7 @@ def train_model(
 
     bce_loss = nn.BCELoss()
 
-    def complete_loss_fn(
-        log_aa_mut_probs, aa_subs_indicator, padding_mask
-    ):
+    def complete_loss_fn(log_aa_mut_probs, aa_subs_indicator, padding_mask):
         predictions = torch.exp(log_aa_mut_probs)
 
         predictions = predictions.masked_select(~padding_mask)
@@ -185,6 +185,7 @@ def train_model(
         os.makedirs(checkpoint_dir)
 
     print("training model...")
+    loss_records = []
 
     for epoch in range(num_epochs):
         model.train()
@@ -240,6 +241,16 @@ def train_model(
             f"Epoch [{epoch + 1}/{num_epochs}], Training Loss: {loss.item()}, Validation Loss: {avg_val_loss}"
         )
 
+        loss_records.append(
+            {
+                "Epoch": epoch + 1,
+                "Training Loss": loss.item(),
+                "Validation Loss": avg_val_loss,
+            }
+        )
+
     writer.close()
+    loss_df = pd.DataFrame(loss_records)
+    loss_df.to_csv("training_validation_loss.csv", index=False)
 
     return model
