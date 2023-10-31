@@ -31,38 +31,63 @@ from shmple import AttentionModel
 
 class PCPDataset(Dataset):
     def __init__(self, nt_parents, nt_children, shmple_model):
-        assert len(nt_parents) == len(
-            nt_children
-        ), "Lengths of nt_parents and nt_children must be equal."
-        pcp_count = len(nt_parents)
+        self.nt_parents = nt_parents
+        # TODO I don't think we need the nt_children, but I'm leaving it in for now.
+        self.nt_children = nt_children
+        self.shmple_model = shmple_model
 
-        for parent, child in zip(nt_parents, nt_children):
+        assert len(self.nt_parents) == len(self.nt_children)
+        pcp_count = len(self.nt_parents)
+
+        for parent, child in zip(self.nt_parents, self.nt_children):
             if parent == child:
                 raise ValueError(
                     f"Found an identical parent and child sequence: {parent}"
                 )
 
-        aa_parents = translate_sequences(nt_parents)
-        aa_children = translate_sequences(nt_children)
+        aa_parents = translate_sequences(self.nt_parents)
+        aa_children = translate_sequences(self.nt_children)
         self.max_aa_seq_len = max(len(seq) for seq in aa_parents)
         self.aa_parents_onehot = torch.zeros((pcp_count, self.max_aa_seq_len, 20))
         self.aa_subs_indicator_tensor = torch.zeros((pcp_count, self.max_aa_seq_len))
 
+        # padding_mask is True for padding positions.
+        self.padding_mask = torch.ones(
+            (pcp_count, self.max_aa_seq_len), dtype=torch.bool
+        )
+
+        for i, (aa_parent, aa_child) in enumerate(zip(aa_parents, aa_children)):
+            aa_indices_parent = sequences.aa_idx_array_of_str(aa_parent)
+            aa_seq_len = len(aa_parent)
+            self.aa_parents_onehot[i, :aa_seq_len, aa_indices_parent] = 1
+            self.aa_subs_indicator_tensor[i, :aa_seq_len] = torch.tensor(
+                [p != c for p, c in zip(aa_parent, aa_child)], dtype=torch.float
+            )
+            self.padding_mask[i, :aa_seq_len] = False
+
         mutation_freqs = [
             sequences.mutation_frequency(parent, child)
-            for parent, child in zip(nt_parents, nt_children)
+            for parent, child in zip(self.nt_parents, self.nt_children)
         ]
 
+        self.update_neutral_aa_mut_probs(mutation_freqs)
+
+    def update_neutral_aa_mut_probs(self, branch_lengths):
         print("predicting mutabilities and substitutions...")
-        all_rates, all_subs_probs = shmple_model.predict_mutabilities_and_substitutions(
-            nt_parents, mutation_freqs
+        (
+            all_rates,
+            all_subs_probs,
+        ) = self.shmple_model.predict_mutabilities_and_substitutions(
+            self.nt_parents, branch_lengths
         )
 
         print("consolidating this into substitution probabilities...")
 
         neutral_aa_mut_prob_l = []
 
-        for nt_parent, rates, subs_probs in zip(nt_parents, all_rates, all_subs_probs):
+        for nt_parent, rates, subs_probs in zip(
+            self.nt_parents, all_rates, all_subs_probs
+        ):
             parent_idxs = sequences.nt_idx_tensor_of_str(nt_parent)
 
             # Making sure the rates tensor is of float type for numerical stability.
@@ -86,22 +111,7 @@ class PCPDataset(Dataset):
 
             neutral_aa_mut_prob_l.append(neutral_aa_mut_prob)
 
-        # Stacking along a new first dimension (dimension 0)
         self.log_neutral_aa_mut_probs = torch.log(torch.stack(neutral_aa_mut_prob_l))
-
-        # padding_mask is True for padding positions.
-        self.padding_mask = torch.ones(
-            (pcp_count, self.max_aa_seq_len), dtype=torch.bool
-        )
-
-        for i, (aa_parent, aa_child) in enumerate(zip(aa_parents, aa_children)):
-            aa_indices_parent = sequences.aa_idx_array_of_str(aa_parent)
-            aa_seq_len = len(aa_parent)
-            self.aa_parents_onehot[i, :aa_seq_len, aa_indices_parent] = 1
-            self.aa_subs_indicator_tensor[i, :aa_seq_len] = torch.tensor(
-                [p != c for p, c in zip(aa_parent, aa_child)], dtype=torch.float
-            )
-            self.padding_mask[i, :aa_seq_len] = False
 
     def __len__(self):
         return len(self.aa_parents_onehot)
