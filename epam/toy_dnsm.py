@@ -161,6 +161,8 @@ def train_model(
     )
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     device = model.device
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
     writer = SummaryWriter(log_dir=log_dir)
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
@@ -211,8 +213,6 @@ def train_model(
     print(
         f"Epoch [0/{num_epochs}], Training Loss: {avg_train_loss_epoch_zero}, Validation Loss: {avg_val_loss_epoch_zero}"
     )
-
-    print("training model...")
 
     loss_records = []
 
