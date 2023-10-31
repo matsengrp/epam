@@ -93,11 +93,32 @@ def tyrosine_mut_criterion(aa_seq, pos):
 
 
 def hydrophobic_mut_criterion(aa_seq, pos):
-    hydrophobic_aa = set("AILMFVWY")  
+    hydrophobic_aa = set("AILMFVWY")
     return aa_seq[pos] in hydrophobic_aa
 
 
-[tyrosine_mutator, hydrophobic_mutator] = [
+def hydrophobic_neighbor_mut_criterion(aa_seq, pos):
+    """
+    Criterion function that returns True if either amino acid at immediate
+    neighbors are hydrophobic.
+    """
+
+    hydrophobic_aa = set("AILMFVWY")
+
+    positions_to_check = []
+    if pos > 0:
+        positions_to_check.append(pos - 1)
+    if pos < len(aa_seq) - 1:
+        positions_to_check.append(pos + 1)
+
+    return any(aa_seq[i] in hydrophobic_aa for i in positions_to_check)
+
+
+[tyrosine_mutator, hydrophobic_mutator, hydrophobic_neighbor_mutator] = [
     lambda aa_seq, sub_count, crit=crit: general_mutator(aa_seq, sub_count, crit)
-    for crit in [tyrosine_mut_criterion, hydrophobic_mut_criterion]
+    for crit in [
+        tyrosine_mut_criterion,
+        hydrophobic_mut_criterion,
+        hydrophobic_neighbor_mut_criterion,
+    ]
 ]

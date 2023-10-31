@@ -84,7 +84,6 @@ class TransformerBinaryModel(nn.Module):
     ):
         super().__init__()
         self.device = pick_device()
-        self.ntoken = 20
         self.d_model = d_model
         self.pos_encoder = PositionalEncoding(self.d_model, dropout)
         self.encoder_layer = nn.TransformerEncoderLayer(
@@ -120,7 +119,9 @@ class TransformerBinaryModel(nn.Module):
         """
 
         parent_onehots = parent_onehots * math.sqrt(self.d_model)
-        parent_onehots = self.pos_encoder(parent_onehots)
+        # Have to do the permutation because the positional encoding expects the 
+        # sequence length to be the first dimension.
+        parent_onehots = self.pos_encoder(parent_onehots.permute(1, 0, 2)).permute(1, 0, 2)
 
         # NOTE: not masking due to MPS bug
         out = self.encoder(parent_onehots)  # , src_key_padding_mask=padding_mask)
