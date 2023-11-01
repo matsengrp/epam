@@ -49,7 +49,7 @@ class AAPCPDataset(Dataset):
         for i, (aa_parent, aa_child) in enumerate(zip(aa_parents, aa_children)):
             aa_indices_parent = sequences.aa_idx_array_of_str(aa_parent)
             aa_seq_len = len(aa_parent)
-            self.aa_parents_onehot[i, :aa_seq_len, aa_indices_parent] = 1
+            self.aa_parents_onehot[i, torch.arange(aa_seq_len), aa_indices_parent] = 1
             self.aa_subs_indicator_tensor[i, :aa_seq_len] = torch.tensor(
                 [p != c for p, c in zip(aa_parent, aa_child)], dtype=torch.float
             )
