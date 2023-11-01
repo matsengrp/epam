@@ -25,6 +25,7 @@ from epam.torch_common import pick_device, PositionalEncoding
 import epam.molevol as molevol
 import epam.sequences as sequences
 from epam.sequences import translate_sequences
+from epam.models import WrappedBinaryMutSel
 
 from shmple import AttentionModel
 
@@ -107,7 +108,8 @@ class PCPDataset(Dataset):
 
             pad_len = self.max_aa_seq_len - neutral_aa_mut_prob.shape[0]
             if pad_len > 0:
-                neutral_aa_mut_prob = F.pad(neutral_aa_mut_prob, (0, pad_len), value=1)
+                # TODO: does this value matter? If we are masking correctly it shoudln't.
+                neutral_aa_mut_prob = F.pad(neutral_aa_mut_prob, (0, pad_len), value=1e-6)
 
             neutral_aa_mut_prob_l.append(neutral_aa_mut_prob)
 
@@ -189,7 +191,7 @@ class TransformerBinarySelectionModel(nn.Module):
         out = self.linear(out)
         return out.squeeze(-1)
 
-    def p_substitution_of_aa_str(self, aa_str: str):
+    def selection_factors_of_aa_str(self, aa_str: str):
         """Do the forward method without gradients from an amino acid string and convert to numpy.
 
         Parameters:
@@ -211,56 +213,57 @@ class TransformerBinarySelectionModel(nn.Module):
             model_out = self(aa_onehot.unsqueeze(0), padding_mask.unsqueeze(0)).squeeze(
                 0
             )
+            final_out = torch.exp(model_out)
+            # TODO think about if we can interpret model outputs greater than 1; in any case this makes problems if we have mutation*selection > 1
+            final_out = torch.clamp(final_out, min=0.0, max=0.999)
 
-        return model_out.cpu().numpy()[: len(aa_str)]
+        return final_out.cpu().numpy()[: len(aa_str)]
 
 
-def train_model(
-    pcp_df,
-    shmple_weights_directory,
-    nhead,
-    dim_feedforward,
-    layer_count,
-    batch_size=32,
-    num_epochs=10,
-    learning_rate=0.001,
-    checkpoint_dir="./_checkpoints",
-    log_dir="./_logs",
-):
-    print("preparing data...")
-    nt_parents = pcp_df["parent"]
-    nt_children = pcp_df["child"]
+class DNSMBurrito:
+    def __init__(self, 
+        pcp_df,
+        shmple_weights_directory,
+        dnsm,
+        batch_size=32,
+        learning_rate=0.001,
+        checkpoint_dir="./_checkpoints",
+        log_dir="./_logs",
+    ):
+        self.dnsm = dnsm
+        self.batch_size = batch_size
+        self.learning_rate = learning_rate
+        self.checkpoint_dir = checkpoint_dir
+        
+        print("preparing data...")
+        nt_parents = pcp_df["parent"]
+        nt_children = pcp_df["child"]
 
-    train_len = int(0.8 * len(nt_parents))
-    train_parents, val_parents = nt_parents[:train_len], nt_parents[train_len:]
-    train_children, val_children = nt_children[:train_len], nt_children[train_len:]
+        train_len = int(0.8 * len(nt_parents))
+        train_parents, val_parents = nt_parents[:train_len], nt_parents[train_len:]
+        train_children, val_children = nt_children[:train_len], nt_children[train_len:]
 
-    shmple_model = AttentionModel(
-        weights_dir=shmple_weights_directory, log_level=logging.WARNING
-    )
+        shmple_model = AttentionModel(
+            weights_dir=shmple_weights_directory, log_level=logging.WARNING
+        )
+        self.wrapped_dnsm = WrappedBinaryMutSel(self.dnsm, shmple_weights_directory)
 
-    # It's important to make separate PCPDatasets for training and validation
-    # because the maximum sequence length can differ between those two.
-    train_set = PCPDataset(train_parents, train_children, shmple_model)
-    val_set = PCPDataset(val_parents, val_children, shmple_model)
+        # It's important to make separate PCPDatasets for training and validation
+        # because the maximum sequence length can differ between those two.
+        self.train_set = PCPDataset(train_parents, train_children, shmple_model)
+        self.val_set = PCPDataset(val_parents, val_children, shmple_model)
 
-    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False)
+        self.optimizer = optim.Adam(self.dnsm.parameters(), lr=learning_rate)
+        self.device = self.dnsm.device
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        self.writer = SummaryWriter(log_dir=log_dir)
+        if not os.path.exists(checkpoint_dir):
+            os.makedirs(checkpoint_dir)
 
-    model = TransformerBinarySelectionModel(
-        nhead=nhead, dim_feedforward=dim_feedforward, layer_count=layer_count
-    )
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    device = model.device
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-    writer = SummaryWriter(log_dir=log_dir)
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
+        self.bce_loss = nn.BCELoss()
 
-    bce_loss = nn.BCELoss()
-
-    def complete_loss_fn(
+    def complete_loss_fn(self,
         log_neutral_aa_mut_probs, log_selection_factors, aa_subs_indicator, padding_mask
     ):
         # Take the product of the neutral mutation probabilities and the selection factors.
@@ -273,81 +276,89 @@ def train_model(
         # of bad parameter initialization. We clamp the predictions to be between
         # 0 and 0.999 to avoid this: out of range predictions can make NaNs
         # downstream.
-        out_of_range_prediction_count = torch.sum(predictions > 1.0)
+        # out_of_range_prediction_count = torch.sum(predictions > 1.0)
         # if out_of_range_prediction_count > 0:
         #     print(f"{out_of_range_prediction_count}\tpredictions out of range.")
         predictions = torch.clamp(predictions, min=0.0, max=0.999)
 
-        return bce_loss(predictions, aa_subs_indicator)
+        return self.bce_loss(predictions, aa_subs_indicator)
 
-    def loss_of_batch(batch):
-        aa_onehot = batch["aa_onehot"].to(device)
-        aa_subs_indicator = batch["subs_indicator"].to(device)
-        padding_mask = batch["padding_mask"].to(device)
-        log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(device)
-        log_selection_factors = model(aa_onehot, padding_mask)
-        return complete_loss_fn(
+    def loss_of_batch(self, batch):
+        aa_onehot = batch["aa_onehot"].to(self.device)
+        aa_subs_indicator = batch["subs_indicator"].to(self.device)
+        padding_mask = batch["padding_mask"].to(self.device)
+        log_neutral_aa_mut_probs = batch["log_neutral_aa_mut_probs"].to(self.device)
+        log_selection_factors = self.dnsm(aa_onehot, padding_mask)
+        return self.complete_loss_fn(
             log_neutral_aa_mut_probs,
             log_selection_factors,
             aa_subs_indicator,
             padding_mask,
         )
 
-    def compute_avg_loss(data_loader):
+    def compute_avg_loss(self, data_loader):
         total_loss = 0
         with torch.no_grad():
             for batch in data_loader:
-                total_loss += loss_of_batch(batch).item()
+                total_loss += self.loss_of_batch(batch).item()
         return total_loss / len(data_loader)
 
-    # Record epoch 0
-    model.eval()
-    avg_train_loss_epoch_zero = compute_avg_loss(train_loader)
-    avg_val_loss_epoch_zero = compute_avg_loss(val_loader)
-    writer.add_scalar("Training Loss", avg_train_loss_epoch_zero, 0)
-    writer.add_scalar("Validation Loss", avg_val_loss_epoch_zero, 0)
-    print(
-        f"Epoch [0/{num_epochs}], Training Loss: {avg_train_loss_epoch_zero}, Validation Loss: {avg_val_loss_epoch_zero}"
-    )
-
-    print("training model...")
-
-    for epoch in range(num_epochs):
-        model.train()
-        for i, batch in enumerate(train_loader):
-            optimizer.zero_grad()
-            loss = loss_of_batch(batch)
-            loss.backward()
-            optimizer.step()
-            writer.add_scalar(
-                "Training Loss", loss.item(), epoch * len(train_loader) + i
-            )
-
-        # Validation Loop
-        model.eval()
-        val_loss = 0
-        with torch.no_grad():
-            for batch in val_loader:
-                val_loss += loss_of_batch(batch).item()
-
-            avg_val_loss = val_loss / len(val_loader)
-            writer.add_scalar("Validation Loss", avg_val_loss, epoch)
-
-            # Save model checkpoint
-            torch.save(
-                {
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "loss": avg_val_loss,
-                },
-                f"{checkpoint_dir}/model_epoch_{epoch}.pth",
-            )
-
+    def train(self, num_epochs=10):
+        train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True)
+        val_loader = DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False)
+        # Record epoch 0
+        self.dnsm.eval()
+        avg_train_loss_epoch_zero = self.compute_avg_loss(train_loader)
+        avg_val_loss_epoch_zero = self.compute_avg_loss(val_loader)
+        self.writer.add_scalar("Training Loss", avg_train_loss_epoch_zero, 0)
+        self.writer.add_scalar("Validation Loss", avg_val_loss_epoch_zero, 0)
         print(
-            f"Epoch [{epoch + 1}/{num_epochs}], Training Loss: {loss.item()}, Validation Loss: {avg_val_loss}"
+            f"Epoch [0/{num_epochs}], Training Loss: {avg_train_loss_epoch_zero}, Validation Loss: {avg_val_loss_epoch_zero}"
         )
 
-    writer.close()
+        print("training model...")
 
-    return model
+        for epoch in range(num_epochs):
+            self.dnsm.train()
+            for i, batch in enumerate(train_loader):
+                self.optimizer.zero_grad()
+                loss = self.loss_of_batch(batch)
+                loss.backward()
+                self.optimizer.step()
+                self.writer.add_scalar(
+                    "Training Loss", loss.item(), epoch * len(train_loader) + i
+                )
+
+            # Validation Loop
+            self.dnsm.eval()
+            val_loss = 0
+            with torch.no_grad():
+                for batch in val_loader:
+                    val_loss += self.loss_of_batch(batch).item()
+
+                avg_val_loss = val_loss / len(val_loader)
+                self.writer.add_scalar("Validation Loss", avg_val_loss, epoch)
+
+                # Save model checkpoint
+                torch.save(
+                    {
+                        "epoch": epoch,
+                        "model_state_dict": self.dnsm.state_dict(),
+                        "optimizer_state_dict": self.optimizer.state_dict(),
+                        "loss": avg_val_loss,
+                    },
+                    f"{self.checkpoint_dir}/model_epoch_{epoch}.pth",
+                )
+
+            print(
+                f"Epoch [{epoch + 1}/{num_epochs}], Training Loss: {loss.item()}, Validation Loss: {avg_val_loss}"
+            )
+
+        self.writer.close()
+
+    def optimize_branch_lengths(self):
+        for dataset in [self.train_set, self.val_set]:
+            branch_lengths = self.wrapped_dnsm.find_optimal_branch_lengths(
+                dataset.nt_parents, dataset.nt_children
+            )
+            dataset.update_neutral_aa_mut_probs(branch_lengths) 

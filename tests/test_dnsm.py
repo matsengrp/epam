@@ -1,5 +1,5 @@
 import pandas as pd
-from epam.dnsm import train_model
+from epam.dnsm import TransformerBinarySelectionModel, DNSMBurrito
 
 
 def test_dnsm():
@@ -11,18 +11,17 @@ def test_dnsm():
     pcp_df = pcp_df[pcp_df["parent"] != pcp_df["child"]]
     print(f"After filtering out identical PCPs, we have {len(pcp_df)} PCPs.")
 
-    nhead = 4
-    dim_feedforward = 2048
-    layer_count = 3
-    model = train_model(
+    dnsm = TransformerBinarySelectionModel(nhead=2, dim_feedforward=256, layer_count=2)
+
+    burrito = DNSMBurrito(
         pcp_df,
         shmple_weights_directory,
-        nhead=nhead,
-        dim_feedforward=dim_feedforward,
-        layer_count=layer_count,
+        dnsm,
         batch_size=32,
-        num_epochs=10,
         learning_rate=0.001,
         checkpoint_dir="./_checkpoints",
         log_dir="./_logs",
     )
+
+    burrito.train(2)
+    burrito.optimize_branch_lengths()

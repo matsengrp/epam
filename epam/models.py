@@ -2,19 +2,23 @@ from abc import ABC, abstractmethod
 from importlib import resources
 import logging
 from typing import Tuple
-import ablang
-import shmple
+
 import torch
 import torch.optim as optim
 from torch import Tensor
-
-from esm import (
-    pretrained,
-)
-import h5py
 import numpy as np
 import pandas as pd
 from scipy.special import softmax
+
+from tqdm import tqdm
+import h5py
+
+import ablang
+from esm import (
+    pretrained,
+)
+
+import shmple
 import epam.molevol as molevol
 import epam.sequences as sequences
 from epam.sequences import (
@@ -330,9 +334,10 @@ class OptimizableSHMple(SHMple):
         child (str): The child sequence.
 
         Returns:
-        float: The optimal branch length.
+        Tensor: The optimal branch length.
         """
 
+        # TODO note that we're starting from some pretty crappy branch lengths; we have no way of keeping track of the current branch lengths
         base_branch_length = np.mean([a != b for a, b in zip(parent, child)])
         rates, sub_probs = self.predict_rates_and_normed_sub_probs(
             parent, base_branch_length
@@ -347,8 +352,13 @@ class OptimizableSHMple(SHMple):
         optimizer = optim.SGD([log_branch_scaling], lr=self.learning_rate)
         prev_log_branch_scaling = log_branch_scaling.clone()
 
-        for _ in range(self.max_optimization_steps):
+        for step_idx in range(self.max_optimization_steps):
             optimizer.zero_grad()
+
+            # TODO
+            if torch.isnan(log_branch_scaling):
+                print("BAD! log_branch_scaling is nan on step", step_idx)
+                return base_branch_length
 
             loss = -log_pcp_probability(log_branch_scaling)
             assert not torch.isnan(
@@ -367,6 +377,16 @@ class OptimizableSHMple(SHMple):
 
         branch_scaling = torch.exp(log_branch_scaling.detach())
         return branch_scaling * base_branch_length
+
+
+    def find_optimal_branch_lengths(self, nt_parent, nt_child):
+        optimal_lengths = []
+
+        for parent, child in tqdm(zip(nt_parent, nt_child), total=len(nt_parent), desc="Finding optimal branch lengths"):
+            optimal_lengths.append(self._find_optimal_branch_length(parent, child))
+
+        return torch.tensor(optimal_lengths)
+
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         branch_length = self._find_optimal_branch_length(parent, child)
@@ -430,7 +450,21 @@ class MutSel(OptimizableSHMple):
                 reshaped_child_idxs[:, 2],
             ]
 
-            return torch.sum(torch.log(child_prob_vector))
+            result = torch.sum(torch.log(child_prob_vector))
+
+            if torch.isnan(result):
+                print(f"parent: {parent}")
+                print(f"child : {child}")
+                print(f"parent is the same as child: {parent == child}")
+                print(f"branch_scaling: {branch_scaling}")
+                print(f"mut_probs: {mut_probs}")
+                print(f"sub_probs: {sub_probs}")
+                print(f"sel_matrix: {sel_matrix}")
+                print(f"codon_mutsel_v: {codon_mutsel_v}")
+                print(f"child_prob_vector: {child_prob_vector}")
+                assert(False)
+
+            return result
 
         return log_pcp_probability
 
@@ -554,29 +588,32 @@ class SHMpleESM(MutSel):
 
 
 class WrappedBinaryMutSel(MutSel):
-    """A mutation selection model that is built from a model that has a `p_substitution_of_aa_str` method."""
+    """A mutation selection model that is built from a model that has a `selection_factors_of_aa_str` method."""
 
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, selection_model, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.model = model
+        self.selection_model = selection_model
 
     def build_selection_matrix_from_parent(self, parent: str):
+        # TODO consder this always taking an amino acid sequence
+        parent = translate_sequences([parent])[0]
         # We need to take our binary selection matrix and turn it into a selection matrix which gives the same weight to each off-diagonal element.
-        p_substitution = self.model.p_substitution_of_aa_str(parent)
+        # TODO don't we want to do all of this in torch land?
+        selection_factors = self.selection_model.selection_factors_of_aa_str(parent)
         parent_idxs = sequences.aa_idx_array_of_str(parent)
 
         # make a np array with the same number of rows as the length of p_substitution
         # and the same number of columns as the number of amino acids
-        selection_matrix = np.zeros((len(p_substitution), 20))
+        selection_matrix = np.zeros((len(selection_factors), 20))
 
         # Set each row to p_substitution/19, which is the probability of the
         # corresponding site mutating to a given alternative amino acid.
-        selection_matrix[:, :] = p_substitution[:, np.newaxis] / 19.0
+        selection_matrix[:, :] = selection_factors[:, np.newaxis] / 19.0
 
         # Set "diagonal" elements to 1 - p_substitution for each corresponding amino
         # acid in the parent, where "diagonal means keeping the same amino acid.
         selection_matrix[np.arange(len(parent_idxs)), parent_idxs] = (
-            1.0 - p_substitution
+            1.0 - selection_factors
         )
-
-        return selection_matrix
+        
+        return torch.tensor(selection_matrix, dtype=torch.float)
