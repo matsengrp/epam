@@ -34,7 +34,9 @@ class MutSelSimulator:
     def apply_mutation(self, dna_sequence, nt_position, new_nt):
         return dna_sequence[:nt_position] + new_nt + dna_sequence[nt_position + 1 :]
 
-    def simulate_child_sequence(self, parent_dna_sequence, target_mut_count, max_tries=10000):
+    def simulate_child_sequence(
+        self, parent_dna_sequence, target_mut_count, max_tries=10000
+    ):
         """
         Simulates a child DNA sequence from a given parent sequence based on a
         mutation-selection process. The method uses the `shmple_model` to compute
@@ -97,12 +99,12 @@ class MutSelSimulator:
             nt_site = np.random.choice(
                 len(mutation_prob), p=mutation_prob / sum(mutation_prob)
             )
-            
+
             if try_count > max_tries:
                 return running_dna_sequence
-            
+
             try_count += 1
-            
+
             # Skip if this site has already been mutated
             if nt_site in mutated_sites:
                 continue

@@ -5,8 +5,10 @@ So, this is not for simulating mutation-selection processes.
 
 It corresponds to the inference happning in toy_dnsm.py.
 """
-import pandas as pd
 import random
+
+import pandas as pd
+from tqdm import tqdm
 
 from epam.sequences import AA_STR_SORTED
 
@@ -32,7 +34,9 @@ def mimic_mutations(sequence_mutator_fn, parents, sub_counts):
 
     mutated_sequences = []
 
-    for seq, sub_count in zip(parents, sub_counts):
+    for seq, sub_count in tqdm(
+        zip(parents, sub_counts), total=len(parents), desc="Mutating sequences"
+    ):
         mutated_seq = sequence_mutator_fn(seq, sub_count)
         mutated_sequences.append(mutated_seq)
 
