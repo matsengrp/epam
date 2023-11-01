@@ -4,7 +4,7 @@ import torch
 import pytest
 import os
 import epam.models
-from epam.sequences import translate_sequences
+from epam.sequences import translate_sequence
 from epam.models import (
     AbLang,
     SHMple,
@@ -37,7 +37,7 @@ weights_path = "data/shmple_weights/my_shmoof"
 def test_shmple():
     shmple_shmoof = SHMple(weights_directory=weights_path)
     aaprobs = shmple_shmoof.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
-    child_aa_seq = translate_sequences([child_nt_seq])[0]
+    child_aa_seq = translate_sequence(child_nt_seq)
     prob_vec = shmple_shmoof.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 
@@ -91,7 +91,7 @@ def test_mut_sel_probability():
 def test_esm():
     esm_v1 = ESM1v()
     aaprobs = esm_v1.aaprobs_of_parent_child_pair(parent_nt_seq)
-    child_aa_seq = translate_sequences([child_nt_seq])[0]
+    child_aa_seq = translate_sequence(child_nt_seq)
     prob_vec = esm_v1.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 
@@ -99,7 +99,7 @@ def test_esm():
 def test_shmple_esm():
     shmple_esm = SHMpleESM(weights_directory=weights_path)
     aaprobs = shmple_esm.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
-    child_aa_seq = translate_sequences([child_nt_seq])[0]
+    child_aa_seq = translate_sequence(child_nt_seq)
     prob_vec = shmple_esm.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 

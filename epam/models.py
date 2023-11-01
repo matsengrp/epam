@@ -24,7 +24,7 @@ import epam.sequences as sequences
 from epam.sequences import (
     AA_STR_SORTED,
     assert_pcp_lengths,
-    translate_sequences,
+    translate_sequence,
 )
 from epam.torch_common import pick_device
 import epam.utils as utils
@@ -185,7 +185,7 @@ class AbLang(BaseModel):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        parent_aa = translate_sequences([parent])[0]
+        parent_aa = translate_sequence(parent)
         return self.probability_array_of_seq(parent_aa)
 
 
@@ -549,7 +549,7 @@ class ESM1v(TorchModel):
         """
         batch_converter = self.alphabet.get_batch_converter()
 
-        parent_aa = translate_sequences([parent])[0]
+        parent_aa = translate_sequence(parent)
         data = [
             ("protein1", parent_aa),
         ]
@@ -599,7 +599,7 @@ class WrappedBinaryMutSel(MutSel):
 
     def build_selection_matrix_from_parent(self, parent: str):
         # TODO consder this always taking an amino acid sequence
-        parent = translate_sequences([parent])[0]
+        parent = translate_sequence(parent)
         # We need to take our binary selection matrix and turn it into a selection matrix which gives the same weight to each off-diagonal element.
         # TODO don't we want to do all of this in torch land?
         selection_factors = self.selection_model.selection_factors_of_aa_str(parent)

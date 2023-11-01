@@ -57,9 +57,13 @@ def translate_sequences(nt_sequences):
     return aa_sequences
 
 
+def translate_sequence(nt_sequence):
+    return translate_sequences([nt_sequence])[0]
+
+
 def aa_index_of_codon(codon):
     """Return the index of the amino acid encoded by a codon."""
-    aa = translate_sequences([codon])[0]
+    aa = translate_sequence(codon)
     return AA_STR_SORTED.index(aa)
 
 

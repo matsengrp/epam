@@ -4,7 +4,7 @@ from epam.models import SHMple
 
 from epam.sequences import (
     nt_idx_tensor_of_str,
-    translate_sequences,
+    translate_sequence,
     AA_STR_SORTED,
     CODONS,
     NT_STR_SORTED,
@@ -83,7 +83,7 @@ def iterative_aaprob_of_mut_and_sub(parent_codon, mut_probs, sub_probs):
     # iterate through all possible child codons
     for child_codon in CODONS:
         try:
-            aa = translate_sequences([child_codon])[0]
+            aa = translate_sequence(child_codon)
         except ValueError:  # check for STOP codon
             continue
 
