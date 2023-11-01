@@ -32,6 +32,13 @@ def nt_idx_tensor_of_str(nt_str):
     return torch.tensor([NT_STR_SORTED.index(nt) for nt in nt_str])
 
 
+def aa_onehot_tensor_of_str(aa_str):
+    aa_onehot = torch.zeros((len(aa_str), 20))
+    aa_indices_parent = aa_idx_array_of_str(aa_str)
+    aa_onehot[torch.arange(len(aa_str)), aa_indices_parent] = 1
+    return aa_onehot
+
+
 def read_fasta_sequences(file_path):
     with open(file_path, "r") as handle:
         sequences = [str(record.seq) for record in SeqIO.parse(handle, "fasta")]

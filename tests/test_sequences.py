@@ -1,11 +1,13 @@
 import pytest
 import numpy as np
+import torch
 from Bio.Seq import Seq
 from Bio.Data import CodonTable
 from epam.sequences import (
     AA_STR_SORTED,
     CODONS,
     nt_idx_array_of_str,
+    aa_onehot_tensor_of_str,
     translate_sequences,
     CODON_AA_INDICATOR_MATRIX,
 )
@@ -15,6 +17,19 @@ def test_nucleotide_indices_of_codon():
     assert nt_idx_array_of_str("AAA").tolist() == [0, 0, 0]
     assert nt_idx_array_of_str("TAC").tolist() == [3, 0, 1]
     assert nt_idx_array_of_str("GCG").tolist() == [2, 1, 2]
+
+
+def test_aa_onehot_tensor_of_str():
+    aa_str = "QY"
+
+    expected_output = torch.zeros((2, 20))
+    expected_output[0][AA_STR_SORTED.index("Q")] = 1
+    expected_output[1][AA_STR_SORTED.index("Y")] = 1
+
+    output = aa_onehot_tensor_of_str(aa_str)
+
+    assert output.shape == (2, 20)
+    assert torch.equal(output, expected_output)
 
 
 def test_translate_sequences():

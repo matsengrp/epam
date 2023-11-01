@@ -203,9 +203,7 @@ class TransformerBinarySelectionModel(nn.Module):
             A numpy array of the same length as the input string representing
             the level of selection for each amino acid site.
         """
-        aa_onehot = torch.zeros((len(aa_str), 20))
-        aa_indices_parent = sequences.aa_idx_array_of_str(aa_str)
-        aa_onehot[:, aa_indices_parent] = 1
+        aa_onehot = sequences.aa_onehot_tensor_of_str(aa_str)
 
         # Create a padding mask with False values (i.e., no padding)
         padding_mask = torch.zeros(len(aa_str), dtype=torch.bool).to(self.device)
