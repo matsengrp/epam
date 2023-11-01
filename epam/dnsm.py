@@ -104,7 +104,8 @@ class PCPDataset(Dataset):
             )
 
             # Ensure that all values are positive before taking the log later
-            assert torch.all(neutral_aa_mut_prob > 0)
+            # TODO log these?
+            neutral_aa_mut_prob = torch.clamp(neutral_aa_mut_prob, min=1e-6)
 
             pad_len = self.max_aa_seq_len - neutral_aa_mut_prob.shape[0]
             if pad_len > 0:
@@ -215,7 +216,7 @@ class TransformerBinarySelectionModel(nn.Module):
             )
             final_out = torch.exp(model_out)
             # TODO think about if we can interpret model outputs greater than 1; in any case this makes problems if we have mutation*selection > 1
-            final_out = torch.clamp(final_out, min=0.0, max=0.999)
+            final_out = torch.clamp(final_out, min=1e-6, max=0.999)
 
         return final_out.cpu().numpy()[: len(aa_str)]
 
@@ -284,7 +285,7 @@ class DNSMBurrito:
         # out_of_range_prediction_count = torch.sum(predictions > 1.0)
         # if out_of_range_prediction_count > 0:
         #     print(f"{out_of_range_prediction_count}\tpredictions out of range.")
-        predictions = torch.clamp(predictions, min=0.0, max=0.999)
+        predictions = torch.clamp(predictions, min=1e-6, max=0.999)
 
         return self.bce_loss(predictions, aa_subs_indicator)
 
