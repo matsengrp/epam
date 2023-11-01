@@ -1,3 +1,10 @@
+"""
+These are functions for simulating amino acid mutations in a protein sequence.
+
+So, this is not for simulating mutation-selection processes.
+
+It corresponds to the inference happning in toy_dnsm.py.
+"""
 import pandas as pd
 import random
 
