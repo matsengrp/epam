@@ -18,7 +18,6 @@ import torch.optim as optim
 import torch.nn as nn
 from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
-import torch.nn.functional as F
 
 from tensorboardX import SummaryWriter
 
@@ -129,6 +128,31 @@ class TransformerBinaryModel(nn.Module):
         out = self.encoder(parent_onehots)  # , src_key_padding_mask=padding_mask)
         out = self.linear(out)
         return out.squeeze(-1)
+
+    def prediction_of_aa_str(self, aa_str: str):
+        """Do the forward method without gradients from an amino acid string and convert to numpy.
+
+        Parameters:
+            aa_str: A string of amino acids.
+
+        Returns:
+            A numpy array of the same length as the input string representing
+            the level of selection for each amino acid site.
+        """
+        aa_onehot = sequences.aa_onehot_tensor_of_str(aa_str)
+
+        # Create a padding mask with False values (i.e., no padding)
+        padding_mask = torch.zeros(len(aa_str), dtype=torch.bool).to(self.device)
+
+        with torch.no_grad():
+            aa_onehot = aa_onehot.to(self.device)
+            model_out = self(aa_onehot.unsqueeze(0), padding_mask.unsqueeze(0)).squeeze(
+                0
+            )
+            final_out = torch.exp(model_out)
+            final_out = torch.clamp(final_out, min=0.0, max=0.999)
+
+        return final_out.cpu().numpy()
 
 
 def train_model(
