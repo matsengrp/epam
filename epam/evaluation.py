@@ -43,7 +43,11 @@ def evaluate_dataset(aaprob_path):
     full_pcp_df = pd.read_csv(pcp_path, index_col=0)
 
     # remove PCPs that do not meet criteria: 0% < mutation rate < 30%
-    pcp_df = full_pcp_df[full_pcp_df.apply(lambda row: pcp_criteria_check(row["parent"], row["child"]), axis=1)]
+    pcp_df = full_pcp_df[
+        full_pcp_df.apply(
+            lambda row: pcp_criteria_check(row["parent"], row["child"]), axis=1
+        )
+    ]
 
     nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
 
@@ -69,13 +73,13 @@ def evaluate_dataset(aaprob_path):
 
     with h5py.File(aaprob_path, "r") as matfile:
         model_name = matfile.attrs["model_name"]
-        for index in range(len(parent_aa_seqs)): 
+        for index in range(len(parent_aa_seqs)):
             pcp_index = pcp_df.index[index]
             grp = matfile[
                 "matrix" + str(pcp_index)
             ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
             matrix = grp["data"]
-            
+
             site_sub_probs.append(
                 calculate_site_substitution_probabilities(matrix, parent_aa_seqs[index])
             )
@@ -161,7 +165,7 @@ def calculate_site_substitution_probabilities(aaprobs, parent_aa):
 
     """
     site_sub_probs = [
-        1.0 - aaprobs[i, :][AA_STR_SORTED.index(parent_aa[i])]
+        np.sum(aaprobs[i, :][[AA_STR_SORTED.index(aa) for aa in AA_STR_SORTED if aa != parent_aa[i]]])
         for i in range(len(parent_aa))
     ]
 
