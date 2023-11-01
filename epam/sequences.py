@@ -62,6 +62,16 @@ def assert_pcp_lengths(parent, child):
         )
     if len(parent) % 3 != 0:
         raise ValueError(f"Found a PCP with length not a multiple of 3: {len(parent)}")
+    
+
+def pcp_criteria_check(parent, child):
+    """Check that parent child pair undergoes mutation at a reasonable rate."""
+    if parent == child:
+        return False
+    elif sum(1 for p, c in zip(parent, child) if p != c)/len(parent) > 0.3:
+        return False
+    else:
+        return True
 
 
 def generate_codon_aa_indicator_matrix():

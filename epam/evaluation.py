@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 from epam.sequences import AA_STR_SORTED
 from epam.utils import pcp_path_of_aaprob_path
-from epam.sequences import translate_sequences
+from epam.sequences import translate_sequences, pcp_criteria_check
 
 
 def evaluate(aaprob_paths, model_performance_path):
@@ -40,7 +40,10 @@ def evaluate_dataset(aaprob_path):
     """
     pcp_path = pcp_path_of_aaprob_path(aaprob_path)
 
-    pcp_df = pd.read_csv(pcp_path, index_col=0)
+    full_pcp_df = pd.read_csv(pcp_path, index_col=0)
+
+    # remove PCPs that do not meet criteria: 0% < mutation rate < 30%
+    pcp_df = full_pcp_df[full_pcp_df.apply(lambda row: pcp_criteria_check(row["parent"], row["child"]), axis=1)]
 
     nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
 
@@ -66,13 +69,13 @@ def evaluate_dataset(aaprob_path):
 
     with h5py.File(aaprob_path, "r") as matfile:
         model_name = matfile.attrs["model_name"]
-        for i in range(len(pcp_df)): #pcp_df.index:
+        for index in range(len(parent_aa_seqs)): 
+            pcp_index = pcp_df.index[index]
             grp = matfile[
-                "matrix" + str(i)
-            ]  # assumes that the keys are named "matrix0", "matrix1", etc.
+                "matrix" + str(pcp_index)
+            ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
             matrix = grp["data"]
-            index = grp.attrs["pcp_index"]
-
+            
             site_sub_probs.append(
                 calculate_site_substitution_probabilities(matrix, parent_aa_seqs[index])
             )

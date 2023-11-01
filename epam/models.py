@@ -21,6 +21,7 @@ from epam.sequences import (
     AA_STR_SORTED,
     assert_pcp_lengths,
     translate_sequences,
+    pcp_criteria_check,
 )
 import epam.utils as utils
 
@@ -111,14 +112,15 @@ class BaseModel(ABC):
                 parent = row["parent"]
                 child = row["child"]
                 assert_pcp_lengths(parent, child)
-                matrix = self.aaprobs_of_parent_child_pair(parent, child)
+                if pcp_criteria_check(parent, child):
+                    matrix = self.aaprobs_of_parent_child_pair(parent, child)
 
-                # create a group for each matrix
-                grp = outfile.create_group(f"matrix{i}")
-                grp.attrs["pcp_index"] = i
-                grp.create_dataset(
-                    "data", data=matrix, compression="gzip", compression_opts=4
-                )
+                    # create a group for each matrix
+                    grp = outfile.create_group(f"matrix{i}")
+                    grp.attrs["pcp_index"] = i
+                    grp.create_dataset(
+                        "data", data=matrix, compression="gzip", compression_opts=4
+                    )
 
 
 class AbLang(BaseModel):
