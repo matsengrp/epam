@@ -11,17 +11,17 @@ import random
 from epam.sequences import AA_STR_SORTED
 
 
-def mimic_aa_mutations(sequence_mutator_fn, aa_parents, aa_sub_counts):
+def mimic_mutations(sequence_mutator_fn, parents, sub_counts):
     """
-    Mimics amino acid mutations for a series of parent sequences.
+    Mimics mutations for a series of parent sequences.
 
     Parameters
     ----------
     sequence_mutator_fn : function
-        Function that takes an amino acid sequence and an integer, returns mutated sequence with that many mutations.
-    aa_parents : pd.Series
-        Series containing parent amino acid sequences as strings.
-    aa_sub_counts : pd.Series
+        Function that takes a string sequence and an integer, returns a mutated sequence with that many mutations.
+    parents : pd.Series
+        Series containing parent sequences as strings.
+    sub_counts : pd.Series
         Series containing the number of substitutions for each parent sequence.
 
     Returns
@@ -32,8 +32,8 @@ def mimic_aa_mutations(sequence_mutator_fn, aa_parents, aa_sub_counts):
 
     mutated_sequences = []
 
-    for aa_seq, sub_count in zip(aa_parents, aa_sub_counts):
-        mutated_seq = sequence_mutator_fn(aa_seq, sub_count)
+    for seq, sub_count in zip(parents, sub_counts):
+        mutated_seq = sequence_mutator_fn(seq, sub_count)
         mutated_sequences.append(mutated_seq)
 
     return pd.Series(mutated_sequences)
