@@ -173,3 +173,4 @@ output/
 # model training
 _checkpoints/
 _logs/
+_model_weights/
