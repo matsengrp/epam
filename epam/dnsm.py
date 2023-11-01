@@ -109,7 +109,9 @@ class PCPDataset(Dataset):
             pad_len = self.max_aa_seq_len - neutral_aa_mut_prob.shape[0]
             if pad_len > 0:
                 # TODO: does this value matter? If we are masking correctly it shoudln't.
-                neutral_aa_mut_prob = F.pad(neutral_aa_mut_prob, (0, pad_len), value=1e-6)
+                neutral_aa_mut_prob = F.pad(
+                    neutral_aa_mut_prob, (0, pad_len), value=1e-6
+                )
 
             neutral_aa_mut_prob_l.append(neutral_aa_mut_prob)
 
@@ -221,7 +223,8 @@ class TransformerBinarySelectionModel(nn.Module):
 
 
 class DNSMBurrito:
-    def __init__(self, 
+    def __init__(
+        self,
         pcp_df,
         shmple_weights_directory,
         dnsm,
@@ -234,7 +237,7 @@ class DNSMBurrito:
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.checkpoint_dir = checkpoint_dir
-        
+
         print("preparing data...")
         nt_parents = pcp_df["parent"]
         nt_children = pcp_df["child"]
@@ -263,8 +266,12 @@ class DNSMBurrito:
 
         self.bce_loss = nn.BCELoss()
 
-    def complete_loss_fn(self,
-        log_neutral_aa_mut_probs, log_selection_factors, aa_subs_indicator, padding_mask
+    def complete_loss_fn(
+        self,
+        log_neutral_aa_mut_probs,
+        log_selection_factors,
+        aa_subs_indicator,
+        padding_mask,
     ):
         # Take the product of the neutral mutation probabilities and the selection factors.
         predictions = torch.exp(log_neutral_aa_mut_probs + log_selection_factors)
@@ -304,7 +311,9 @@ class DNSMBurrito:
         return total_loss / len(data_loader)
 
     def train(self, num_epochs=10):
-        train_loader = DataLoader(self.train_set, batch_size=self.batch_size, shuffle=True)
+        train_loader = DataLoader(
+            self.train_set, batch_size=self.batch_size, shuffle=True
+        )
         val_loader = DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False)
         # Record epoch 0
         self.dnsm.eval()
@@ -361,4 +370,4 @@ class DNSMBurrito:
             branch_lengths = self.wrapped_dnsm.find_optimal_branch_lengths(
                 dataset.nt_parents, dataset.nt_children
             )
-            dataset.update_neutral_aa_mut_probs(branch_lengths) 
+            dataset.update_neutral_aa_mut_probs(branch_lengths)

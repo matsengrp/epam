@@ -46,7 +46,7 @@ def test_neutral_aa_mut_prob_v():
     # same. In this case, ACG is the codon, and it's fourfold degenerate. Thus
     # we just multiply the probability of A and C staying the same from the
     # correct_tensor just above.
-    correct_tensor = torch.tensor([1 - 0.99*0.98])
+    correct_tensor = torch.tensor([1 - 0.99 * 0.98])
 
     computed_tensor = molevol.neutral_aa_mut_prob_v(
         ex_parent_codon_idxs.unsqueeze(0),

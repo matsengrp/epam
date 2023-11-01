@@ -55,6 +55,7 @@ FULLY_SPECIFIED_MODELS = [
     ),
 ]
 
+
 class BaseModel(ABC):
     def __init__(self, model_name=None):
         """
@@ -378,15 +379,17 @@ class OptimizableSHMple(SHMple):
         branch_scaling = torch.exp(log_branch_scaling.detach())
         return branch_scaling * base_branch_length
 
-
     def find_optimal_branch_lengths(self, nt_parent, nt_child):
         optimal_lengths = []
 
-        for parent, child in tqdm(zip(nt_parent, nt_child), total=len(nt_parent), desc="Finding optimal branch lengths"):
+        for parent, child in tqdm(
+            zip(nt_parent, nt_child),
+            total=len(nt_parent),
+            desc="Finding optimal branch lengths",
+        ):
             optimal_lengths.append(self._find_optimal_branch_length(parent, child))
 
         return torch.tensor(optimal_lengths)
-
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         branch_length = self._find_optimal_branch_length(parent, child)
@@ -462,7 +465,7 @@ class MutSel(OptimizableSHMple):
                 print(f"sel_matrix: {sel_matrix}")
                 print(f"codon_mutsel_v: {codon_mutsel_v}")
                 print(f"child_prob_vector: {child_prob_vector}")
-                assert(False)
+                assert False
 
             return result
 
@@ -615,5 +618,5 @@ class WrappedBinaryMutSel(MutSel):
         selection_matrix[np.arange(len(parent_idxs)), parent_idxs] = (
             1.0 - selection_factors
         )
-        
+
         return torch.tensor(selection_matrix, dtype=torch.float)

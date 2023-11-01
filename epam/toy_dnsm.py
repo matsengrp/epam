@@ -119,9 +119,11 @@ class TransformerBinaryModel(nn.Module):
         """
 
         parent_onehots = parent_onehots * math.sqrt(self.d_model)
-        # Have to do the permutation because the positional encoding expects the 
+        # Have to do the permutation because the positional encoding expects the
         # sequence length to be the first dimension.
-        parent_onehots = self.pos_encoder(parent_onehots.permute(1, 0, 2)).permute(1, 0, 2)
+        parent_onehots = self.pos_encoder(parent_onehots.permute(1, 0, 2)).permute(
+            1, 0, 2
+        )
 
         # NOTE: not masking due to MPS bug
         out = self.encoder(parent_onehots)  # , src_key_padding_mask=padding_mask)
