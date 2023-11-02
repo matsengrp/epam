@@ -68,6 +68,7 @@ class BaseModel(ABC):
             model_name = self.__class__.__name__
         self.model_name = model_name
 
+    # TODO think about notation in which parents and children are always nt sequences here?
     @abstractmethod
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         pass
@@ -325,7 +326,7 @@ class OptimizableSHMple(SHMple):
 
         return log_pcp_probability
 
-    def _find_optimal_branch_length(self, parent, child):
+    def _find_optimal_branch_length(self, parent, child, base_branch_length):
         """
         Find the optimal branch length for a parent-child pair in terms of
         nucleotide likelihood.
@@ -333,13 +334,12 @@ class OptimizableSHMple(SHMple):
         Parameters:
         parent (str): The parent sequence.
         child (str): The child sequence.
+        base_branch_length (float, optional): The branch length used to initialize the optimization. If not specified, the mean of the number of nucleotide differences between the parent and child is used.
 
         Returns:
         Tensor: The optimal branch length.
         """
 
-        # TODO note that we're starting from some pretty crappy branch lengths; we have no way of keeping track of the current branch lengths
-        base_branch_length = np.mean([a != b for a, b in zip(parent, child)])
         rates, sub_probs = self.predict_rates_and_normed_sub_probs(
             parent, base_branch_length
         )
@@ -379,20 +379,25 @@ class OptimizableSHMple(SHMple):
         branch_scaling = torch.exp(log_branch_scaling.detach())
         return branch_scaling * base_branch_length
 
-    def find_optimal_branch_lengths(self, nt_parent, nt_child):
+    def find_optimal_branch_lengths(self, nt_parents, nt_children, base_branch_lengths):
         optimal_lengths = []
 
-        for parent, child in tqdm(
-            zip(nt_parent, nt_child),
-            total=len(nt_parent),
+        for parent, child, base_length in tqdm(
+            zip(nt_parents, nt_children, base_branch_lengths),
+            total=len(nt_parents),
             desc="Finding optimal branch lengths",
         ):
-            optimal_lengths.append(self._find_optimal_branch_length(parent, child))
+            optimal_lengths.append(
+                self._find_optimal_branch_length(parent, child, base_length)
+            )
 
         return torch.tensor(optimal_lengths)
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
-        branch_length = self._find_optimal_branch_length(parent, child)
+        base_branch_length = sequences.mutation_frequency(parent, child)
+        branch_length = self._find_optimal_branch_length(
+            parent, child, base_branch_length
+        )
         if branch_length > 0.5:
             print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()

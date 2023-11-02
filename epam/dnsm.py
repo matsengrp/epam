@@ -66,20 +66,29 @@ class PCPDataset(Dataset):
             )
             self.padding_mask[i, :aa_seq_len] = False
 
-        mutation_freqs = [
+        # Make initial branch lengths (will get optimized later).
+        self._branch_lengths = [
             sequences.mutation_frequency(parent, child)
             for parent, child in zip(self.nt_parents, self.nt_children)
         ]
+        self.update_neutral_aa_mut_probs()
 
-        self.update_neutral_aa_mut_probs(mutation_freqs)
+    @property
+    def branch_lengths(self):
+        return self._branch_lengths
 
-    def update_neutral_aa_mut_probs(self, branch_lengths):
+    @branch_lengths.setter
+    def branch_lengths(self, new_branch_lengths):
+        self._branch_lengths = new_branch_lengths
+        self.update_neutral_aa_mut_probs()
+
+    def update_neutral_aa_mut_probs(self):
         print("predicting mutabilities and substitutions...")
         (
             all_rates,
             all_subs_probs,
         ) = self.shmple_model.predict_mutabilities_and_substitutions(
-            self.nt_parents, branch_lengths
+            self.nt_parents, self._branch_lengths
         )
 
         print("consolidating this into substitution probabilities...")
@@ -366,7 +375,6 @@ class DNSMBurrito:
 
     def optimize_branch_lengths(self):
         for dataset in [self.train_set, self.val_set]:
-            branch_lengths = self.wrapped_dnsm.find_optimal_branch_lengths(
-                dataset.nt_parents, dataset.nt_children
+            dataset.branch_lengths = self.wrapped_dnsm.find_optimal_branch_lengths(
+                dataset.nt_parents, dataset.nt_children, dataset.branch_lengths
             )
-            dataset.update_neutral_aa_mut_probs(branch_lengths)
