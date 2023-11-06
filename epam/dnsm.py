@@ -33,7 +33,6 @@ from shmple import AttentionModel
 class PCPDataset(Dataset):
     def __init__(self, nt_parents, nt_children, shmple_model):
         self.nt_parents = nt_parents
-        # TODO I don't think we need the nt_children, but I'm leaving it in for now.
         self.nt_children = nt_children
         self.shmple_model = shmple_model
 
