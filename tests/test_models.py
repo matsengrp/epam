@@ -104,6 +104,11 @@ def test_shmple_esm():
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 
 
+def test_nasty_shmple_esm():
+    shmple_esm = SHMpleESM(weights_directory=weights_path)
+    shmple_esm.write_aaprobs("data/wyatt_10x_loss_nan.csv", "_ignore/wyatt_10x_loss_nan.hdf5")
+
+
 def hdf5_files_identical(path_1, path_2, tol=1e-4):
     """Return if two HDF5 files are identical."""
     with h5py.File(path_1, "r") as f1, h5py.File(path_2, "r") as f2:

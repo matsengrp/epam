@@ -334,7 +334,7 @@ class OptimizableSHMple(SHMple):
         Parameters:
         parent (str): The parent sequence.
         child (str): The child sequence.
-        base_branch_length (float, optional): The branch length used to initialize the optimization. If not specified, the mean of the number of nucleotide differences between the parent and child is used.
+        base_branch_length (float): The branch length used to initialize the optimization.
 
         Returns:
         Tensor: The optimal branch length.
@@ -350,13 +350,12 @@ class OptimizableSHMple(SHMple):
 
         log_branch_scaling = torch.tensor(0.0, requires_grad=True)
 
-        optimizer = optim.SGD([log_branch_scaling], lr=self.learning_rate)
+        optimizer = optim.Adam([log_branch_scaling], lr=self.learning_rate)
         prev_log_branch_scaling = log_branch_scaling.clone()
 
         for step_idx in range(self.max_optimization_steps):
             optimizer.zero_grad()
 
-            # TODO
             if torch.isnan(log_branch_scaling):
                 print("BAD! log_branch_scaling is nan on step", step_idx)
                 return base_branch_length
@@ -366,6 +365,7 @@ class OptimizableSHMple(SHMple):
                 loss
             ), "Loss is NaN: perhaps selection has given a probability of zero?"
             loss.backward()
+            torch.nn.utils.clip_grad_norm_([log_branch_scaling], max_norm=2.5)
             optimizer.step()
 
             change_in_log_branch_scaling = torch.abs(
