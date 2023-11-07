@@ -110,6 +110,7 @@ def test_aaprob_of_mut_and_sub():
     [rates], [subs] = shmple_shmoof.model.predict_mutabilities_and_substitutions(
         [parent_nt_seq], [0.1]
     )
+    # TODO
     mut_probs = 1.0 - torch.exp(-torch.tensor(rates.squeeze()))
     parent_codon = parent_nt_seq[0:3]
     parent_codon_idxs = nt_idx_tensor_of_str(parent_codon)

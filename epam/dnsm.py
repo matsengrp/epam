@@ -88,20 +88,21 @@ class PCPDataset(Dataset):
             all_rates,
             all_subs_probs,
         ) = self.shmple_model.predict_mutabilities_and_substitutions(
-            self.nt_parents, self._branch_lengths
+            self.nt_parents, [1.]*len(self.nt_parents)
         )
 
         print("consolidating this into substitution probabilities...")
 
         neutral_aa_mut_prob_l = []
 
-        for nt_parent, rates, subs_probs in zip(
-            self.nt_parents, all_rates, all_subs_probs
+        for nt_parent, rates, branch_length, subs_probs in zip(
+            self.nt_parents, all_rates, self._branch_lengths, all_subs_probs
         ):
             parent_idxs = sequences.nt_idx_tensor_of_str(nt_parent)
 
             # Making sure the rates tensor is of float type for numerical stability.
-            mut_probs = 1.0 - torch.exp(-torch.tensor(rates).squeeze().float())
+            # TODO
+            mut_probs = 1.0 - torch.exp(-branch_length * torch.tensor(rates).squeeze().float())
             normed_subs_probs = molevol.normalize_sub_probs(
                 parent_idxs, torch.tensor(subs_probs).float()
             )
@@ -225,7 +226,7 @@ class TransformerBinarySelectionModel(nn.Module):
             # TODO think about if we can interpret model outputs greater than 1; in any case this makes problems if we have mutation*selection > 1
             final_out = torch.clamp(final_out, min=1e-6, max=0.999)
 
-        return final_out.cpu().numpy()[: len(aa_str)]
+        return final_out[: len(aa_str)]
 
 
 class DNSMBurrito:
@@ -321,9 +322,11 @@ class DNSMBurrito:
             self.train_set, batch_size=self.batch_size, shuffle=True
         )
         val_loader = DataLoader(self.val_set, batch_size=self.batch_size, shuffle=False)
+
         # Record epoch 0
-        self.dnsm.eval()
+        self.dnsm.train()
         avg_train_loss_epoch_zero = self.compute_avg_loss(train_loader)
+        self.dnsm.eval()
         avg_val_loss_epoch_zero = self.compute_avg_loss(val_loader)
         self.writer.add_scalar("Training Loss", avg_train_loss_epoch_zero, 0)
         self.writer.add_scalar("Validation Loss", avg_val_loss_epoch_zero, 0)
