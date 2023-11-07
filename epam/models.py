@@ -346,7 +346,8 @@ class OptimizableSHMple(SHMple):
 
         log_branch_scaling = torch.tensor(0.0, requires_grad=True)
 
-        optimizer = optim.SGD([log_branch_scaling], lr=self.learning_rate)
+        #optimizer = optim.SGD([log_branch_scaling], lr=self.learning_rate)
+        optimizer = optim.Adam([log_branch_scaling], lr=self.learning_rate)
         prev_log_branch_scaling = log_branch_scaling.clone()
 
         for _ in range(self.max_optimization_steps):
@@ -357,6 +358,7 @@ class OptimizableSHMple(SHMple):
                 loss
             ), "Loss is NaN: perhaps selection has given a probability of zero?"
             loss.backward()
+            torch.nn.utils.clip_grad_norm_([log_branch_scaling], max_norm=2.5)
             optimizer.step()
 
             change_in_log_branch_scaling = torch.abs(
