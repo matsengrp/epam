@@ -26,7 +26,7 @@ from epam.sequences import (
     assert_pcp_lengths,
     translate_sequence,
 )
-from epam.torch_common import pick_device
+from epam.torch_common import clamp_probability, pick_device
 import epam.utils as utils
 
 with resources.path("epam", "__init__.py") as p:
@@ -227,8 +227,8 @@ class SHMple(BaseModel):
             [parent], [1.0]
         )
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return torch.tensor(rates.squeeze()), molevol.normalize_sub_probs(
-            parent_idxs, torch.tensor(subs)
+        return torch.tensor(rates.squeeze(), dtype=torch.float), molevol.normalize_sub_probs(
+            parent_idxs, torch.tensor(subs, dtype=torch.float)
         )
 
     def _aaprobs_of_parent_and_branch_length(
@@ -249,9 +249,8 @@ class SHMple(BaseModel):
         np.ndarray: The aaprobs for every codon of the parent sequence.
         """
         rates, subs = self.predict_rates_and_normed_subs_probs(parent)
-        rates *= branch_length
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return molevol.aaprobs_of_parent_rates_and_sub_probs(parent_idxs, rates, subs)
+        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(parent_idxs, rates * branch_length, subs)
 
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         """
@@ -313,8 +312,7 @@ class OptimizableSHMple(SHMple):
 
         def log_pcp_probability(log_branch_length):
             branch_length = torch.exp(log_branch_length)
-            # TODO
-            mut_probs = 1.0 - torch.exp(-rates * branch_length)
+            mut_probs = 1.0 - torch.exp(-branch_length * rates)
             no_mutation_sites = parent_idxs == child_idxs
 
             same_probs = 1.0 - mut_probs[no_mutation_sites]
@@ -356,11 +354,6 @@ class OptimizableSHMple(SHMple):
         for step_idx in range(self.max_optimization_steps):
             optimizer.zero_grad()
 
-            # TODO I think we can get rid of this
-            if torch.isnan(log_branch_length):
-                print("BAD! log_branch_length is nan on step", step_idx)
-                return base_branch_length
-
             loss = -log_pcp_probability(log_branch_length)
             assert not torch.isnan(
                 loss
@@ -368,6 +361,7 @@ class OptimizableSHMple(SHMple):
             loss.backward()
             torch.nn.utils.clip_grad_norm_([log_branch_length], max_norm=2.5)
             optimizer.step()
+            assert not torch.isnan(log_branch_length)
 
             change_in_log_branch_length = torch.abs(
                 log_branch_length - prev_log_branch_length
@@ -441,8 +435,7 @@ class MutSel(OptimizableSHMple):
 
         def log_pcp_probability(log_branch_length: torch.Tensor):
             branch_length = torch.exp(log_branch_length)
-            # TODO
-            mut_probs = 1.0 - torch.exp(-rates * branch_length)
+            mut_probs = 1.0 - torch.exp(-branch_length * rates)
 
             codon_mutsel_v = molevol.build_codon_mutsel_v(
                 parent_idxs.reshape(-1, 3),
@@ -471,8 +464,7 @@ class MutSel(OptimizableSHMple):
         rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
 
         sel_matrix = self.build_selection_matrix_from_parent(parent)
-        # TODO
-        mut_probs = 1.0 - torch.exp(-rates * branch_length)
+        mut_probs = 1.0 - torch.exp(-branch_length * rates)
 
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
 
@@ -632,7 +624,6 @@ class WrappedBinaryMutSel(MutSel):
 
         assert len(parent) % 3 == 0
 
-        # TODO note subs_probs vs sub_probs
         rates, subs_probs = self.predict_rates_and_normed_subs_probs(parent)
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
         aa_parent = translate_sequence(parent)
@@ -641,7 +632,6 @@ class WrappedBinaryMutSel(MutSel):
             [p != c for p, c in zip(aa_parent, aa_child)], dtype=torch.float
         )
 
-        min_neutral_prob = 1e-8
         selection_factors = self.selection_model.selection_factors_of_aa_str(
             aa_parent
         ).to("cpu")
@@ -649,11 +639,9 @@ class WrappedBinaryMutSel(MutSel):
 
         def log_pcp_probability(log_branch_length: torch.Tensor):
             branch_length = torch.exp(log_branch_length)
-            # Take the product of the neutral mutation probabilities and the selection factors.
-            # TODO
-            mut_probs = 1.0 - torch.exp(-branch_length * rates.float())
+            mut_probs = 1.0 - torch.exp(-branch_length * rates)
             normed_subs_probs = molevol.normalize_sub_probs(
-                parent_idxs, subs_probs.float()
+                parent_idxs, subs_probs
             )
 
             neutral_aa_mut_prob = molevol.neutral_aa_mut_prob_v(
@@ -662,12 +650,9 @@ class WrappedBinaryMutSel(MutSel):
                 normed_subs_probs.reshape(-1, 3, 4),
             )
 
-            # Ensure that all values are positive before taking the log later
-            neutral_aa_mut_prob = torch.clamp(neutral_aa_mut_prob, min=min_neutral_prob)
-
+            neutral_aa_mut_prob = clamp_probability(neutral_aa_mut_prob)
             predictions = neutral_aa_mut_prob * selection_factors
-
-            predictions = torch.clamp(predictions, min=1e-6, max=0.999)
+            predictions = clamp_probability(predictions)
 
             # negative because BCELoss is negative log likelihood
             return -bce_loss(predictions, aa_subs_indicator)

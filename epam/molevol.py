@@ -217,8 +217,8 @@ def reshape_for_codons(array: Tensor) -> Tensor:
     return array.reshape(codon_count, 3, *array.shape[1:])
 
 
-def aaprobs_of_parent_rates_and_sub_probs(
-    parent_idxs: Tensor, rates: Tensor, sub_probs: Tensor
+def aaprobs_of_parent_scaled_rates_and_sub_probs(
+    parent_idxs: Tensor, scaled_rates: Tensor, sub_probs: Tensor
 ) -> Tensor:
     """
     Calculate per-site amino acid probabilities from per-site nucleotide rates
@@ -226,7 +226,8 @@ def aaprobs_of_parent_rates_and_sub_probs(
 
     Args:
         parent_idxs (torch.Tensor): Parent nucleotide indices. Shape should be (site_count,).
-        rates (torch.Tensor): Poisson rates of mutation per site. Shape should be (site_count,).
+        scaled_rates (torch.Tensor): Poisson rates of mutation per site, scaled by branch length. 
+                                     Shape should be (site_count,).
         sub_probs (torch.Tensor): Substitution probabilities per site: a 2D
                                   tensor with shape (site_count, 4).
 
@@ -235,8 +236,7 @@ def aaprobs_of_parent_rates_and_sub_probs(
                       corresponding to amino acids.
     """
     # Calculate the probability of at least one mutation at each site.
-    # TODO
-    mut_probs = 1.0 - torch.exp(-rates)
+    mut_probs = 1.0 - torch.exp(-scaled_rates)
 
     # Reshape the inputs to include a codon dimension.
     parent_codon_idxs_v = reshape_for_codons(parent_idxs)

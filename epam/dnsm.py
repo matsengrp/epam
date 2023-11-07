@@ -21,7 +21,7 @@ import torch.nn.functional as F
 
 from tensorboardX import SummaryWriter
 
-from epam.torch_common import pick_device, PositionalEncoding
+from epam.torch_common import clamp_probability, pick_device, PositionalEncoding
 import epam.molevol as molevol
 import epam.sequences as sequences
 from epam.sequences import translate_sequences
@@ -82,7 +82,6 @@ class PCPDataset(Dataset):
         self.update_neutral_aa_mut_probs()
 
     def update_neutral_aa_mut_probs(self):
-        min_neutral_prob = 1e-8
         print("predicting mutabilities and substitutions...")
         (
             all_rates,
@@ -100,13 +99,11 @@ class PCPDataset(Dataset):
         ):
             parent_idxs = sequences.nt_idx_tensor_of_str(nt_parent)
 
-            # Making sure the rates tensor is of float type for numerical stability.
-            # TODO
             mut_probs = 1.0 - torch.exp(
-                -branch_length * torch.tensor(rates).squeeze().float()
+                -branch_length * torch.tensor(rates, dtype=torch.float).squeeze()
             )
             normed_subs_probs = molevol.normalize_sub_probs(
-                parent_idxs, torch.tensor(subs_probs).float()
+                parent_idxs, torch.tensor(subs_probs, dtype=torch.float)
             )
 
             neutral_aa_mut_prob = molevol.neutral_aa_mut_prob_v(
@@ -116,12 +113,12 @@ class PCPDataset(Dataset):
             )
 
             # Ensure that all values are positive before taking the log later
-            neutral_aa_mut_prob = torch.clamp(neutral_aa_mut_prob, min=min_neutral_prob)
+            neutral_aa_mut_prob = clamp_probability(neutral_aa_mut_prob)
 
             pad_len = self.max_aa_seq_len - neutral_aa_mut_prob.shape[0]
             if pad_len > 0:
                 neutral_aa_mut_prob = F.pad(
-                    neutral_aa_mut_prob, (0, pad_len), value=min_neutral_prob
+                    neutral_aa_mut_prob, (0, pad_len), value=1e-8
                 )
 
             neutral_aa_mut_prob_l.append(neutral_aa_mut_prob)
@@ -225,8 +222,7 @@ class TransformerBinarySelectionModel(nn.Module):
                 0
             )
             final_out = torch.exp(model_out)
-            # TODO think about if we can interpret model outputs greater than 1; in any case this makes problems if we have mutation*selection > 1
-            final_out = torch.clamp(final_out, min=1e-6, max=0.999)
+            final_out = clamp_probability(final_out)
 
         return final_out[: len(aa_str)]
 
@@ -292,10 +288,7 @@ class DNSMBurrito:
         # of bad parameter initialization. We clamp the predictions to be between
         # 0 and 0.999 to avoid this: out of range predictions can make NaNs
         # downstream.
-        # out_of_range_prediction_count = torch.sum(predictions > 1.0)
-        # if out_of_range_prediction_count > 0:
-        #     print(f"{out_of_range_prediction_count}\tpredictions out of range.")
-        predictions = torch.clamp(predictions, min=1e-6, max=0.999)
+        predictions = clamp_probability(predictions)
 
         return self.bce_loss(predictions, aa_subs_indicator)
 

@@ -106,7 +106,9 @@ def test_shmple_esm():
 
 def test_nasty_shmple_esm():
     shmple_esm = SHMpleESM(weights_directory=weights_path)
-    shmple_esm.write_aaprobs("data/wyatt_10x_loss_nan.csv", "_ignore/wyatt_10x_loss_nan.hdf5")
+    shmple_esm.write_aaprobs(
+        "data/wyatt_10x_loss_nan.csv", "_ignore/wyatt_10x_loss_nan.hdf5"
+    )
 
 
 def hdf5_files_identical(path_1, path_2, tol=1e-4):
