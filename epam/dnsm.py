@@ -88,7 +88,7 @@ class PCPDataset(Dataset):
             all_rates,
             all_subs_probs,
         ) = self.shmple_model.predict_mutabilities_and_substitutions(
-            self.nt_parents, [1.]*len(self.nt_parents)
+            self.nt_parents, [1.0] * len(self.nt_parents)
         )
 
         print("consolidating this into substitution probabilities...")
@@ -102,7 +102,9 @@ class PCPDataset(Dataset):
 
             # Making sure the rates tensor is of float type for numerical stability.
             # TODO
-            mut_probs = 1.0 - torch.exp(-branch_length * torch.tensor(rates).squeeze().float())
+            mut_probs = 1.0 - torch.exp(
+                -branch_length * torch.tensor(rates).squeeze().float()
+            )
             normed_subs_probs = molevol.normalize_sub_probs(
                 parent_idxs, torch.tensor(subs_probs).float()
             )
