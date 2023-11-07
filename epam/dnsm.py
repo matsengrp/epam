@@ -82,6 +82,7 @@ class PCPDataset(Dataset):
         self.update_neutral_aa_mut_probs()
 
     def update_neutral_aa_mut_probs(self):
+        min_neutral_prob = 1e-8
         print("predicting mutabilities and substitutions...")
         (
             all_rates,
@@ -112,14 +113,12 @@ class PCPDataset(Dataset):
             )
 
             # Ensure that all values are positive before taking the log later
-            # TODO log these?
-            neutral_aa_mut_prob = torch.clamp(neutral_aa_mut_prob, min=1e-6)
+            neutral_aa_mut_prob = torch.clamp(neutral_aa_mut_prob, min=min_neutral_prob)
 
             pad_len = self.max_aa_seq_len - neutral_aa_mut_prob.shape[0]
             if pad_len > 0:
-                # TODO: does this value matter? If we are masking correctly it shoudln't.
                 neutral_aa_mut_prob = F.pad(
-                    neutral_aa_mut_prob, (0, pad_len), value=1e-6
+                    neutral_aa_mut_prob, (0, pad_len), value=min_neutral_prob
                 )
 
             neutral_aa_mut_prob_l.append(neutral_aa_mut_prob)
