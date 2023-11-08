@@ -371,7 +371,7 @@ class OptimizableSHMple(SHMple):
 
             prev_log_branch_length = log_branch_length.clone()
 
-        return torch.exp(log_branch_length.detach())
+        return torch.exp(log_branch_length.detach()).item()
 
     def find_optimal_branch_lengths(self, nt_parents, nt_children, base_branch_lengths):
         optimal_lengths = []
