@@ -1,6 +1,11 @@
+import logging
+
 import fire
 import pandas as pd
-from epam import evaluation, models
+import numpy as np
+import h5py
+
+from epam import evaluation, models, shmple_precompute
 
 
 def aaprob(model_name, model_args, in_path, out_path):
@@ -51,6 +56,18 @@ def concatenate_csvs(
     result_df = pd.concat(dfs, ignore_index=True)
 
     result_df.to_csv(output_csv, index=False)
+
+
+def shmplify(weights_path, csv_path):
+    """
+    This command precomputes SHMple rates and substitution probabilities, and then
+    saves those values in an HDF5 file along with the whole original df from the CSV.
+
+    :param weights_path: Path to the directory containing the SHMple weights.
+    :param csv_path: Path to the CSV file containing the parent sequences.
+    """
+    output_hdf5_path = csv_path.replace(".csv", ".shmple.hdf5")
+    shmple_precompute.precompute_and_save(weights_path, csv_path, output_hdf5_path)
 
 
 def main():

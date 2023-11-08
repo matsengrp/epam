@@ -226,7 +226,7 @@ def aaprobs_of_parent_scaled_rates_and_sub_probs(
 
     Args:
         parent_idxs (torch.Tensor): Parent nucleotide indices. Shape should be (site_count,).
-        scaled_rates (torch.Tensor): Poisson rates of mutation per site, scaled by branch length. 
+        scaled_rates (torch.Tensor): Poisson rates of mutation per site, scaled by branch length.
                                      Shape should be (site_count,).
         sub_probs (torch.Tensor): Substitution probabilities per site: a 2D
                                   tensor with shape (site_count, 4).

@@ -227,7 +227,9 @@ class SHMple(BaseModel):
             [parent], [1.0]
         )
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return torch.tensor(rates.squeeze(), dtype=torch.float), molevol.normalize_sub_probs(
+        return torch.tensor(
+            rates.squeeze(), dtype=torch.float
+        ), molevol.normalize_sub_probs(
             parent_idxs, torch.tensor(subs, dtype=torch.float)
         )
 
@@ -250,7 +252,9 @@ class SHMple(BaseModel):
         """
         rates, subs = self.predict_rates_and_normed_subs_probs(parent)
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(parent_idxs, rates * branch_length, subs)
+        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
+            parent_idxs, rates * branch_length, subs
+        )
 
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         """
@@ -640,9 +644,7 @@ class WrappedBinaryMutSel(MutSel):
         def log_pcp_probability(log_branch_length: torch.Tensor):
             branch_length = torch.exp(log_branch_length)
             mut_probs = 1.0 - torch.exp(-branch_length * rates)
-            normed_subs_probs = molevol.normalize_sub_probs(
-                parent_idxs, subs_probs
-            )
+            normed_subs_probs = molevol.normalize_sub_probs(parent_idxs, subs_probs)
 
             neutral_aa_mut_prob = molevol.neutral_aa_mut_prob_v(
                 parent_idxs.reshape(-1, 3),
