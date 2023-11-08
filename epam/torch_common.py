@@ -5,8 +5,10 @@ from torch import nn, Tensor
 
 SMALL_PROB = 1e-8
 
+
 def clamp_probability(x: Tensor) -> Tensor:
     return torch.clamp(x, min=SMALL_PROB, max=(1.0 - SMALL_PROB))
+
 
 def pick_device():
     # check that CUDA is usable

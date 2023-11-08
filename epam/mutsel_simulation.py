@@ -1,10 +1,18 @@
 import numpy as np
 from epam.sequences import translate_sequence, NT_STR_SORTED, STOP_CODONS
 
+HYDROPHOBIC_AAS = set(list("AILMFWV"))
+
 
 def parent_position_is_hydrophobic(aa_str, pos, new_aa):
-    hydrophobic_aas = set(list("AILMFWV"))
-    return aa_str[pos] in hydrophobic_aas
+    return aa_str[pos] in HYDROPHOBIC_AAS
+
+
+def parent_position_is_next_to_hydrophobic(aa_str, pos, new_aa):
+    # return true if the position is next to a hydrophobic amino acid
+    left_is_good = pos != 0 and aa_str[pos - 1] in HYDROPHOBIC_AAS
+    right_is_good = pos != len(aa_str) - 1 and aa_str[pos + 1] in HYDROPHOBIC_AAS
+    return left_is_good or right_is_good
 
 
 class MutSelSimulator:
