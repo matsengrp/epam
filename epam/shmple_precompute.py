@@ -28,7 +28,8 @@ def precompute_and_save(weights_path, csv_path, output_hdf5):
     with h5py.File(output_hdf5, "w") as h5f:
         # Store each set of rates and substitution probabilities in the HDF5 file
         for i, (rates, subs_probs) in enumerate(zip(all_rates, all_subs_probs)):
-            rates = rates.squeeze()
+            rates = rates.squeeze().astype(np.float32)
+            subs_probs = subs_probs.astype(np.float32)
             h5f.create_dataset(f"rates_{i}", data=rates)
             h5f.create_dataset(f"subs_probs_{i}", data=subs_probs)
 

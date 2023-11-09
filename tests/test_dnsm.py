@@ -1,11 +1,12 @@
 import pandas as pd
 from epam.dnsm import TransformerBinarySelectionModel, DNSMBurrito
+from epam.shmple_precompute import load_and_convert_to_tensors
 
 
 def test_dnsm():
     """Just make sure that the model trains."""
-    pcp_df = pd.read_csv("~/data/wyatt-10x-1p5m_pcp_2023-10-07.first100.csv")
-    shmple_weights_directory = "data/shmple_weights/my_shmoof"
+    # pcp_df = pd.read_csv("~/data/wyatt-10x-1p5m_pcp_2023-10-07.first100.csv")
+    pcp_df = load_and_convert_to_tensors("/Users/matsen/data/wyatt-10x-1p5m_pcp_2023-10-07.first100.shmple.hdf5")
 
     # filter out rows of pcp_df where the parent and child sequences are identical
     pcp_df = pcp_df[pcp_df["parent"] != pcp_df["child"]]
@@ -15,7 +16,6 @@ def test_dnsm():
 
     burrito = DNSMBurrito(
         pcp_df,
-        shmple_weights_directory,
         dnsm,
         batch_size=32,
         learning_rate=0.001,

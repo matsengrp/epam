@@ -26,7 +26,7 @@ from epam.sequences import (
     assert_pcp_lengths,
     translate_sequence,
 )
-from epam.torch_common import clamp_probability, pick_device
+from epam.torch_common import pick_device, optimize_branch_length
 import epam.utils as utils
 
 with resources.path("epam", "__init__.py") as p:
@@ -330,7 +330,7 @@ class OptimizableSHMple(SHMple):
 
         return log_pcp_probability
 
-    def _find_optimal_branch_length(self, parent, child, base_branch_length):
+    def _find_optimal_branch_length(self, parent, child, starting_branch_length):
         """
         Find the optimal branch length for a parent-child pair in terms of
         nucleotide likelihood.
@@ -338,7 +338,7 @@ class OptimizableSHMple(SHMple):
         Parameters:
         parent (str): The parent sequence.
         child (str): The child sequence.
-        base_branch_length (float): The branch length used to initialize the optimization.
+        starting_branch_length (float): The branch length used to initialize the optimization.
 
         Returns:
         Tensor: The optimal branch length.
@@ -349,48 +349,9 @@ class OptimizableSHMple(SHMple):
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, rates, sub_probs
         )
-
-        log_branch_length = torch.tensor(np.log(base_branch_length), requires_grad=True)
-
-        optimizer = optim.Adam([log_branch_length], lr=self.learning_rate)
-        prev_log_branch_length = log_branch_length.clone()
-
-        for step_idx in range(self.max_optimization_steps):
-            optimizer.zero_grad()
-
-            loss = -log_pcp_probability(log_branch_length)
-            assert not torch.isnan(
-                loss
-            ), "Loss is NaN: perhaps selection has given a probability of zero?"
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_([log_branch_length], max_norm=2.5)
-            optimizer.step()
-            assert not torch.isnan(log_branch_length)
-
-            change_in_log_branch_length = torch.abs(
-                log_branch_length - prev_log_branch_length
-            )
-            if change_in_log_branch_length < self.optimization_tol:
-                break
-
-            prev_log_branch_length = log_branch_length.clone()
-
-        return torch.exp(log_branch_length.detach()).item()
-
-    def find_optimal_branch_lengths(self, nt_parents, nt_children, base_branch_lengths):
-        optimal_lengths = []
-
-        for parent, child, base_length in tqdm(
-            zip(nt_parents, nt_children, base_branch_lengths),
-            total=len(nt_parents),
-            desc="Finding optimal branch lengths",
-        ):
-            optimal_lengths.append(
-                self._find_optimal_branch_length(parent, child, base_length)
-            )
-
-        return torch.tensor(optimal_lengths)
-
+        return optimize_branch_length(log_pcp_probability, starting_branch_length, self.learning_rate, self.max_optimization_steps, self.optimization_tol)
+        
+    
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         base_branch_length = sequences.mutation_frequency(parent, child)
         branch_length = self._find_optimal_branch_length(
@@ -589,12 +550,8 @@ class WrappedBinaryMutSel(MutSel):
         self.selection_model = selection_model
 
     def build_selection_matrix_from_parent(self, parent: str):
-        # TODO for the time being we aren't going to use this because we have overriden _build_log_pcp_probability below
-        assert False
-        # TODO consder this always taking an amino acid sequence
         parent = translate_sequence(parent)
         # We need to take our binary selection matrix and turn it into a selection matrix which gives the same weight to each off-diagonal element.
-        # TODO don't we want to do all of this in torch land?
         selection_factors = self.selection_model.selection_factors_of_aa_str(parent)
         parent_idxs = sequences.aa_idx_array_of_str(parent)
 
@@ -617,46 +574,3 @@ class WrappedBinaryMutSel(MutSel):
 
         return torch.tensor(selection_matrix, dtype=torch.float)
 
-    def _build_log_pcp_probability(
-        self, parent: str, child: str, rates: Tensor, sub_probs: Tensor
-    ):
-        """
-        This version of _build_log_pcp_probability directly expresses BCELoss
-        so that we're minimizing the same loss as the NN when we're optimizing
-        branch length.
-        """
-
-        assert len(parent) % 3 == 0
-
-        rates, subs_probs = self.predict_rates_and_normed_subs_probs(parent)
-        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        aa_parent = translate_sequence(parent)
-        aa_child = translate_sequence(child)
-        aa_subs_indicator = torch.tensor(
-            [p != c for p, c in zip(aa_parent, aa_child)], dtype=torch.float
-        )
-
-        selection_factors = self.selection_model.selection_factors_of_aa_str(
-            aa_parent
-        ).to("cpu")
-        bce_loss = torch.nn.BCELoss()
-
-        def log_pcp_probability(log_branch_length: torch.Tensor):
-            branch_length = torch.exp(log_branch_length)
-            mut_probs = 1.0 - torch.exp(-branch_length * rates)
-            normed_subs_probs = molevol.normalize_sub_probs(parent_idxs, subs_probs)
-
-            neutral_aa_mut_prob = molevol.neutral_aa_mut_prob_v(
-                parent_idxs.reshape(-1, 3),
-                mut_probs.reshape(-1, 3),
-                normed_subs_probs.reshape(-1, 3, 4),
-            )
-
-            neutral_aa_mut_prob = clamp_probability(neutral_aa_mut_prob)
-            predictions = neutral_aa_mut_prob * selection_factors
-            predictions = clamp_probability(predictions)
-
-            # negative because BCELoss is negative log likelihood
-            return -bce_loss(predictions, aa_subs_indicator)
-
-        return log_pcp_probability

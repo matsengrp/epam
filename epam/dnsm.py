@@ -19,22 +19,22 @@ from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
 
-from tensorboardX import SummaryWriter
+import numpy as np
 
-from epam.torch_common import clamp_probability, pick_device, PositionalEncoding
+from tensorboardX import SummaryWriter
+from tqdm import tqdm
+
+from epam.torch_common import clamp_probability, stack_heterogeneous, pick_device, PositionalEncoding, optimize_branch_length
 import epam.molevol as molevol
 import epam.sequences as sequences
-from epam.sequences import translate_sequences
-from epam.models import WrappedBinaryMutSel
-
-from shmple import AttentionModel
-
+from epam.sequences import translate_sequence, translate_sequences
 
 class PCPDataset(Dataset):
-    def __init__(self, nt_parents, nt_children, shmple_model):
+    def __init__(self, nt_parents, nt_children, all_rates, all_subs_probs):
         self.nt_parents = nt_parents
         self.nt_children = nt_children
-        self.shmple_model = shmple_model
+        self.all_rates = stack_heterogeneous(all_rates.reset_index(drop=True))
+        self.all_subs_probs = stack_heterogeneous(all_subs_probs.reset_index(drop=True))
 
         assert len(self.nt_parents) == len(self.nt_children)
         pcp_count = len(self.nt_parents)
@@ -82,29 +82,20 @@ class PCPDataset(Dataset):
         self.update_neutral_aa_mut_probs()
 
     def update_neutral_aa_mut_probs(self):
-        print("predicting mutabilities and substitutions...")
-        (
-            all_rates,
-            all_subs_probs,
-        ) = self.shmple_model.predict_mutabilities_and_substitutions(
-            self.nt_parents, [1.0] * len(self.nt_parents)
-        )
 
-        print("consolidating this into substitution probabilities...")
+        print("consolidating shmple rates into substitution probabilities...")
 
         neutral_aa_mut_prob_l = []
 
         for nt_parent, rates, branch_length, subs_probs in zip(
-            self.nt_parents, all_rates, self._branch_lengths, all_subs_probs
+            self.nt_parents, self.all_rates, self._branch_lengths, self.all_subs_probs
         ):
             parent_idxs = sequences.nt_idx_tensor_of_str(nt_parent)
+            parent_len = len(nt_parent)
 
-            mut_probs = 1.0 - torch.exp(
-                -branch_length * torch.tensor(rates, dtype=torch.float).squeeze()
-            )
-            normed_subs_probs = molevol.normalize_sub_probs(
-                parent_idxs, torch.tensor(subs_probs, dtype=torch.float)
-            )
+            mut_probs = 1.0 - torch.exp(-branch_length * rates[:parent_len])
+            # TODO don't we normalize already?
+            normed_subs_probs = molevol.normalize_sub_probs(parent_idxs, subs_probs[:parent_len,:])
 
             neutral_aa_mut_prob = molevol.neutral_aa_mut_prob_v(
                 parent_idxs.reshape(-1, 3),
@@ -134,6 +125,8 @@ class PCPDataset(Dataset):
             "subs_indicator": self.aa_subs_indicator_tensor[idx],
             "padding_mask": self.padding_mask[idx],
             "log_neutral_aa_mut_probs": self.log_neutral_aa_mut_probs[idx],
+            "rates": self.all_rates[idx],
+            "subs_probs": self.all_subs_probs[idx],
         }
 
 
@@ -231,7 +224,6 @@ class DNSMBurrito:
     def __init__(
         self,
         pcp_df,
-        shmple_weights_directory,
         dnsm,
         batch_size=32,
         learning_rate=0.001,
@@ -244,22 +236,21 @@ class DNSMBurrito:
         self.checkpoint_dir = checkpoint_dir
 
         print("preparing data...")
-        nt_parents = pcp_df["parent"]
-        nt_children = pcp_df["child"]
+        nt_parents = pcp_df["parent"].reset_index(drop=True)
+        nt_children = pcp_df["child"].reset_index(drop=True)
+        rates = pcp_df["rates"].reset_index(drop=True)
+        subs_probs = pcp_df["subs_probs"].reset_index(drop=True)
 
         train_len = int(0.8 * len(nt_parents))
         train_parents, val_parents = nt_parents[:train_len], nt_parents[train_len:]
         train_children, val_children = nt_children[:train_len], nt_children[train_len:]
-
-        shmple_model = AttentionModel(
-            weights_dir=shmple_weights_directory, log_level=logging.WARNING
-        )
-        self.wrapped_dnsm = WrappedBinaryMutSel(self.dnsm, shmple_weights_directory)
+        train_rates, val_rates = rates[:train_len], rates[train_len:]
+        train_subs_probs, val_subs_probs = subs_probs[:train_len], subs_probs[train_len:]
 
         # It's important to make separate PCPDatasets for training and validation
         # because the maximum sequence length can differ between those two.
-        self.train_set = PCPDataset(train_parents, train_children, shmple_model)
-        self.val_set = PCPDataset(val_parents, val_children, shmple_model)
+        self.train_set = PCPDataset(train_parents, train_children, train_rates, train_subs_probs)
+        self.val_set = PCPDataset(val_parents, val_children, val_rates, val_subs_probs)
 
         self.optimizer = optim.Adam(self.dnsm.parameters(), lr=learning_rate)
         self.device = self.dnsm.device
@@ -369,8 +360,77 @@ class DNSMBurrito:
 
         self.writer.close()
 
+    def _build_log_pcp_probability(
+        self, parent: str, child: str, rates: Tensor, subs_probs: Tensor
+    ):
+        """
+        This version of _build_log_pcp_probability directly expresses BCELoss
+        so that we're minimizing the same loss as the NN when we're optimizing
+        branch length.
+        """
+
+        assert len(parent) % 3 == 0
+
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
+        aa_parent = translate_sequence(parent)
+        aa_child = translate_sequence(child)
+        aa_subs_indicator = torch.tensor(
+            [p != c for p, c in zip(aa_parent, aa_child)], dtype=torch.float
+        )
+
+        selection_factors = self.dnsm.selection_factors_of_aa_str(
+            aa_parent
+        ).to("cpu")
+        bce_loss = torch.nn.BCELoss()
+
+        def log_pcp_probability(log_branch_length: torch.Tensor):
+            branch_length = torch.exp(log_branch_length)
+            mut_probs = 1.0 - torch.exp(-branch_length * rates)
+            normed_subs_probs = molevol.normalize_sub_probs(parent_idxs, subs_probs)
+
+            neutral_aa_mut_prob = molevol.neutral_aa_mut_prob_v(
+                parent_idxs.reshape(-1, 3),
+                mut_probs.reshape(-1, 3),
+                normed_subs_probs.reshape(-1, 3, 4),
+            )
+
+            neutral_aa_mut_prob = clamp_probability(neutral_aa_mut_prob)
+            predictions = neutral_aa_mut_prob * selection_factors
+            predictions = clamp_probability(predictions)
+
+            # negative because BCELoss is negative log likelihood
+            return -bce_loss(predictions, aa_subs_indicator)
+
+        return log_pcp_probability
+
+    def _find_optimal_branch_length(self, parent, child, rates, subs_probs, starting_branch_length):
+        if parent == child:
+            return 0.0
+        log_pcp_probability = self._build_log_pcp_probability(
+            parent, child, rates, subs_probs
+        )
+        return optimize_branch_length(log_pcp_probability, starting_branch_length)
+
+    def find_optimal_branch_lengths(self, nt_parents, nt_children, all_rates, all_subs_probs, starting_branch_lengths):
+        optimal_lengths = []
+
+        for parent, child, rates, subs_probs, starting_length in tqdm(
+            zip(nt_parents, nt_children, all_rates, all_subs_probs, starting_branch_lengths),
+            total=len(nt_parents),
+            desc="Finding optimal branch lengths",
+        ):
+
+            optimal_lengths.append(
+                self._find_optimal_branch_length(parent, child, rates[:len(parent)], subs_probs[:len(parent),:], starting_length)
+            )
+
+        return np.array(optimal_lengths)
+            
+  
     def optimize_branch_lengths(self):
         for dataset in [self.train_set, self.val_set]:
-            dataset.branch_lengths = self.wrapped_dnsm.find_optimal_branch_lengths(
-                dataset.nt_parents, dataset.nt_children, dataset.branch_lengths
+            dataset.branch_lengths = self.find_optimal_branch_lengths(
+                dataset.nt_parents, dataset.nt_children, dataset.all_rates, dataset.all_subs_probs, dataset.branch_lengths
             )
+            
+            

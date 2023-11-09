@@ -1,6 +1,8 @@
 import math
 
+import numpy as np
 import torch
+import torch.optim as optim
 from torch import nn, Tensor
 
 SMALL_PROB = 1e-8
@@ -8,6 +10,48 @@ SMALL_PROB = 1e-8
 
 def clamp_probability(x: Tensor) -> Tensor:
     return torch.clamp(x, min=SMALL_PROB, max=(1.0 - SMALL_PROB))
+
+
+def stack_heterogeneous(tensors, pad_value=0.0):
+    """
+    Stack an iterable of 1D or 2D torch.Tensor objects of different lengths along the first dimension into a single tensor.
+
+    Parameters:
+    tensors (iterable): An iterable of 1D or 2D torch.Tensor objects with variable lengths in the first dimension.
+    pad_value (number): The value used for padding shorter tensors. Default is 0.
+
+    Returns:
+    torch.Tensor: A stacked tensor with all input tensors padded to the length of the longest tensor in the first dimension.
+    """
+    if tensors is None or len(tensors) == 0:
+        return torch.Tensor()  # Return an empty tensor if no tensors are provided
+
+    dim = tensors[0].dim()
+    if dim not in [1, 2]:
+        raise ValueError("This function only supports 1D or 2D tensors.")
+
+    max_length = max(tensor.size(0) for tensor in tensors)
+
+    if dim == 1:
+        # If 1D, simply pad the end of the tensor.
+        padded_tensors = [
+            torch.nn.functional.pad(
+                tensor, (0, max_length - tensor.size(0)), value=pad_value
+            )
+            for tensor in tensors
+        ]
+    else:
+        # If 2D, pad the end of the first dimension (rows); the argument to pad
+        # is a tuple of (padding_left, padding_right, padding_top,
+        # padding_bottom)
+        padded_tensors = [
+            torch.nn.functional.pad(
+                tensor, (0, 0, 0, max_length - tensor.size(0)), value=pad_value
+            )
+            for tensor in tensors
+        ]
+
+    return torch.stack(padded_tensors)
 
 
 def pick_device():
@@ -51,3 +95,49 @@ class PositionalEncoding(nn.Module):
         """
         x = x + self.pe[: x.size(0)]
         return self.dropout(x)
+
+
+def optimize_branch_length(
+    log_prob_fn,
+    starting_branch_length,
+    learning_rate=0.1,
+    max_optimization_steps=1000,
+    optimization_tol=1e-3,
+    log_branch_length_lower_threshold=-10.0,
+):
+    log_branch_length = torch.tensor(np.log(starting_branch_length), requires_grad=True)
+
+    optimizer = optim.Adam([log_branch_length], lr=learning_rate)
+    prev_log_branch_length = log_branch_length.clone()
+
+    for step_idx in range(max_optimization_steps):
+        
+        # For some PCPs, the optimizer works very hard optimizing very tiny branch lengths.
+        if log_branch_length < log_branch_length_lower_threshold:
+            break
+
+        optimizer.zero_grad()
+
+        loss = -log_prob_fn(log_branch_length)
+        assert not torch.isnan(
+            loss
+        ), "Loss is NaN: perhaps selection has given a probability of zero?"
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_([log_branch_length], max_norm=5.0)
+        optimizer.step()
+        assert not torch.isnan(log_branch_length)
+
+        change_in_log_branch_length = torch.abs(
+            log_branch_length - prev_log_branch_length
+        )
+        if change_in_log_branch_length < optimization_tol:
+            break
+
+        prev_log_branch_length = log_branch_length.clone()
+
+    if step_idx == max_optimization_steps - 1:
+        print(
+            f"Warning: optimization did not converge after {max_optimization_steps} steps"
+        )   
+
+    return torch.exp(log_branch_length.detach()).item()
