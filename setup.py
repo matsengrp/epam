@@ -15,6 +15,7 @@ setup(
         "matplotlib >= 3.4.3",
         "pandas >= 1.3.3",
         "biopython >= 1.79",
+        "seaborn",
         "statsmodels",
         "fire",
     ],

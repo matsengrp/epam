@@ -234,6 +234,8 @@ class DNSMBurrito:
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.checkpoint_dir = checkpoint_dir
+        self.global_train_step = 0
+        self.global_val_step = 0
 
         print("preparing data...")
         nt_parents = pcp_df["parent"].reset_index(drop=True)
@@ -314,8 +316,8 @@ class DNSMBurrito:
         avg_train_loss_epoch_zero = self.compute_avg_loss(train_loader)
         self.dnsm.eval()
         avg_val_loss_epoch_zero = self.compute_avg_loss(val_loader)
-        self.writer.add_scalar("Training Loss", avg_train_loss_epoch_zero, 0)
-        self.writer.add_scalar("Validation Loss", avg_val_loss_epoch_zero, 0)
+        self.writer.add_scalar("Training Loss", avg_train_loss_epoch_zero, self.global_train_step)
+        self.writer.add_scalar("Validation Loss", avg_val_loss_epoch_zero, self.global_val_step)
         print(
             f"Epoch [0/{num_epochs}], Training Loss: {avg_train_loss_epoch_zero}, Validation Loss: {avg_val_loss_epoch_zero}"
         )
@@ -330,8 +332,9 @@ class DNSMBurrito:
                 loss.backward()
                 self.optimizer.step()
                 self.writer.add_scalar(
-                    "Training Loss", loss.item(), epoch * len(train_loader) + i
+                    "Training Loss", loss.item(), self.global_train_step
                 )
+                self.global_train_step += 1
 
             # Validation Loop
             self.dnsm.eval()
@@ -341,7 +344,8 @@ class DNSMBurrito:
                     val_loss += self.loss_of_batch(batch).item()
 
                 avg_val_loss = val_loss / len(val_loader)
-                self.writer.add_scalar("Validation Loss", avg_val_loss, epoch)
+                self.writer.add_scalar("Validation Loss", avg_val_loss, self.global_val_step)
+                self.global_val_step += 1
 
                 # Save model checkpoint
                 torch.save(
@@ -354,11 +358,10 @@ class DNSMBurrito:
                     f"{self.checkpoint_dir}/model_epoch_{epoch}.pth",
                 )
 
+            self.writer.flush()
             print(
                 f"Epoch [{epoch + 1}/{num_epochs}], Training Loss: {loss.item()}, Validation Loss: {avg_val_loss}"
             )
-
-        self.writer.close()
 
     def _build_log_pcp_probability(
         self, parent: str, child: str, rates: Tensor, subs_probs: Tensor
