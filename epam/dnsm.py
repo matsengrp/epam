@@ -192,6 +192,7 @@ class TransformerBinarySelectionModel(nn.Module):
         # NOTE: not masking due to MPS bug
         out = self.encoder(parent_onehots)  # , src_key_padding_mask=padding_mask)
         out = self.linear(out)
+        out = F.logsigmoid(out)
         return out.squeeze(-1)
 
     def selection_factors_of_aa_str(self, aa_str: str):
@@ -215,7 +216,6 @@ class TransformerBinarySelectionModel(nn.Module):
                 0
             )
             final_out = torch.exp(model_out)
-            final_out = clamp_probability(final_out)
 
         return final_out[: len(aa_str)]
 
@@ -277,6 +277,7 @@ class DNSMBurrito:
         predictions = predictions.masked_select(~padding_mask)
         aa_subs_indicator = aa_subs_indicator.masked_select(~padding_mask)
 
+        # TODO this shouldn't be necessary any more because of the log sigmoid activation.
         # In the early stages of training, we can get probabilities > 1.0 because
         # of bad parameter initialization. We clamp the predictions to be between
         # 0 and 0.999 to avoid this: out of range predictions can make NaNs
