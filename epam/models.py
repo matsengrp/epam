@@ -123,69 +123,6 @@ class BaseModel(ABC):
                     )
 
 
-class AbLang(BaseModel):
-    def __init__(self, chain="heavy", model_name=None):
-        """
-        Initialize AbLang model with specified chain and create amino acid string.
-
-        Parameters:
-        chain (str): Name of the chain, default is "heavy".
-        model_name (str, optional): The name of the model. If not specified, the class name is used.
-
-        """
-        super().__init__(model_name=model_name)
-        self.model = ablang.pretrained(chain)
-        self.model.freeze()
-        vocab_dict = self.model.tokenizer.vocab_to_aa
-        self.aa_str = "".join([vocab_dict[i + 1] for i in range(20)])
-        self.aa_str_sorted_indices = np.argsort(list(self.aa_str))
-        assert AA_STR_SORTED == "".join(
-            np.array(list(self.aa_str))[self.aa_str_sorted_indices]
-        )
-
-    def probability_array_of_seq(self, seq: str):
-        """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
-
-        Parameters:
-        seq (str): The sequence for which we want the array of probabilities.
-
-        Returns:
-        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
-
-        """
-        likelihoods = self.model([seq], mode="likelihood")
-
-        # Apply softmax to the second dimension, and skip the first and last
-        # elements (which are the probability of the start and end token).
-        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1])
-
-        # Sort the second dimension according to the sorted amino acid string.
-        arr_sorted = arr[:, self.aa_str_sorted_indices]
-        assert len(seq) == arr_sorted.shape[0]
-
-        return arr_sorted
-
-    def aaprobs_of_parent_child_pair(self, parent: str, child=None) -> np.ndarray:
-        """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
-
-        Parameters:
-        parent (str): The parent sequence for which we want the array of probabilities.
-        child (str): The child sequence (ignored for AbLang model).
-
-        Returns:
-        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
-
-        """
-        parent_aa = translate_sequences([parent])[0]
-        return self.probability_array_of_seq(parent_aa)
-
-
 class SHMple(BaseModel):
     def __init__(self, weights_directory: str, model_name=None):
         """
@@ -498,6 +435,69 @@ class TorchModel(BaseModel):
         else:
             print("Using CPU")
             self.device = torch.device("cpu")
+
+
+class AbLang(TorchModel):
+    def __init__(self, chain="heavy", model_name=None):
+        """
+        Initialize AbLang model with specified chain and create amino acid string.
+
+        Parameters:
+        chain (str): Name of the chain, default is "heavy".
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
+
+        """
+        super().__init__(model_name=model_name)
+        self.model = ablang.pretrained(chain, device = self.device)
+        self.model.freeze()
+        vocab_dict = self.model.tokenizer.vocab_to_aa
+        self.aa_str = "".join([vocab_dict[i + 1] for i in range(20)])
+        self.aa_str_sorted_indices = np.argsort(list(self.aa_str))
+        assert AA_STR_SORTED == "".join(
+            np.array(list(self.aa_str))[self.aa_str_sorted_indices]
+        )
+
+    def probability_array_of_seq(self, seq: str):
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
+
+        Parameters:
+        seq (str): The sequence for which we want the array of probabilities.
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+
+        """
+        likelihoods = self.model([seq], mode="likelihood")
+
+        # Apply softmax to the second dimension, and skip the first and last
+        # elements (which are the probability of the start and end token).
+        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1])
+
+        # Sort the second dimension according to the sorted amino acid string.
+        arr_sorted = arr[:, self.aa_str_sorted_indices]
+        assert len(seq) == arr_sorted.shape[0]
+
+        return arr_sorted
+
+    def aaprobs_of_parent_child_pair(self, parent: str, child=None) -> np.ndarray:
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
+
+        Parameters:
+        parent (str): The parent sequence for which we want the array of probabilities.
+        child (str): The child sequence (ignored for AbLang model).
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+
+        """
+        parent_aa = translate_sequences([parent])[0]
+        return self.probability_array_of_seq(parent_aa)
 
 
 class ESM1v(TorchModel):

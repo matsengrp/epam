@@ -103,6 +103,7 @@ def evaluate_dataset(aaprob_path):
 
     model_performance = {
         "data_set": pcp_path,
+        "pcp_count": len(pcp_df),
         "model": model_name,
         "sub_accuracy": sub_acc,
         "r_precision": r_prec,
