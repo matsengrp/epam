@@ -166,7 +166,11 @@ def calculate_site_substitution_probabilities(aaprobs, parent_aa):
 
     """
     site_sub_probs = [
-        np.sum(aaprobs[i, :][[AA_STR_SORTED.index(aa) for aa in AA_STR_SORTED if aa != parent_aa[i]]])
+        np.sum(
+            aaprobs[i, :][
+                [AA_STR_SORTED.index(aa) for aa in AA_STR_SORTED if aa != parent_aa[i]]
+            ]
+        )
         for i in range(len(parent_aa))
     ]
 

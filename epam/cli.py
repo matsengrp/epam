@@ -1,6 +1,6 @@
 import fire
 import pandas as pd
-from epam import evaluation, models
+from epam import evaluation, models, esm_precompute
 
 
 def aaprob(model_name, model_args, in_path, out_path):
@@ -52,6 +52,14 @@ def concatenate_csvs(
 
     result_df.to_csv(output_csv, index=False)
 
+def esm_bulk_precompute(csv_path):
+    """
+    This function enables precomputation of ESM1v selection factors for a set of PCPs in bulk, and then saves those values in an HDF5 file for later use in SHMple-ESM.
+
+    :param csv_path: Path to a CSV file containing PCP data.
+    """
+    output_hdf5_path = csv_path.replace(".csv", ".hdf5")
+    esm_precompute.precompute_and_save(csv_path, output_hdf5_path)
 
 def main():
     fire.Fire()
