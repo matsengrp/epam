@@ -502,7 +502,7 @@ class AbLang(TorchModel):
         return self.probability_array_of_seq(parent_aa)
 
 
-class CachedESM1v(BaseModel): 
+class CachedESM1v(BaseModel):
     def __init__(self, hdf5_path, model_name=None):
         """
         Initialize ESM1v with cached selection matrices generated in esm_precompute.py.
