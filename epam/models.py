@@ -7,7 +7,9 @@ import shmple
 import torch
 import torch.optim as optim
 from torch import Tensor
-from esm import pretrained
+
+# from esm import pretrained
+from epam.esm_precompute import precompute_and_save, load_and_convert_to_dict
 import h5py
 import numpy as np
 import pandas as pd
@@ -40,11 +42,14 @@ FULLY_SPECIFIED_MODELS = [
         "SHMple",
         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
     ),
-    # ("ESM1v_default", "ESM1v", {}),
+    ("ESM1v_default", "CachedESM1v", {"hdf5_path": "smart_way_to_pcp_hdf5"}),
     (
         "SHMple_ESM1v",
         "SHMpleESM",
-        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
+        {
+            "hdf5_path": "smart_way_to_pcp_hdf5",
+            "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
+        },
     ),
 ]
 
@@ -497,75 +502,45 @@ class AbLang(TorchModel):
         return self.probability_array_of_seq(parent_aa)
 
 
-# class ESM1v(TorchModel):
-#     def __init__(self, model_name=None):
-#         """
-#         Initialize ESM1v model; currently using #1 of 5 models in ensemble.
+class CachedESM1v(BaseModel): 
+    def __init__(self, hdf5_path, model_name=None):
+        """
+        Initialize ESM1v with cached selection matrices generated in esm_precompute.py.
 
-#         Parameters:
-#         model_name (str, optional): The name of the model. If not specified, the class name is used.
+        Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
+        model_name (str, optional): The name of the model.
+        """
+        super().__init__(model_name=model_name)
+        self.selection_matrices = load_and_convert_to_dict(hdf5_path)
 
-#         """
-#         super().__init__(model_name=model_name)
-#         self.model, self.alphabet = pretrained.load_model_and_alphabet(
-#             "esm1v_t33_650M_UR90S_1"
-#         )
-#         self.model.eval()
-#         self.model = self.model.to(self.device)
-#         self.aa_idxs = [self.alphabet.get_idx(aa) for aa in AA_STR_SORTED]
+    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+        """
+        Find probability matrix corresponding to parent sequence via lookup table.
 
-#     def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
-#         """
-#         Generate a numpy array of the normalized probability of the various amino acids by site according to the ESM-1v_1 model.
+        Parameters:
+        parent (str): The parent sequence for which we want the array of probabilities.
+        child (str): The child sequence (ignored for ESM1v model)
 
-#         The rows of the array correspond to the amino acids sorted alphabetically.
-
-#         Parameters:
-#         parent (str): The parent sequence for which we want the array of probabilities.
-#         child (str): The child sequence (ignored for AbLang model)
-
-#         Returns:
-#         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
-
-#         """
-#         batch_converter = self.alphabet.get_batch_converter()
-
-#         parent_aa = translate_sequences([parent])[0]
-#         data = [
-#             ("protein1", parent_aa),
-#         ]
-
-#         batch_tokens = batch_converter(data)[2]
-
-#         # Get token probabilities before softmax so we can restrict to 20 amino
-#         # acids in softmax calculation.
-#         with torch.no_grad():
-#             batch_tokens = batch_tokens.to(self.device)
-#             token_probs_pre_softmax = self.model(batch_tokens)["logits"]
-
-#         aa_probs = torch.softmax(token_probs_pre_softmax[..., self.aa_idxs], dim=-1)
-
-#         aa_probs_np = aa_probs.cpu().numpy().squeeze()
-
-#         # Drop first and last elements, which are the probability of the start
-#         # and end token.
-#         prob_matrix = aa_probs_np[1:-1, :]
-
-#         assert prob_matrix.shape[0] == len(parent_aa)
-
-#         return prob_matrix
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+        """
+        assert parent in self.selection_matrices.keys()
+        return self.selection_matrices[parent]
 
 
 class SHMpleESM(MutSel):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, hdf5_path, *args, **kwargs):
         """
         Initialize a mutation-selection model using SHMple for the mutation part and ESM-1v_1 for the selection part.
+
         Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
         weights_directory (str): Directory path to trained SHMple model weights.
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         """
         super().__init__(*args, **kwargs)
-        self.selection_model = ESM1v()
+        self.selection_model = CachedESM1v(hdf5_path)
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))

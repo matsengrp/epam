@@ -1,5 +1,5 @@
 """
-This module enables precomputation of ESM1v selection factors for a set of PCPs in bulk, and then loading those saved values into tensors?.
+This module enables precomputation of ESM1v selection factors for a set of PCPs in bulk, and then loading those saved values into a dictionary.
 """
 import numpy as np
 import pandas as pd
@@ -24,6 +24,7 @@ def precompute_and_save(pcp_path, output_hdf5):
     pcp_path (str): Path to a CSV file containing PCP data.
     output_hdf5 (str): Path to the output HDF5 file.
     """
+
     # Check that CUDA is usable
     def check_CUDA():
         try:
@@ -63,6 +64,9 @@ def precompute_and_save(pcp_path, output_hdf5):
 
     pcp_df.apply(lambda row: assert_pcp_lengths(row["parent"], row["child"]), axis=1)
 
+    # Keep only unique parent sequences (remove duplicate computations and entries in HDF5 file)
+    pcp_df = pcp_df.drop_duplicates(subset=["parent"])
+
     # Translate parent sequences and format for ESM1v input
     sequences = pcp_df["parent"].tolist()
     sequences_aa = [translate_sequences([parent])[0] for parent in sequences]
@@ -94,13 +98,26 @@ def precompute_and_save(pcp_path, output_hdf5):
         outfile.attrs["pcp_filename"] = pcp_path
         outfile.attrs["model_name"] = "ESM1v_bulk"
 
-        for i in range(len(pcp_df)):
+        for i in range(len(sequences)):
             matrix = prob_matrix[i, :, :]
-            pcp_index = pcp_df.index[i]
-            # create a group for each matrix
-            grp = outfile.create_group(f"matrix{pcp_index}")
-            grp.attrs["pcp_index"] = i
-            grp.create_dataset(
-                "data", data=matrix, compression="gzip", compression_opts=4
+            parent = sequences[i]
+            outfile.create_dataset(
+                f"{parent}", data=matrix, compression="gzip", compression_opts=4
             )
 
+
+def load_and_convert_to_dict(hdf5_path):
+    """
+    Load precomputed ESM1v selection factors from an HDF5 file and convert to a dictionary.
+
+    hdf5_path (str): Path to the HDF5 file.
+    """
+    with h5py.File(hdf5_path, "r") as infile:
+        # initialize dictionary
+        parent_esm_dict = {}
+
+        # iterate through parent sequences and add to dictionary
+        for parent in infile:
+            parent_esm_dict[parent] = infile[parent][:]
+
+    return parent_esm_dict
