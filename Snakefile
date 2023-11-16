@@ -16,6 +16,17 @@ rule all:
         "output/combined_performance.csv",
 
 
+rule precompute_esm:
+    input:
+        in_csv="pcp_inputs/{pcp_input}.csv",
+    output:
+        out_hdf5="pcp_inputs/{pcp_input}.hdf5",
+    shell:
+        """
+        epam esm_bulk_precompute {input.in_csv}
+        """
+
+
 rule run_model:
     input:
         in_csv="pcp_inputs/{pcp_input}.csv",
