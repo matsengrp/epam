@@ -3,6 +3,7 @@ import numpy as np
 import torch
 import pytest
 import os
+from importlib import resources
 import epam.models
 from epam.esm_precompute import precompute_and_save
 from epam.esm_precompute import load_and_convert_to_dict
@@ -120,41 +121,17 @@ def hdf5_files_identical(path_1, path_2, tol=1e-4):
 
     return True
 
-# from importlib import resources
-# with resources.path("epam", "__init__.py") as p:
-#     DATA_DIR = str(p.parent.parent) + "/data/"
 
-# pcp_hdf5_path = DATA_DIR + "/10-random-from-10x.hdf5"
-
-# local_FULLY_SPECIFIED_MODELS = [
-#     ("AbLang_heavy", "AbLang", {"chain": "heavy"}),
-#     (
-#         "SHMple_default",
-#         "SHMple",
-#         {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
-#     ),
-#     (
-#         "SHMple_productive",
-#         "SHMple",
-#         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
-#     ),
-#     ("ESM1v_default", "CachedESM1v", {"hdf5_path": pcp_hdf5_path}),
-#     (
-#         "SHMple_ESM1v",
-#         "SHMpleESM",
-#         {
-#             "hdf5_path": pcp_hdf5_path,
-#             "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
-#         },
-#     ),
-# ]
+with resources.path("epam", "__init__.py") as p:
+    pcp_hdf5_path = str(p.parent.parent) + "/data/10-random-from-10x.hdf5"
 
 def test_snapshot():
     """Test that the current code produces the same results as a previously-built snapshot."""
     os.makedirs("_ignore", exist_ok=True)
-    #for model_name, model_class_str, model_args in local_FULLY_SPECIFIED_MODELS:
     for model_name, model_class_str, model_args in epam.models.FULLY_SPECIFIED_MODELS:
         print(f"Snapshot testing {model_name}")
+        if model_name in ("ESM1v_default", "SHMple_ESM1v"):
+            model_args["hdf5_path"] = pcp_hdf5_path
         source = "10-random-from-10x"
         ModelClass = getattr(epam.models, model_class_str)
         model = ModelClass(**model_args)
