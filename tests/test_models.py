@@ -4,14 +4,15 @@ import torch
 import pytest
 import os
 import epam.models
+from epam.esm_precompute import precompute_and_save
+from epam.esm_precompute import load_and_convert_to_dict
 from epam.sequences import translate_sequences
 from epam.models import (
     AbLang,
     SHMple,
     OptimizableSHMple,
     MutSel,
-    ESM1v,
-    SHMpleESM,
+    # CachedESM1v
 )
 
 parent_seqs = [
@@ -88,21 +89,19 @@ def test_mut_sel_probability():
     assert correct_prob == pytest.approx(calculated_prob, rel=1e-5)
 
 
-def test_esm():
-    esm_v1 = ESM1v()
-    aaprobs = esm_v1.aaprobs_of_parent_child_pair(parent_nt_seq)
-    child_aa_seq = translate_sequences([child_nt_seq])[0]
-    prob_vec = esm_v1.probability_vector_of_child_seq(aaprobs, child_aa_seq)
-    assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
+def test_cached_esm():
+    source = "10-random-from-10x"
+    pcp_file = f"data/{source}.csv"
+    hdf5_file = f"_ignore/{source}_cached.hdf5"
+    compare_file = f"data/{source}.hdf5"
 
+    precompute_and_save(pcp_file, hdf5_file)
+    cached_esm_dict = load_and_convert_to_dict(hdf5_file)
+    ref_esm_dict = load_and_convert_to_dict(compare_file)
 
-def test_shmple_esm():
-    shmple_esm = SHMpleESM(weights_directory=weights_path)
-    aaprobs = shmple_esm.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
-    child_aa_seq = translate_sequences([child_nt_seq])[0]
-    prob_vec = shmple_esm.probability_vector_of_child_seq(aaprobs, child_aa_seq)
-    assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
-
+    for key in cached_esm_dict.keys():
+        assert np.allclose(ref_esm_dict[key], cached_esm_dict[key])
+                        
 
 def hdf5_files_identical(path_1, path_2, tol=1e-4):
     """Return if two HDF5 files are identical."""
@@ -121,10 +120,39 @@ def hdf5_files_identical(path_1, path_2, tol=1e-4):
 
     return True
 
+# from importlib import resources
+# with resources.path("epam", "__init__.py") as p:
+#     DATA_DIR = str(p.parent.parent) + "/data/"
+
+# pcp_hdf5_path = DATA_DIR + "/10-random-from-10x.hdf5"
+
+# local_FULLY_SPECIFIED_MODELS = [
+#     ("AbLang_heavy", "AbLang", {"chain": "heavy"}),
+#     (
+#         "SHMple_default",
+#         "SHMple",
+#         {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
+#     ),
+#     (
+#         "SHMple_productive",
+#         "SHMple",
+#         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
+#     ),
+#     ("ESM1v_default", "CachedESM1v", {"hdf5_path": pcp_hdf5_path}),
+#     (
+#         "SHMple_ESM1v",
+#         "SHMpleESM",
+#         {
+#             "hdf5_path": pcp_hdf5_path,
+#             "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
+#         },
+#     ),
+# ]
 
 def test_snapshot():
     """Test that the current code produces the same results as a previously-built snapshot."""
     os.makedirs("_ignore", exist_ok=True)
+    #for model_name, model_class_str, model_args in local_FULLY_SPECIFIED_MODELS:
     for model_name, model_class_str, model_args in epam.models.FULLY_SPECIFIED_MODELS:
         print(f"Snapshot testing {model_name}")
         source = "10-random-from-10x"

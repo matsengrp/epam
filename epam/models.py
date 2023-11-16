@@ -7,9 +7,7 @@ import shmple
 import torch
 import torch.optim as optim
 from torch import Tensor
-
-# from esm import pretrained
-from epam.esm_precompute import precompute_and_save, load_and_convert_to_dict
+from epam.esm_precompute import load_and_convert_to_dict
 import h5py
 import numpy as np
 import pandas as pd
@@ -27,6 +25,8 @@ import epam.utils as utils
 with resources.path("epam", "__init__.py") as p:
     DATA_DIR = str(p.parent.parent) + "/data/"
 
+pcp_hdf5_path = DATA_DIR + "/10-random-from-10x.hdf5"
+
 # Here's a list of the models and configurations we will use in our tests and
 # pipeline.
 
@@ -42,12 +42,12 @@ FULLY_SPECIFIED_MODELS = [
         "SHMple",
         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
     ),
-    ("ESM1v_default", "CachedESM1v", {"hdf5_path": "smart_way_to_pcp_hdf5"}),
+    ("ESM1v_default", "CachedESM1v", {"hdf5_path": pcp_hdf5_path}),
     (
         "SHMple_ESM1v",
         "SHMpleESM",
         {
-            "hdf5_path": "smart_way_to_pcp_hdf5",
+            "hdf5_path": pcp_hdf5_path,
             "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
         },
     ),
@@ -525,7 +525,9 @@ class CachedESM1v(BaseModel):
         Returns:
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
         """
-        assert parent in self.selection_matrices.keys()
+        assert (
+            parent in self.selection_matrices.keys()
+        ), f"{parent} not present in CachedESM."
         return self.selection_matrices[parent]
 
 
