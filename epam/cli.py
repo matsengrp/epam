@@ -3,7 +3,7 @@ import pandas as pd
 from epam import evaluation, models, esm_precompute
 
 
-def aaprob(model_name, model_args, in_path, out_path):
+def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
     """
     Generate amino acid probability matrices using the specified model.
 
@@ -12,12 +12,16 @@ def aaprob(model_name, model_args, in_path, out_path):
         model_args (str): JSON string of arguments to pass to the model constructor.
         in_path (str): Path to the input file.
         out_path (str): Path where the output file will be written.
+        hdf5_path (str, optional): Path to the HDF5 file containing precomputed ESM1v selection factors.
 
     Examples:
         epam aaprob SHMple '{"weights_directory":"data/shmple_weights/my_shmoof"}' in_path out_path
     """
     ModelClass = getattr(models, model_name)
     model = ModelClass(**model_args)
+    if model_name in ("CachedESM1v", "SHMpleESM"):
+        print("Preloading ESM1v data...")
+        model.preload_esm_data(hdf5_path)
     model.write_aaprobs(in_path, out_path)
 
 
@@ -53,13 +57,12 @@ def concatenate_csvs(
     result_df.to_csv(output_csv, index=False)
 
 
-def esm_bulk_precompute(csv_path):
+def esm_bulk_precompute(csv_path, output_hdf5_path):
     """
     This function enables precomputation of ESM1v selection factors for a set of PCPs in bulk, and then saves those values in an HDF5 file for later use in SHMple-ESM.
 
     :param csv_path: Path to a CSV file containing PCP data.
     """
-    output_hdf5_path = csv_path.replace(".csv", ".hdf5")
     esm_precompute.precompute_and_save(csv_path, output_hdf5_path)
 
 

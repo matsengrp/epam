@@ -98,7 +98,7 @@ def precompute_and_save(pcp_path, output_hdf5):
             # Drop first and last element (adjusted for sequence length as ESM pads to largest seq len), which are the probability of the start
             # and end token.
             len_seq = len(sequences_aa[i])
-            matrix =  aa_probs_np[i, 1:len_seq + 1, :]
+            matrix = aa_probs_np[i, 1 : len_seq + 1, :]
             parent = sequences[i]
             outfile.create_dataset(
                 f"{parent}", data=matrix, compression="gzip", compression_opts=4

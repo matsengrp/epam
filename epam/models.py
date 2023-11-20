@@ -40,14 +40,11 @@ FULLY_SPECIFIED_MODELS = [
         "SHMple",
         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
     ),
-    ("ESM1v_default", "CachedESM1v", {"hdf5_path": "pcp_hdf5_path"}),
+    ("ESM1v_default", "CachedESM1v", {}),
     (
         "SHMple_ESM1v",
         "SHMpleESM",
-        {
-            "hdf5_path": "pcp_hdf5_path",
-            "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
-        },
+        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
     ),
 ]
 
@@ -501,15 +498,22 @@ class AbLang(TorchModel):
 
 
 class CachedESM1v(BaseModel):
-    def __init__(self, hdf5_path, model_name=None):
+    def __init__(self, model_name=None):
         """
         Initialize ESM1v with cached selection matrices generated in esm_precompute.py.
 
         Parameters:
-        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
         model_name (str, optional): The name of the model.
         """
         super().__init__(model_name=model_name)
+
+    def preload_esm_data(self, hdf5_path):
+        """
+        Preload ESM1v data from HDF5 file.
+
+        Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
+        """
         self.selection_matrices = load_and_convert_to_dict(hdf5_path)
 
     def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
@@ -530,17 +534,25 @@ class CachedESM1v(BaseModel):
 
 
 class SHMpleESM(MutSel):
-    def __init__(self, hdf5_path, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Initialize a mutation-selection model using SHMple for the mutation part and ESM-1v_1 for the selection part.
 
         Parameters:
-        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
         weights_directory (str): Directory path to trained SHMple model weights.
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         """
         super().__init__(*args, **kwargs)
-        self.selection_model = CachedESM1v(hdf5_path)
+
+    def preload_esm_data(self, hdf5_path):
+        """
+        Preload ESM1v data from HDF5 file.
+
+        Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
+        """
+        self.selection_model = CachedESM1v()
+        self.selection_matrices = self.selection_model.preload_esm_data(hdf5_path)
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))

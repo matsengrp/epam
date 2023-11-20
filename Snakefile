@@ -1,40 +1,11 @@
 import epam.models
 import json
 import subprocess
-from importlib import resources
 
-
-with resources.path("epam", "__init__.py") as p:
-    DATA_DIR = str(p.parent.parent) + "/data/"
-
-
-local_FULLY_SPECIFIED_MODELS = [
-    ("AbLang_heavy", "AbLang", {"chain": "heavy"}),
-    (
-        "SHMple_default",
-        "SHMple",
-        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
-    ),
-    (
-        "SHMple_productive",
-        "SHMple",
-        {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
-    ),
-    ("ESM1v_default", "CachedESM1v", {"hdf5_path": pcp_hdf5_path}),
-    (
-        "SHMple_ESM1v",
-        "SHMpleESM",
-        {
-            "hdf5_path": pcp_hdf5_path,
-            "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
-        },
-    ),
-]
 
 model_name_to_spec = {
     model_name: [model_class, json.dumps({**model_params, "model_name": model_name})]
-    # for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS
-    for model_name, model_class, model_params in local_FULLY_SPECIFIED_MODELS
+    for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS
 }
 
 pcp_inputs = glob_wildcards("pcp_inputs/{name}.csv").name
@@ -52,13 +23,14 @@ rule precompute_esm:
         out_hdf5="pcp_inputs/{pcp_input}.hdf5",
     shell:
         """
-        epam esm_bulk_precompute {input.in_csv}
+        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5}
         """
 
 
 rule run_model:
     input:
         in_csv="pcp_inputs/{pcp_input}.csv",
+        hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
         aaprob="output/{pcp_input}/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/{model_name}/performance.csv",
@@ -70,7 +42,7 @@ rule run_model:
     shell:
         """
         mkdir -p output/{wildcards.pcp_input}/{wildcards.model_name}
-        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob}
+        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
         epam evaluate {output.aaprob} {output.performance}
         """
 
