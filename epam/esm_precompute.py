@@ -61,7 +61,7 @@ def precompute_and_save(pcp_path, output_hdf5):
 
     # Translate parent sequences and format for ESM1v input
     sequences = pcp_df["parent"].tolist()
-    sequences_aa = [translate_sequences([parent])[0] for parent in sequences]
+    sequences_aa = translate_sequences(sequences)
     protein_ids = [f"protein{i}" for i in range(len(sequences))]
 
     data = list(zip(protein_ids, sequences_aa))
