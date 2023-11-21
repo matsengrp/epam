@@ -4,8 +4,8 @@ import h5py
 import pandas as pd
 import numpy as np
 from epam.sequences import AA_STR_SORTED
-from epam.utils import pcp_path_of_aaprob_path
-from epam.sequences import translate_sequences
+from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
+from epam.sequences import translate_sequences, pcp_criteria_check
 
 
 def evaluate(aaprob_paths, model_performance_path):
@@ -40,7 +40,7 @@ def evaluate_dataset(aaprob_path):
     """
     pcp_path = pcp_path_of_aaprob_path(aaprob_path)
 
-    pcp_df = pd.read_csv(pcp_path, index_col=0)
+    pcp_df = load_and_filter_pcp_df(pcp_path)
 
     nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
 
@@ -66,12 +66,12 @@ def evaluate_dataset(aaprob_path):
 
     with h5py.File(aaprob_path, "r") as matfile:
         model_name = matfile.attrs["model_name"]
-        for i in range(len(pcp_df)):
+        for index in range(len(parent_aa_seqs)):
+            pcp_index = pcp_df.index[index]
             grp = matfile[
-                "matrix" + str(i)
-            ]  # assumes that the keys are named "matrix0", "matrix1", etc.
+                "matrix" + str(pcp_index)
+            ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
             matrix = grp["data"]
-            index = grp.attrs["pcp_index"]
 
             site_sub_probs.append(
                 calculate_site_substitution_probabilities(matrix, parent_aa_seqs[index])
@@ -96,6 +96,7 @@ def evaluate_dataset(aaprob_path):
 
     model_performance = {
         "data_set": pcp_path,
+        "pcp_count": len(pcp_df),
         "model": model_name,
         "sub_accuracy": sub_acc,
         "r_precision": r_prec,
@@ -158,7 +159,11 @@ def calculate_site_substitution_probabilities(aaprobs, parent_aa):
 
     """
     site_sub_probs = [
-        1.0 - aaprobs[i, :][AA_STR_SORTED.index(parent_aa[i])]
+        np.sum(
+            aaprobs[i, :][
+                [AA_STR_SORTED.index(aa) for aa in AA_STR_SORTED if aa != parent_aa[i]]
+            ]
+        )
         for i in range(len(parent_aa))
     ]
 

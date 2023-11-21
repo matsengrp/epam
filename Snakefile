@@ -16,9 +16,21 @@ rule all:
         "output/combined_performance.csv",
 
 
+rule precompute_esm:
+    input:
+        in_csv="pcp_inputs/{pcp_input}.csv",
+    output:
+        out_hdf5="pcp_inputs/{pcp_input}.hdf5",
+    shell:
+        """
+        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5}
+        """
+
+
 rule run_model:
     input:
         in_csv="pcp_inputs/{pcp_input}.csv",
+        hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
         aaprob="output/{pcp_input}/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/{model_name}/performance.csv",
@@ -30,7 +42,7 @@ rule run_model:
     shell:
         """
         mkdir -p output/{wildcards.pcp_input}/{wildcards.model_name}
-        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob}
+        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
         epam evaluate {output.aaprob} {output.performance}
         """
 

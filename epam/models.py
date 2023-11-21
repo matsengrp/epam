@@ -7,10 +7,7 @@ import shmple
 import torch
 import torch.optim as optim
 from torch import Tensor
-
-from esm import (
-    pretrained,
-)
+from epam.esm_precompute import load_and_convert_to_dict
 import h5py
 import numpy as np
 import pandas as pd
@@ -21,6 +18,7 @@ from epam.sequences import (
     AA_STR_SORTED,
     assert_pcp_lengths,
     translate_sequences,
+    pcp_criteria_check,
 )
 import epam.utils as utils
 
@@ -42,7 +40,7 @@ FULLY_SPECIFIED_MODELS = [
         "SHMple",
         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
     ),
-    ("ESM1v_default", "ESM1v", {}),
+    ("ESM1v_default", "CachedESM1v", {}),
     (
         "SHMple_ESM1v",
         "SHMpleESM",
@@ -111,77 +109,15 @@ class BaseModel(ABC):
                 parent = row["parent"]
                 child = row["child"]
                 assert_pcp_lengths(parent, child)
-                matrix = self.aaprobs_of_parent_child_pair(parent, child)
+                if pcp_criteria_check(parent, child):
+                    matrix = self.aaprobs_of_parent_child_pair(parent, child)
 
-                # create a group for each matrix
-                grp = outfile.create_group(f"matrix{i}")
-                grp.attrs["pcp_index"] = i
-                grp.create_dataset(
-                    "data", data=matrix, compression="gzip", compression_opts=4
-                )
-
-
-class AbLang(BaseModel):
-    def __init__(self, chain="heavy", model_name=None):
-        """
-        Initialize AbLang model with specified chain and create amino acid string.
-
-        Parameters:
-        chain (str): Name of the chain, default is "heavy".
-        model_name (str, optional): The name of the model. If not specified, the class name is used.
-
-        """
-        super().__init__(model_name=model_name)
-        self.model = ablang.pretrained(chain)
-        self.model.freeze()
-        vocab_dict = self.model.tokenizer.vocab_to_aa
-        self.aa_str = "".join([vocab_dict[i + 1] for i in range(20)])
-        self.aa_str_sorted_indices = np.argsort(list(self.aa_str))
-        assert AA_STR_SORTED == "".join(
-            np.array(list(self.aa_str))[self.aa_str_sorted_indices]
-        )
-
-    def probability_array_of_seq(self, seq: str):
-        """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
-
-        Parameters:
-        seq (str): The sequence for which we want the array of probabilities.
-
-        Returns:
-        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
-
-        """
-        likelihoods = self.model([seq], mode="likelihood")
-
-        # Apply softmax to the second dimension, and skip the first and last
-        # elements (which are the probability of the start and end token).
-        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1])
-
-        # Sort the second dimension according to the sorted amino acid string.
-        arr_sorted = arr[:, self.aa_str_sorted_indices]
-        assert len(seq) == arr_sorted.shape[0]
-
-        return arr_sorted
-
-    def aaprobs_of_parent_child_pair(self, parent: str, child=None) -> np.ndarray:
-        """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
-
-        Parameters:
-        parent (str): The parent sequence for which we want the array of probabilities.
-        child (str): The child sequence (ignored for AbLang model).
-
-        Returns:
-        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
-
-        """
-        parent_aa = translate_sequences([parent])[0]
-        return self.probability_array_of_seq(parent_aa)
+                    # create a group for each matrix
+                    grp = outfile.create_group(f"matrix{i}")
+                    grp.attrs["pcp_index"] = i
+                    grp.create_dataset(
+                        "data", data=matrix, compression="gzip", compression_opts=4
+                    )
 
 
 class SHMple(BaseModel):
@@ -344,7 +280,7 @@ class OptimizableSHMple(SHMple):
 
         log_branch_scaling = torch.tensor(0.0, requires_grad=True)
 
-        optimizer = optim.SGD([log_branch_scaling], lr=self.learning_rate)
+        optimizer = optim.Adam([log_branch_scaling], lr=self.learning_rate)
         prev_log_branch_scaling = log_branch_scaling.clone()
 
         for _ in range(self.max_optimization_steps):
@@ -355,6 +291,7 @@ class OptimizableSHMple(SHMple):
                 loss
             ), "Loss is NaN: perhaps selection has given a probability of zero?"
             loss.backward()
+            torch.nn.utils.clip_grad_norm_([log_branch_scaling], max_norm=2.5)
             optimizer.step()
 
             change_in_log_branch_scaling = torch.abs(
@@ -492,78 +429,129 @@ class TorchModel(BaseModel):
             print("Using Metal Performance Shaders")
             self.device = torch.device("mps")
         else:
+            print("Using CPU")
             self.device = torch.device("cpu")
 
 
-class ESM1v(TorchModel):
-    def __init__(self, model_name=None):
+class AbLang(TorchModel):
+    def __init__(self, chain="heavy", model_name=None):
         """
-        Initialize ESM1v model; currently using #1 of 5 models in ensemble.
+        Initialize AbLang model with specified chain and create amino acid string.
 
         Parameters:
+        chain (str): Name of the chain, default is "heavy".
         model_name (str, optional): The name of the model. If not specified, the class name is used.
 
         """
         super().__init__(model_name=model_name)
-        self.model, self.alphabet = pretrained.load_model_and_alphabet(
-            "esm1v_t33_650M_UR90S_1"
+        self.model = ablang.pretrained(chain, device=self.device)
+        self.model.freeze()
+        vocab_dict = self.model.tokenizer.vocab_to_aa
+        self.aa_str = "".join([vocab_dict[i + 1] for i in range(20)])
+        self.aa_str_sorted_indices = np.argsort(list(self.aa_str))
+        assert AA_STR_SORTED == "".join(
+            np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
-        self.model.eval()
-        self.model = self.model.to(self.device)
-        self.aa_idxs = [self.alphabet.get_idx(aa) for aa in AA_STR_SORTED]
 
-    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+    def probability_array_of_seq(self, seq: str):
         """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to the ESM-1v_1 model.
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
 
         The rows of the array correspond to the amino acids sorted alphabetically.
 
         Parameters:
-        parent (str): The parent sequence for which we want the array of probabilities.
-        child (str): The child sequence (ignored for AbLang model)
+        seq (str): The sequence for which we want the array of probabilities.
 
         Returns:
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        batch_converter = self.alphabet.get_batch_converter()
+        likelihoods = self.model([seq], mode="likelihood")
 
+        # Apply softmax to the second dimension, and skip the first and last
+        # elements (which are the probability of the start and end token).
+        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1])
+
+        # Sort the second dimension according to the sorted amino acid string.
+        arr_sorted = arr[:, self.aa_str_sorted_indices]
+        assert len(seq) == arr_sorted.shape[0]
+
+        return arr_sorted
+
+    def aaprobs_of_parent_child_pair(self, parent: str, child=None) -> np.ndarray:
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
+
+        Parameters:
+        parent (str): The parent sequence for which we want the array of probabilities.
+        child (str): The child sequence (ignored for AbLang model).
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+
+        """
         parent_aa = translate_sequences([parent])[0]
-        data = [
-            ("protein1", parent_aa),
-        ]
+        return self.probability_array_of_seq(parent_aa)
 
-        batch_tokens = batch_converter(data)[2]
 
-        # Get token probabilities before softmax so we can restrict to 20 amino
-        # acids in softmax calculation.
-        with torch.no_grad():
-            batch_tokens = batch_tokens.to(self.device)
-            token_probs_pre_softmax = self.model(batch_tokens)["logits"]
+class CachedESM1v(BaseModel):
+    def __init__(self, model_name=None):
+        """
+        Initialize ESM1v with cached selection matrices generated in esm_precompute.py.
 
-        aa_probs = torch.softmax(token_probs_pre_softmax[..., self.aa_idxs], dim=-1)
+        Parameters:
+        model_name (str, optional): The name of the model.
+        """
+        super().__init__(model_name=model_name)
 
-        aa_probs_np = aa_probs.cpu().numpy().squeeze()
+    def preload_esm_data(self, hdf5_path):
+        """
+        Preload ESM1v data from HDF5 file.
 
-        # Drop first and last elements, which are the probability of the start
-        # and end token.
-        prob_matrix = aa_probs_np[1:-1, :]
+        Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
+        """
+        self.selection_matrices = load_and_convert_to_dict(hdf5_path)
 
-        assert prob_matrix.shape[0] == len(parent_aa)
+    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+        """
+        Find probability matrix corresponding to parent sequence via lookup table.
 
-        return prob_matrix
+        Parameters:
+        parent (str): The parent sequence for which we want the array of probabilities.
+        child (str): The child sequence (ignored for ESM1v model)
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+        """
+        assert (
+            parent in self.selection_matrices.keys()
+        ), f"{parent} not present in CachedESM."
+        return self.selection_matrices[parent]
 
 
 class SHMpleESM(MutSel):
     def __init__(self, *args, **kwargs):
         """
         Initialize a mutation-selection model using SHMple for the mutation part and ESM-1v_1 for the selection part.
+
         Parameters:
         weights_directory (str): Directory path to trained SHMple model weights.
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         """
         super().__init__(*args, **kwargs)
-        self.selection_model = ESM1v()
+
+    def preload_esm_data(self, hdf5_path):
+        """
+        Preload ESM1v data from HDF5 file.
+
+        Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
+        """
+        self.selection_model = CachedESM1v()
+        self.selection_matrices = self.selection_model.preload_esm_data(hdf5_path)
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))

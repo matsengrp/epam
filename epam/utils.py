@@ -2,6 +2,8 @@
 
 import hashlib
 import h5py
+import pandas as pd
+from epam.sequences import pcp_criteria_check
 
 
 def generate_file_checksum(filename, buf_size=65536):
@@ -43,3 +45,24 @@ def pcp_path_of_aaprob_path(aaprob_path):
             raise ValueError(f"checksum failed for {pcp_path}.")
 
     return pcp_path
+
+
+def load_and_filter_pcp_df(pcp_path):
+    """
+    Load PCP data and filter out PCPs that do not meet criteria.
+
+    Parameters:
+    pcp_path (str): path to parent-child pairs.
+
+    Returns:
+    pcp_df (pd.DataFrame): PCP data frame.
+
+    """
+    full_pcp_df = pd.read_csv(pcp_path, index_col=0)
+
+    # Filter out PCPs that do not meet criteria: 0% < mutation rate < 30% (default value of max_mut_freq)
+    pcp_df = full_pcp_df[
+        full_pcp_df.apply(lambda x: pcp_criteria_check(x["parent"], x["child"]), axis=1)
+    ]
+
+    return pcp_df

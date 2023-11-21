@@ -159,6 +159,7 @@ _ignore
 tests/*.hdf5
 tests/*.csv
 .vscode
+.Rhistory
 
 # Workflow managers
 work/
