@@ -20,6 +20,10 @@ def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
     ModelClass = getattr(models, model_name)
     model = ModelClass(**model_args)
     if model_name in ("CachedESM1v", "SHMpleESM"):
+        if hdf5_path is None:
+            raise ValueError(
+                f"Model {model_name} requires an HDF5 file containing precomputed ESM1v selection factors."
+            )
         print("Preloading ESM1v data...")
         model.preload_esm_data(hdf5_path)
     model.write_aaprobs(in_path, out_path)
@@ -59,7 +63,7 @@ def concatenate_csvs(
 
 def esm_bulk_precompute(csv_path, output_hdf5_path):
     """
-    This function enables precomputation of ESM1v selection factors for a set of PCPs in bulk, and then saves those values in an HDF5 file for later use in SHMple-ESM.
+    This subcommand precomputes ESM1v selection factors for a set of PCPs in bulk, and then saves those values in an HDF5 file for later use in SHMple-ESM.
 
     :param csv_path: Path to a CSV file containing PCP data.
     """

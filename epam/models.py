@@ -280,7 +280,6 @@ class OptimizableSHMple(SHMple):
 
         log_branch_scaling = torch.tensor(0.0, requires_grad=True)
 
-        # optimizer = optim.SGD([log_branch_scaling], lr=self.learning_rate)
         optimizer = optim.Adam([log_branch_scaling], lr=self.learning_rate)
         prev_log_branch_scaling = log_branch_scaling.clone()
 

@@ -4,7 +4,7 @@ import h5py
 import pandas as pd
 import numpy as np
 from epam.sequences import AA_STR_SORTED
-from epam.utils import pcp_path_of_aaprob_path
+from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
 from epam.sequences import translate_sequences, pcp_criteria_check
 
 
@@ -40,14 +40,7 @@ def evaluate_dataset(aaprob_path):
     """
     pcp_path = pcp_path_of_aaprob_path(aaprob_path)
 
-    full_pcp_df = pd.read_csv(pcp_path, index_col=0)
-
-    # remove PCPs that do not meet criteria: 0% < mutation rate < 30%
-    pcp_df = full_pcp_df[
-        full_pcp_df.apply(
-            lambda row: pcp_criteria_check(row["parent"], row["child"]), axis=1
-        )
-    ]
+    pcp_df = load_and_filter_pcp_df(pcp_path)
 
     nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
 

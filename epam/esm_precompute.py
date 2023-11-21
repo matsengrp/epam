@@ -4,7 +4,7 @@ This module enables precomputation of ESM1v selection factors for a set of PCPs 
 import numpy as np
 import pandas as pd
 import h5py
-from epam import utils
+from epam.utils import load_and_filter_pcp_df, generate_file_checksum
 from epam.sequences import (
     AA_STR_SORTED,
     translate_sequences,
@@ -52,15 +52,7 @@ def precompute_and_save(pcp_path, output_hdf5):
 
     batch_converter = alphabet.get_batch_converter()
 
-    # Load in PCP data
-    full_pcp_df = pd.read_csv(pcp_path, index_col=0)
-
-    # Remove PCPs that do not meet criteria: 0% < mutation rate < 30% or mismatched lengths
-    pcp_df = full_pcp_df[
-        full_pcp_df.apply(
-            lambda row: pcp_criteria_check(row["parent"], row["child"]), axis=1
-        )
-    ]
+    pcp_df = load_and_filter_pcp_df(pcp_path)
 
     pcp_df.apply(lambda row: assert_pcp_lengths(row["parent"], row["child"]), axis=1)
 
@@ -86,7 +78,7 @@ def precompute_and_save(pcp_path, output_hdf5):
     aa_probs_np = aa_probs.cpu().numpy().squeeze()
 
     # Save model output to HDF5 file
-    checksum = utils.generate_file_checksum(pcp_path)
+    checksum = generate_file_checksum(pcp_path)
 
     with h5py.File(output_hdf5, "w") as outfile:
         # attributes related to PCP data file
