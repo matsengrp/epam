@@ -2,10 +2,29 @@ import epam.models
 import json
 import subprocess
 
+# update rules to just flag files? to run models in certain order
+# add rule to split pcp files into subsets of reasonable size, merge before evaluation
+# aaprob and evaluate will then need to be separated for each model
 
 model_name_to_spec = {
     model_name: [model_class, json.dumps({**model_params, "model_name": model_name})]
-    for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS
+    for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS 
+}
+
+set1_models = ("AbLang_heavy", "ESM1v_default")
+set2_models = ("SHMple_default", "SHMple_productive")
+set3_models = "SHMple_ESM1v"
+
+set1_model_name_to_spec = {
+    key: model_name_to_spec[key] for key in set1_models
+}
+
+set2_model_name_to_spec = {
+    key: model_name_to_spec[key] for key in set2_models
+}
+
+set3_model_name_to_spec = {
+    set3_models: model_name_to_spec[set3_models]
 }
 
 pcp_inputs = glob_wildcards("pcp_inputs/{name}.csv").name
@@ -27,7 +46,7 @@ rule precompute_esm:
         """
 
 
-rule run_model:
+rule run_model_set1:
     input:
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
@@ -35,8 +54,46 @@ rule run_model:
         aaprob="output/{pcp_input}/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/{model_name}/performance.csv",
     params:
-        model_class=lambda wildcards: model_name_to_spec[wildcards.model_name][0],
-        model_params=lambda wildcards: model_name_to_spec[wildcards.model_name][1],
+        model_class=lambda wildcards: set1_model_name_to_spec[wildcards.model_name][0],
+        model_params=lambda wildcards: set1_model_name_to_spec[wildcards.model_name][1],
+    benchmark:
+        "output/{pcp_input}/{model_name}/timing.tsv"
+    shell:
+        """
+        mkdir -p output/{wildcards.pcp_input}/{wildcards.model_name}
+        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam evaluate {output.aaprob} {output.performance}
+        """
+
+rule run_model_set2:
+    input:
+        in_csv="pcp_inputs/{pcp_input}.csv",
+        hdf5_path="pcp_inputs/{pcp_input}.hdf5",
+    output:
+        aaprob="output/{pcp_input}/{model_name}/aaprob.hdf5",
+        performance="output/{pcp_input}/{model_name}/performance.csv",
+    params:
+        model_class=lambda wildcards: set2_model_name_to_spec[wildcards.model_name][0],
+        model_params=lambda wildcards: set2_model_name_to_spec[wildcards.model_name][1],
+    benchmark:
+        "output/{pcp_input}/{model_name}/timing.tsv"
+    shell:
+        """
+        mkdir -p output/{wildcards.pcp_input}/{wildcards.model_name}
+        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam evaluate {output.aaprob} {output.performance}
+        """
+
+rule run_model_set3:
+    input:
+        in_csv="pcp_inputs/{pcp_input}.csv",
+        hdf5_path="pcp_inputs/{pcp_input}.hdf5",
+    output:
+        aaprob="output/{pcp_input}/{model_name}/aaprob.hdf5",
+        performance="output/{pcp_input}/{model_name}/performance.csv",
+    params:
+        model_class=lambda wildcards: set3_model_name_to_spec[wildcards.model_name][0],
+        model_params=lambda wildcards: set3_model_name_to_spec[wildcards.model_name][1],
     benchmark:
         "output/{pcp_input}/{model_name}/timing.tsv"
     shell:
