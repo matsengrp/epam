@@ -12,6 +12,21 @@ def clamp_probability(x: Tensor) -> Tensor:
     return torch.clamp(x, min=SMALL_PROB, max=(1.0 - SMALL_PROB))
 
 
+def print_parameter_count(model):
+    total = 0
+    for name, module in model.named_modules():
+        if len(list(module.children())) == 0:  # Only count parameters in leaf modules
+            num_params = sum(p.numel() for p in module.parameters())
+            print(f"{name}: {num_params} parameters")
+            total += num_params
+    print("-----")
+    print(f"total: {total} parameters")
+
+
+def parameter_count_of_model(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
 def stack_heterogeneous(tensors, pad_value=0.0):
     """
     Stack an iterable of 1D or 2D torch.Tensor objects of different lengths along the first dimension into a single tensor.
@@ -79,6 +94,9 @@ class PositionalEncoding(nn.Module):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
+        # assert that d_model is even
+        assert d_model % 2 == 0, "d_model must be even for PositionalEncoding"
+
         position = torch.arange(max_len).unsqueeze(1)
         div_term = torch.exp(
             torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model)
@@ -111,7 +129,6 @@ def optimize_branch_length(
     prev_log_branch_length = log_branch_length.clone()
 
     for step_idx in range(max_optimization_steps):
-        
         # For some PCPs, the optimizer works very hard optimizing very tiny branch lengths.
         if log_branch_length < log_branch_length_lower_threshold:
             break
@@ -138,6 +155,6 @@ def optimize_branch_length(
     if step_idx == max_optimization_steps - 1:
         print(
             f"Warning: optimization did not converge after {max_optimization_steps} steps"
-        )   
+        )
 
     return torch.exp(log_branch_length.detach()).item()
