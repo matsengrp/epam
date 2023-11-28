@@ -51,54 +51,56 @@ rule run_model_set1:
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
-        aaprob="output/{pcp_input}/{model_name}/aaprob.hdf5",
-        performance="output/{pcp_input}/{model_name}/performance.csv",
+        aaprob="output/{pcp_input}/set1/{model_name}/aaprob.hdf5",
+        performance="output/{pcp_input}/set1/{model_name}/performance.csv",
     params:
         model_class=lambda wildcards: set1_model_name_to_spec[wildcards.model_name][0],
         model_params=lambda wildcards: set1_model_name_to_spec[wildcards.model_name][1],
     benchmark:
-        "output/{pcp_input}/{model_name}/timing.tsv"
+        "output/{pcp_input}/set1/{model_name}/timing.tsv"
     shell:
         """
-        mkdir -p output/{wildcards.pcp_input}/{wildcards.model_name}
+        mkdir -p output/{wildcards.pcp_input}/set1/{wildcards.model_name}
         epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
         epam evaluate {output.aaprob} {output.performance}
         """
+
 
 rule run_model_set2:
     input:
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
-        aaprob="output/{pcp_input}/{model_name}/aaprob.hdf5",
-        performance="output/{pcp_input}/{model_name}/performance.csv",
+        aaprob="output/{pcp_input}/set2/{model_name}/aaprob.hdf5",
+        performance="output/{pcp_input}/set2/{model_name}/performance.csv",
     params:
         model_class=lambda wildcards: set2_model_name_to_spec[wildcards.model_name][0],
         model_params=lambda wildcards: set2_model_name_to_spec[wildcards.model_name][1],
     benchmark:
-        "output/{pcp_input}/{model_name}/timing.tsv"
+        "output/{pcp_input}/set2/{model_name}/timing.tsv"
     shell:
         """
-        mkdir -p output/{wildcards.pcp_input}/{wildcards.model_name}
+        mkdir -p output/{wildcards.pcp_input}/set2/{wildcards.model_name}
         epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
         epam evaluate {output.aaprob} {output.performance}
         """
+
 
 rule run_model_set3:
     input:
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
-        aaprob="output/{pcp_input}/{model_name}/aaprob.hdf5",
-        performance="output/{pcp_input}/{model_name}/performance.csv",
+        aaprob="output/{pcp_input}/set3/{model_name}/aaprob.hdf5",
+        performance="output/{pcp_input}/set3/{model_name}/performance.csv",
     params:
         model_class=lambda wildcards: set3_model_name_to_spec[wildcards.model_name][0],
         model_params=lambda wildcards: set3_model_name_to_spec[wildcards.model_name][1],
     benchmark:
-        "output/{pcp_input}/{model_name}/timing.tsv"
+        "output/{pcp_input}/set3/{model_name}/timing.tsv"
     shell:
         """
-        mkdir -p output/{wildcards.pcp_input}/{wildcards.model_name}
+        mkdir -p output/{wildcards.pcp_input}/set3/{wildcards.model_name}
         epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
         epam evaluate {output.aaprob} {output.performance}
         """
@@ -107,9 +109,9 @@ rule run_model_set3:
 rule combine_performance_files:
     input:
         expand(
-            "output/{pcp_input}/{model_name}/performance.csv",
+            "output/{pcp_input}/set2/{model_name}/performance.csv",
             pcp_input=pcp_inputs,
-            model_name=model_name_to_spec.keys(),
+            model_name=set2_model_name_to_spec.keys(),
         ),
     output:
         "output/combined_performance.csv",
@@ -117,9 +119,9 @@ rule combine_performance_files:
     run:
         input_files = ",".join(input)
         input_timing_files = ",".join(
-            f"output/{pcp_input}/{model_name}/timing.tsv"
+            f"output/{pcp_input}/set2/{model_name}/timing.tsv"
             for pcp_input in pcp_inputs
-            for model_name in model_name_to_spec.keys()
+            for model_name in set2_model_name_to_spec.keys()
         )
         output_file = output[0]
         output_timing_file = output[1]
@@ -131,3 +133,4 @@ rule combine_performance_files:
             shell=True,
             check=True,
         )
+
