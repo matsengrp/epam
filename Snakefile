@@ -2,7 +2,6 @@ import epam.models
 import json
 import subprocess
 
-# update rules to just flag files? to run models in certain order
 # add rule to split pcp files into subsets of reasonable size, merge before evaluation
 # aaprob and evaluate will then need to be separated for each model
 
@@ -106,12 +105,15 @@ rule run_model_set3:
         """
 
 
+model_combos = ["set1/AbLang_heavy", "set1/ESM1v_default", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMple_ESM1v"]
+
+
 rule combine_performance_files:
     input:
         expand(
-            "output/{pcp_input}/set2/{model_name}/performance.csv",
+            "output/{pcp_input}/{set_model}/performance.csv",
             pcp_input=pcp_inputs,
-            model_name=set2_model_name_to_spec.keys(),
+            set_model=model_combos,
         ),
     output:
         "output/combined_performance.csv",
@@ -119,9 +121,9 @@ rule combine_performance_files:
     run:
         input_files = ",".join(input)
         input_timing_files = ",".join(
-            f"output/{pcp_input}/set2/{model_name}/timing.tsv"
+            f"output/{pcp_input}/{set_model}/timing.tsv"
             for pcp_input in pcp_inputs
-            for model_name in set2_model_name_to_spec.keys()
+            for set_model in model_combos
         )
         output_file = output[0]
         output_timing_file = output[1]
