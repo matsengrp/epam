@@ -50,6 +50,7 @@ rule run_model_set1:
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
+        touch("{pcp_input}_{model_name}.done"),
         aaprob="output/{pcp_input}/set1/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/set1/{model_name}/performance.csv",
     params:
@@ -67,9 +68,11 @@ rule run_model_set1:
 
 rule run_model_set2:
     input:
+        expand("{{pcp_input}}_{model}.done", model = set1_model_name_to_spec.keys()),
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
+        touch("{pcp_input}_{model_name}.done"),
         aaprob="output/{pcp_input}/set2/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/set2/{model_name}/performance.csv",
     params:
@@ -87,9 +90,11 @@ rule run_model_set2:
 
 rule run_model_set3:
     input:
+        expand("{{pcp_input}}_{model}.done", model = set2_model_name_to_spec.keys()),
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
+        touch("{pcp_input}_{model_name}.done"),
         aaprob="output/{pcp_input}/set3/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/set3/{model_name}/performance.csv",
     params:
@@ -104,6 +109,14 @@ rule run_model_set3:
         epam evaluate {output.aaprob} {output.performance}
         """
 
+
+rule clean_touch_files:
+    input:
+        expand("{{pcp_input}}_{model}.done", model = model_name_to_spec.keys())
+    shell:
+        """
+        rm {pcp_input}_{model}.touch
+        """
 
 model_combos = ["set1/AbLang_heavy", "set1/ESM1v_default", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMple_ESM1v"]
 
