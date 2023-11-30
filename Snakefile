@@ -4,6 +4,7 @@ import subprocess
 
 # add rule to split pcp files into subsets of reasonable size, merge before evaluation
 # aaprob and evaluate will then need to be separated for each model
+# remove touch files
 
 model_name_to_spec = {
     model_name: [model_class, json.dumps({**model_params, "model_name": model_name})]
@@ -28,17 +29,38 @@ set3_model_name_to_spec = {
 
 pcp_inputs = glob_wildcards("pcp_inputs/{name}.csv").name
 
-
 rule all:
     input:
-        "output/combined_performance.csv",
+       # "output/combined_performance.csv",
+       expand("pcp_batched_inputs/{pcp_input}_{part}.hdf5", pcp_input=pcp_inputs, part=range(1, 11))  # Adjust the range based on the number of splits
 
+
+rule split_pcp_batches:
+    input:
+        "pcp_inputs/{pcp_input}.csv"
+        # "pcp_inputs/test_100.csv"
+    output:
+        # flag_file=touch("_ignore/flag_files/batched_{pcp_input}"),
+        out_csvs=dynamic("pcp_batched_inputs/{pcp_input}_{part}.csv")  # Specify dynamic output
+        # touch("_ignore/batched_{pcp_input}" for pcp_input in pcp_inputs)
+        # touch("pcp_batched_inputs/{pcp_input}_1.csv")
+        # touch("pcp_inputs/batched/test_100")
+    params:
+        output_dir="pcp_batched_inputs/",
+        batch_size=10  # Adjust the batch size as needed
+    shell:
+        """
+        python scripts/split_pcp_files.py {input} {params.output_dir} {params.batch_size}
+        """
 
 rule precompute_esm:
     input:
-        in_csv="pcp_inputs/{pcp_input}.csv",
+        # rules.split_pcp_batches.output.flag_file,
+        in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv", 
     output:
-        out_hdf5="pcp_inputs/{pcp_input}.hdf5",
+        out_hdf5="pcp_batched_inputs/{pcp_input}_{part}.hdf5", 
+    params:
+        part=lambda wildcards: wildcards.part  # Define a dynamic wildcard for {part}
     shell:
         """
         epam esm_bulk_precompute {input.in_csv} {output.out_hdf5}
@@ -47,8 +69,8 @@ rule precompute_esm:
 
 rule run_model_set1:
     input:
-        in_csv="pcp_inputs/{pcp_input}.csv",
-        hdf5_path="pcp_inputs/{pcp_input}.hdf5",
+        in_csv="pcp_inputs/batched/{pcp_input}.csv",
+        hdf5_path="pcp_inputs/batched/{pcp_input}.hdf5",
     output:
         complete="{pcp_input}_{model_name}.done",
         aaprob="output/{pcp_input}/set1/{model_name}/aaprob.hdf5",
@@ -70,8 +92,8 @@ rule run_model_set1:
 rule run_model_set2:
     input:
         expand("{{pcp_input}}_{model}.done", model = set1_model_name_to_spec.keys()),
-        in_csv="pcp_inputs/{pcp_input}.csv",
-        hdf5_path="pcp_inputs/{pcp_input}.hdf5",
+        in_csv="pcp_inputs/batched/{pcp_input}.csv",
+        hdf5_path="pcp_inputs/batched/{pcp_input}.hdf5",
     output:
         complete="{pcp_input}_{model_name}.done",
         aaprob="output/{pcp_input}/set2/{model_name}/aaprob.hdf5",
@@ -93,8 +115,8 @@ rule run_model_set2:
 rule run_model_set3:
     input:
         expand("{{pcp_input}}_{model}.done", model = set2_model_name_to_spec.keys()),
-        in_csv="pcp_inputs/{pcp_input}.csv",
-        hdf5_path="pcp_inputs/{pcp_input}.hdf5",
+        in_csv="pcp_inputs/batched/{pcp_input}.csv",
+        hdf5_path="pcp_inputs/batched/{pcp_input}.hdf5",
     output:
         aaprob="output/{pcp_input}/set3/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/set3/{model_name}/performance.csv",
