@@ -50,7 +50,7 @@ rule run_model_set1:
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
-        touch("{pcp_input}_{model_name}.done"),
+        complete="{pcp_input}_{model_name}.done",
         aaprob="output/{pcp_input}/set1/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/set1/{model_name}/performance.csv",
     params:
@@ -63,6 +63,7 @@ rule run_model_set1:
         mkdir -p output/{wildcards.pcp_input}/set1/{wildcards.model_name}
         epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
         epam evaluate {output.aaprob} {output.performance}
+        touch {output.complete}
         """
 
 
@@ -72,7 +73,7 @@ rule run_model_set2:
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
-        touch("{pcp_input}_{model_name}.done"),
+        complete="{pcp_input}_{model_name}.done",
         aaprob="output/{pcp_input}/set2/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/set2/{model_name}/performance.csv",
     params:
@@ -85,6 +86,7 @@ rule run_model_set2:
         mkdir -p output/{wildcards.pcp_input}/set2/{wildcards.model_name}
         epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
         epam evaluate {output.aaprob} {output.performance}
+        touch {output.complete}
         """
 
 
@@ -94,7 +96,6 @@ rule run_model_set3:
         in_csv="pcp_inputs/{pcp_input}.csv",
         hdf5_path="pcp_inputs/{pcp_input}.hdf5",
     output:
-        touch("{pcp_input}_{model_name}.done"),
         aaprob="output/{pcp_input}/set3/{model_name}/aaprob.hdf5",
         performance="output/{pcp_input}/set3/{model_name}/performance.csv",
     params:
@@ -109,14 +110,6 @@ rule run_model_set3:
         epam evaluate {output.aaprob} {output.performance}
         """
 
-
-rule clean_touch_files:
-    input:
-        expand("{{pcp_input}}_{model}.done", model = model_name_to_spec.keys())
-    shell:
-        """
-        rm {pcp_input}_{model}.touch
-        """
 
 model_combos = ["set1/AbLang_heavy", "set1/ESM1v_default", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMple_ESM1v"]
 
@@ -148,4 +141,3 @@ rule combine_performance_files:
             shell=True,
             check=True,
         )
-
