@@ -2,8 +2,6 @@ import epam.models
 import json
 import subprocess
 
-# remove touch files - replace with model set combined aaprob file?
-
 model_name_to_spec = {
     model_name: [model_class, json.dumps({**model_params, "model_name": model_name})]
     for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS 
@@ -12,6 +10,8 @@ model_name_to_spec = {
 set1_models = ("AbLang_heavy", "ESM1v_default")
 set2_models = ("SHMple_default", "SHMple_productive")
 set3_models = "SHMple_ESM1v"
+
+model_combos = ["set1/AbLang_heavy", "set1/ESM1v_default", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMple_ESM1v"]
 
 set1_model_name_to_spec = {
     key: model_name_to_spec[key] for key in set1_models
@@ -33,17 +33,6 @@ rule all:
     input:
         "output/combined_performance.csv",
         "output/combined_timing.csv",
-        # expand("pcp_batched_inputs/{pcp_input}_{part}.hdf5", pcp_input=pcp_inputs, part=batch_number),  
-        # expand("pcp_batched_inputs/{pcp_input}_{part}.csv", pcp_input=pcp_inputs, part=batch_number),
-        # expand("output/{pcp_input}/set1/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set1_models, part=batch_number),
-        # expand("output/{pcp_input}/set2/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set2_models, part=batch_number),  
-        # expand("output/{pcp_input}/set3/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set3_models, part=batch_number),
-        # expand("output/{pcp_input}/set1/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set1_models),
-        # expand("output/{pcp_input}/set2/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set2_models),  
-        # expand("output/{pcp_input}/set3/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set3_models),
-        # expand("output/{pcp_input}/set1/{model_name}/performance.csv", pcp_input=pcp_inputs, model_name=set1_models),
-        # expand("output/{pcp_input}/set2/{model_name}/performance.csv", pcp_input=pcp_inputs, model_name=set2_models),
-        # expand("output/{pcp_input}/set3/{model_name}/performance.csv", pcp_input=pcp_inputs, model_name=set3_models),
 
 
 rule split_pcp_batches:
@@ -142,8 +131,6 @@ rule run_model_set3:
         """
 
 
-model_combos = ["set1/AbLang_heavy", "set1/ESM1v_default", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMple_ESM1v"]
-
 rule combine_aaprob_files:
     input:
         expand(
@@ -201,30 +188,9 @@ rule combine_performance_files:
             check=True,
         )
 
-# rule combine_performance_files:
-#     input:
-#         expand(
-#             "output/{pcp_input}/{set_model}/performance.csv",
-#             pcp_input=pcp_inputs,
-#             set_model=model_combos,
-#         ),
-#     output:
-#         "output/combined_performance.csv",
-#         "output/combined_timing.csv",
-#     run:
-#         input_files = ",".join(input)
-#         input_timing_files = ",".join(
-#             f"output/{pcp_input}/{set_model}/timing.tsv"
-#             for pcp_input in pcp_inputs
-#             for set_model in model_combos
-#         )
-#         output_file = output[0]
-#         output_timing_file = output[1]
-#         subprocess.run(
-#             f"epam concatenate_csvs {input_files} {output_file}", shell=True, check=True
-#         )
-#         subprocess.run(
-#             f"epam concatenate_csvs {input_timing_files} {output_timing_file} --is_tsv --record_path",
-#             shell=True,
-#             check=True,
-#         )
+
+rule clean_flag_files:
+    shell:
+        """
+        rm -f _ignore/flag_files/*.done
+        """
