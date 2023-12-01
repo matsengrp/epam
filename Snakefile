@@ -2,9 +2,7 @@ import epam.models
 import json
 import subprocess
 
-# add rule to split pcp files into subsets of reasonable size, merge before evaluation
-# aaprob and evaluate will then need to be separated for each model
-# remove touch files
+# remove touch files - replace with model set combined aaprob file?
 
 model_name_to_spec = {
     model_name: [model_class, json.dumps({**model_params, "model_name": model_name})]
@@ -33,12 +31,14 @@ pcp_per_batch=20 #10
 
 rule all:
     input:
+        "output/combined_performance.csv",
+        "output/combined_timing.csv",
         # expand("pcp_batched_inputs/{pcp_input}_{part}.hdf5", pcp_input=pcp_inputs, part=batch_number),  
         # expand("pcp_batched_inputs/{pcp_input}_{part}.csv", pcp_input=pcp_inputs, part=batch_number),
         # expand("output/{pcp_input}/set1/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set1_models, part=batch_number),
         # expand("output/{pcp_input}/set2/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set2_models, part=batch_number),  
         # expand("output/{pcp_input}/set3/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set3_models, part=batch_number),
-        expand("output/{pcp_input}/set1/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set1_models),
+        # expand("output/{pcp_input}/set1/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set1_models),
         # expand("output/{pcp_input}/set2/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set2_models),  
         # expand("output/{pcp_input}/set3/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set3_models),
         # expand("output/{pcp_input}/set1/{model_name}/performance.csv", pcp_input=pcp_inputs, model_name=set1_models),
@@ -122,7 +122,7 @@ rule run_model_set2:
 
 rule run_model_set3:
     input:
-        expand("_ignore/flag_files/{{pcp_input}}_{{part}}_{model}.done", model = set2_model_name_to_spec.keys()),
+        expand("_ignore/flag_files/{{pcp_input}}_{{part}}_{model}.done", pcp_input=pcp_inputs, part=batch_number, model = set2_model_name_to_spec.keys()),
         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
         hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
     output:
@@ -160,8 +160,7 @@ rule combine_aaprob_files:
             f"epam concatenate_hdf5s {input_files} {output_file}", shell=True, check=True
         )
 
-# model 2 runs after model 1 complete, but model 3 starts while 2 is still running - update input w full params specified
-# need to fix concatentate_hdf5s to save attributes for full pcp file
+
 rule evaluate_performance:
     input:
         "output/{pcp_input}/{set_model}/combined_aaprob.hdf5", 
@@ -172,6 +171,35 @@ rule evaluate_performance:
         epam evaluate {input} {output}
         """
 
+
+rule combine_performance_files:
+    input:
+        expand(
+            "output/{pcp_input}/{set_model}/performance.csv",
+            pcp_input=pcp_inputs,
+            set_model=model_combos,
+        ),
+    output:
+        "output/combined_performance.csv",
+        "output/combined_timing.csv",
+    run:
+        input_files = ",".join(input)
+        input_timing_files = ",".join(
+            f"output/{pcp_input}/{set_model}/batch{part}/timing.tsv"
+            for pcp_input in pcp_inputs
+            for set_model in model_combos
+            for part in batch_number
+        )
+        output_file = output[0]
+        output_timing_file = output[1]
+        subprocess.run(
+            f"epam concatenate_csvs {input_files} {output_file}", shell=True, check=True
+        )
+        subprocess.run(
+            f"epam concatenate_csvs {input_timing_files} {output_timing_file} --is_tsv --record_path",
+            shell=True,
+            check=True,
+        )
 
 # rule combine_performance_files:
 #     input:

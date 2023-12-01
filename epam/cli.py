@@ -74,12 +74,12 @@ def concatenate_hdf5s(input_files, output_file):
     """
     input_hdf5s = input_files.split(",")
 
-    with h5py.File(output_file, 'w') as merged_file:
+    with h5py.File(output_file, "w") as merged_file:
         checksums = []
         model_names = set()
         pcp_filenames = []
         for input_file in input_hdf5s:
-            with h5py.File(input_file, 'r') as input_hdf5:
+            with h5py.File(input_file, "r") as input_hdf5:
                 checksums.append(input_hdf5.attrs["checksum"])
                 model_names.add(input_hdf5.attrs["model_name"])
                 pcp_filenames.append(input_hdf5.attrs["pcp_filename"])
@@ -93,7 +93,10 @@ def concatenate_hdf5s(input_files, output_file):
             raise ValueError("Model names do not match across input files.")
 
         common_prefix = os.path.commonprefix(pcp_filenames)
-        full_pcp_file_path = common_prefix.replace("pcp_batched_inputs", "pcp_inputs").rsplit("_", 1)[0] + ".csv"
+        full_pcp_file_path = (
+            common_prefix.replace("pcp_batched_inputs", "pcp_inputs").rsplit("_", 1)[0]
+            + ".csv"
+        )
         full_pcp_checksum = generate_file_checksum(full_pcp_file_path)
 
         merged_file.attrs["checksum"] = full_pcp_checksum
