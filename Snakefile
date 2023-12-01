@@ -28,20 +28,22 @@ set3_model_name_to_spec = {
 }
 
 pcp_inputs = glob_wildcards("pcp_inputs/{name}.csv").name
-batch_number=range(1, 11)
-pcp_per_batch=10
+batch_number=range(1, 6)#11)
+pcp_per_batch=20 #10
 
 rule all:
     input:
-        expand("pcp_batched_inputs/{pcp_input}_{part}.hdf5", pcp_input=pcp_inputs, part=batch_number),  
-        expand("pcp_batched_inputs/{pcp_input}_{part}.csv", pcp_input=pcp_inputs, part=batch_number),
-        expand("output/{pcp_input}/set1/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set1_models, part=batch_number),
-        expand("output/{pcp_input}/set2/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set2_models, part=batch_number),  
-        expand("output/{pcp_input}/set3/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set3_models, part=batch_number),
+        # expand("pcp_batched_inputs/{pcp_input}_{part}.hdf5", pcp_input=pcp_inputs, part=batch_number),  
+        # expand("pcp_batched_inputs/{pcp_input}_{part}.csv", pcp_input=pcp_inputs, part=batch_number),
+        # expand("output/{pcp_input}/set1/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set1_models, part=batch_number),
+        # expand("output/{pcp_input}/set2/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set2_models, part=batch_number),  
+        # expand("output/{pcp_input}/set3/{model_name}/batch{part}/aaprob.hdf5", pcp_input=pcp_inputs, model_name=set3_models, part=batch_number),
         expand("output/{pcp_input}/set1/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set1_models),
-        expand("output/{pcp_input}/set2/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set2_models),  
-        expand("output/{pcp_input}/set3/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set3_models),
-
+        # expand("output/{pcp_input}/set2/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set2_models),  
+        # expand("output/{pcp_input}/set3/{model_name}/combined_aaprob.hdf5", pcp_input=pcp_inputs, model_name=set3_models),
+        # expand("output/{pcp_input}/set1/{model_name}/performance.csv", pcp_input=pcp_inputs, model_name=set1_models),
+        # expand("output/{pcp_input}/set2/{model_name}/performance.csv", pcp_input=pcp_inputs, model_name=set2_models),
+        # expand("output/{pcp_input}/set3/{model_name}/performance.csv", pcp_input=pcp_inputs, model_name=set3_models),
 
 
 rule split_pcp_batches:
@@ -158,6 +160,17 @@ rule combine_aaprob_files:
             f"epam concatenate_hdf5s {input_files} {output_file}", shell=True, check=True
         )
 
+# model 2 runs after model 1 complete, but model 3 starts while 2 is still running - update input w full params specified
+# need to fix concatentate_hdf5s to save attributes for full pcp file
+rule evaluate_performance:
+    input:
+        "output/{pcp_input}/{set_model}/combined_aaprob.hdf5", 
+    output:
+        "output/{pcp_input}/{set_model}/performance.csv",
+    shell:
+        """
+        epam evaluate {input} {output}
+        """
 
 
 # rule combine_performance_files:
