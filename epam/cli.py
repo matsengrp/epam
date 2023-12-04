@@ -1,6 +1,9 @@
 import fire
 import pandas as pd
+import h5py
+import os
 from epam import evaluation, models, esm_precompute
+from epam.utils import generate_file_checksum
 
 
 def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
@@ -59,6 +62,46 @@ def concatenate_csvs(
     result_df = pd.concat(dfs, ignore_index=True)
 
     result_df.to_csv(output_csv, index=False)
+
+
+def concatenate_hdf5s(input_files, output_file):
+    """
+    This function concatenates multiple HDF5 files into a single HDF5 file. Used to combine aaprobs HDF5 files across batches of PCPs.
+
+    Parameters:
+    :param input_files (str): A string of paths to input HDF5 files.
+    :param output_file (str): Path to the output merged HDF5 file.
+    """
+    input_hdf5s = input_files.split(",")
+
+    with h5py.File(output_file, "w") as merged_file:
+        checksums = []
+        model_names = set()
+        pcp_filenames = []
+        for input_file in input_hdf5s:
+            with h5py.File(input_file, "r") as input_hdf5:
+                checksums.append(input_hdf5.attrs["checksum"])
+                model_names.add(input_hdf5.attrs["model_name"])
+                pcp_filenames.append(input_hdf5.attrs["pcp_filename"])
+
+                for dataset_name, dataset in input_hdf5.items():
+                    merged_file.copy(dataset, dataset_name)
+
+        if len(model_names) == 1:
+            merged_model_name = model_names.pop()
+        else:
+            raise ValueError("Model names do not match across input files.")
+
+        common_prefix = os.path.commonprefix(pcp_filenames)
+        full_pcp_file_path = (
+            common_prefix.replace("pcp_batched_inputs", "pcp_inputs").rsplit("_", 1)[0]
+            + ".csv"
+        )
+        full_pcp_checksum = generate_file_checksum(full_pcp_file_path)
+
+        merged_file.attrs["checksum"] = full_pcp_checksum
+        merged_file.attrs["model_name"] = merged_model_name
+        merged_file.attrs["pcp_filename"] = full_pcp_file_path
 
 
 def esm_bulk_precompute(csv_path, output_hdf5_path):
