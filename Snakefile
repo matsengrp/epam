@@ -2,6 +2,11 @@ import epam.models
 import json
 import subprocess
 
+# ====== User settings ======
+number_of_batches = 5
+pcp_per_batch = 20
+# ============
+
 model_name_to_spec = {
     model_name: [model_class, json.dumps({**model_params, "model_name": model_name})]
     for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS 
@@ -26,8 +31,14 @@ set3_model_name_to_spec = {
 }
 
 pcp_inputs = glob_wildcards("pcp_inputs/{name}.csv").name
-batch_number=range(1, 6)#11)
-pcp_per_batch=20 #10
+batch_number = range(1, number_of_batches+1)
+
+def get_model_class(model_name, set_model_name_to_spec):
+    return set_model_name_to_spec.get(model_name, (None, None))[0]
+
+def get_model_params(model_name, set_model_name_to_spec):
+    return set_model_name_to_spec.get(model_name, (None, None))[1]
+
 
 rule all:
     input:
@@ -71,8 +82,8 @@ rule run_model_set1:
         aaprob="output/{pcp_input}/set1/{model_name}/batch{part}/aaprob.hdf5",
     params:
         part=lambda wildcards: wildcards.part,
-        model_class=lambda wildcards: set1_model_name_to_spec[wildcards.model_name][0],
-        model_params=lambda wildcards: set1_model_name_to_spec[wildcards.model_name][1],
+        model_class=lambda wildcards: get_model_class(wildcards.model_name, set1_model_name_to_spec),
+        model_params=lambda wildcards: get_model_params(wildcards.model_name, set1_model_name_to_spec),
     benchmark:
         "output/{pcp_input}/set1/{model_name}/batch{part}/timing.tsv"
     wildcard_constraints:
@@ -95,8 +106,8 @@ rule run_model_set2:
         aaprob="output/{pcp_input}/set2/{model_name}/batch{part}/aaprob.hdf5",
     params:
         part=lambda wildcards: wildcards.part,
-        model_class=lambda wildcards: set2_model_name_to_spec[wildcards.model_name][0],
-        model_params=lambda wildcards: set2_model_name_to_spec[wildcards.model_name][1],
+        model_class=lambda wildcards: get_model_class(wildcards.model_name, set2_model_name_to_spec),
+        model_params=lambda wildcards: get_model_params(wildcards.model_name, set2_model_name_to_spec),
     benchmark:
         "output/{pcp_input}/set2/{model_name}/batch{part}/timing.tsv"
     wildcard_constraints:
@@ -118,8 +129,8 @@ rule run_model_set3:
         aaprob="output/{pcp_input}/set3/{model_name}/batch{part}/aaprob.hdf5",
     params:
         part=lambda wildcards: wildcards.part,
-        model_class=lambda wildcards: set3_model_name_to_spec[wildcards.model_name][0],
-        model_params=lambda wildcards: set3_model_name_to_spec[wildcards.model_name][1],
+        model_class=lambda wildcards: get_model_class(wildcards.model_name, set3_model_name_to_spec),
+        model_params=lambda wildcards: get_model_params(wildcards.model_name, set3_model_name_to_spec),
     benchmark:
         "output/{pcp_input}/set3/{model_name}/batch{part}/timing.tsv"
     wildcard_constraints:   
