@@ -2,8 +2,7 @@ from abc import ABC, abstractmethod
 from importlib import resources
 import logging
 from typing import Tuple
-import ablang
-import shmple
+
 import torch
 import torch.optim as optim
 from torch import Tensor
@@ -12,14 +11,19 @@ import h5py
 import numpy as np
 import pandas as pd
 from scipy.special import softmax
+
+import ablang
+
+import shmple
 import epam.molevol as molevol
 import epam.sequences as sequences
 from epam.sequences import (
     AA_STR_SORTED,
     assert_pcp_lengths,
-    translate_sequences,
+    translate_sequence,
     pcp_criteria_check,
 )
+from epam.torch_common import pick_device, optimize_branch_length
 import epam.utils as utils
 
 with resources.path("epam", "__init__.py") as p:
@@ -134,8 +138,8 @@ class SHMple(BaseModel):
             weights_dir=weights_directory, log_level=logging.WARNING
         )
 
-    def predict_rates_and_normed_sub_probs(
-        self, parent: str, branch_length: float
+    def predict_rates_and_normed_subs_probs(
+        self, parent: str
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         A wrapper for the predict_mutabilities_and_substitutions method of the
@@ -154,11 +158,13 @@ class SHMple(BaseModel):
             substitution probabilities as Torch tensors.
         """
         [rates], [subs] = self.model.predict_mutabilities_and_substitutions(
-            [parent], [branch_length]
+            [parent], [1.0]
         )
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return torch.tensor(rates.squeeze()), molevol.normalize_sub_probs(
-            parent_idxs, torch.tensor(subs)
+        return torch.tensor(
+            rates.squeeze(), dtype=torch.float
+        ), molevol.normalize_sub_probs(
+            parent_idxs, torch.tensor(subs, dtype=torch.float)
         )
 
     def _aaprobs_of_parent_and_branch_length(
@@ -178,9 +184,11 @@ class SHMple(BaseModel):
         Returns:
         np.ndarray: The aaprobs for every codon of the parent sequence.
         """
-        rates, subs = self.predict_rates_and_normed_sub_probs(parent, branch_length)
+        rates, subs = self.predict_rates_and_normed_subs_probs(parent)
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return molevol.aaprobs_of_parent_rates_and_sub_probs(parent_idxs, rates, subs)
+        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
+            parent_idxs, rates * branch_length, subs
+        )
 
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         """
@@ -233,16 +241,16 @@ class OptimizableSHMple(SHMple):
     ):
         """Constructs the log_pcp_probability function specific to given rates and sub_probs.
 
-        This function takes log_branch_scaling as input and returns the log
-        probability of the child sequence. It uses log of branch scaling to
-        ensure non-negativity of the branch length."""
+        This function takes log_branch_length as input and returns the log
+        probability of the child sequence. It uses log of branch length to
+        ensure non-negativity."""
 
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
         child_idxs = sequences.nt_idx_tensor_of_str(child)
 
-        def log_pcp_probability(log_branch_scaling):
-            branch_scaling = torch.exp(log_branch_scaling)
-            mut_probs = 1.0 - torch.exp(-rates * branch_scaling)
+        def log_pcp_probability(log_branch_length):
+            branch_length = torch.exp(log_branch_length)
+            mut_probs = 1.0 - torch.exp(-branch_length * rates)
             no_mutation_sites = parent_idxs == child_idxs
 
             same_probs = 1.0 - mut_probs[no_mutation_sites]
@@ -256,7 +264,7 @@ class OptimizableSHMple(SHMple):
 
         return log_pcp_probability
 
-    def _find_optimal_branch_length(self, parent, child):
+    def _find_optimal_branch_length(self, parent, child, starting_branch_length):
         """
         Find the optimal branch length for a parent-child pair in terms of
         nucleotide likelihood.
@@ -264,49 +272,30 @@ class OptimizableSHMple(SHMple):
         Parameters:
         parent (str): The parent sequence.
         child (str): The child sequence.
+        starting_branch_length (float): The branch length used to initialize the optimization.
 
         Returns:
-        float: The optimal branch length.
+        Tensor: The optimal branch length.
         """
 
-        base_branch_length = np.mean([a != b for a, b in zip(parent, child)])
-        rates, sub_probs = self.predict_rates_and_normed_sub_probs(
-            parent, base_branch_length
-        )
+        rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
 
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, rates, sub_probs
         )
-
-        log_branch_scaling = torch.tensor(0.0, requires_grad=True)
-
-        optimizer = optim.Adam([log_branch_scaling], lr=self.learning_rate)
-        prev_log_branch_scaling = log_branch_scaling.clone()
-
-        for _ in range(self.max_optimization_steps):
-            optimizer.zero_grad()
-
-            loss = -log_pcp_probability(log_branch_scaling)
-            assert not torch.isnan(
-                loss
-            ), "Loss is NaN: perhaps selection has given a probability of zero?"
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_([log_branch_scaling], max_norm=2.5)
-            optimizer.step()
-
-            change_in_log_branch_scaling = torch.abs(
-                log_branch_scaling - prev_log_branch_scaling
-            )
-            if change_in_log_branch_scaling < self.optimization_tol:
-                break
-
-            prev_log_branch_scaling = log_branch_scaling.clone()
-
-        branch_scaling = torch.exp(log_branch_scaling.detach())
-        return branch_scaling * base_branch_length
+        return optimize_branch_length(
+            log_pcp_probability,
+            starting_branch_length,
+            self.learning_rate,
+            self.max_optimization_steps,
+            self.optimization_tol,
+        )
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
-        branch_length = self._find_optimal_branch_length(parent, child)
+        base_branch_length = sequences.mutation_frequency(parent, child)
+        branch_length = self._find_optimal_branch_length(
+            parent, child, base_branch_length
+        )
         if branch_length > 0.5:
             print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
@@ -336,9 +325,9 @@ class MutSel(OptimizableSHMple):
         """
         Constructs the log_pcp_probability function specific to given rates and sub_probs.
 
-        This function takes log_branch_scaling as input and returns the log
-        probability of the child sequence. It uses log of branch scaling to
-        ensure non-negativity of the branch length.
+        This function takes log_branch_length as input and returns the log
+        probability of the child sequence. It uses log of branch length to
+        ensure non-negativity.
         """
 
         assert len(parent) % 3 == 0
@@ -348,9 +337,9 @@ class MutSel(OptimizableSHMple):
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
         child_idxs = sequences.nt_idx_tensor_of_str(child)
 
-        def log_pcp_probability(log_branch_scaling: torch.Tensor):
-            branch_scaling = torch.exp(log_branch_scaling)
-            mut_probs = 1.0 - torch.exp(-rates * branch_scaling)
+        def log_pcp_probability(log_branch_length: torch.Tensor):
+            branch_length = torch.exp(log_branch_length)
+            mut_probs = 1.0 - torch.exp(-branch_length * rates)
 
             codon_mutsel_v = molevol.build_codon_mutsel_v(
                 parent_idxs.reshape(-1, 3),
@@ -367,17 +356,19 @@ class MutSel(OptimizableSHMple):
                 reshaped_child_idxs[:, 2],
             ]
 
-            return torch.sum(torch.log(child_prob_vector))
+            result = torch.sum(torch.log(child_prob_vector))
+
+            assert not torch.isnan(result)
+
+            return result
 
         return log_pcp_probability
 
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> Tensor:
-        rates, sub_probs = self.predict_rates_and_normed_sub_probs(
-            parent, branch_length
-        )
+        rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
 
         sel_matrix = self.build_selection_matrix_from_parent(parent)
-        mut_probs = 1.0 - torch.exp(-rates)
+        mut_probs = 1.0 - torch.exp(-branch_length * rates)
 
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
 
@@ -403,37 +394,7 @@ class RandomMutSel(MutSel):
         return matrix
 
 
-class TorchModel(BaseModel):
-    def __init__(self, model_name=None):
-        """
-        Initialize a PyTorch model and select device.
-
-        Parameters:
-        model_name (str, optional): The name of the model. If not specified, the class name is used.
-
-        """
-        super().__init__(model_name=model_name)
-
-        # check that CUDA is usable
-        def check_CUDA():
-            try:
-                torch._C._cuda_init()
-                return True
-            except:
-                return False
-
-        if torch.backends.cudnn.is_available() and check_CUDA():
-            print("Using CUDA")
-            self.device = torch.device("cuda")
-        elif torch.backends.mps.is_available():
-            print("Using Metal Performance Shaders")
-            self.device = torch.device("mps")
-        else:
-            print("Using CPU")
-            self.device = torch.device("cpu")
-
-
-class AbLang(TorchModel):
+class AbLang(BaseModel):
     def __init__(self, chain="heavy", model_name=None):
         """
         Initialize AbLang model with specified chain and create amino acid string.
@@ -444,6 +405,7 @@ class AbLang(TorchModel):
 
         """
         super().__init__(model_name=model_name)
+        self.device = pick_device()
         self.model = ablang.pretrained(chain, device=self.device)
         self.model.freeze()
         vocab_dict = self.model.tokenizer.vocab_to_aa
@@ -492,7 +454,7 @@ class AbLang(TorchModel):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        parent_aa = translate_sequences([parent])[0]
+        parent_aa = translate_sequence(parent)
         return self.probability_array_of_seq(parent_aa)
 
 
@@ -555,3 +517,36 @@ class SHMpleESM(MutSel):
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+
+
+class WrappedBinaryMutSel(MutSel):
+    """A mutation selection model that is built from a model that has a `selection_factors_of_aa_str` method."""
+
+    def __init__(self, selection_model, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.selection_model = selection_model
+
+    def build_selection_matrix_from_parent(self, parent: str):
+        parent = translate_sequence(parent)
+        # We need to take our binary selection matrix and turn it into a selection matrix which gives the same weight to each off-diagonal element.
+        selection_factors = self.selection_model.selection_factors_of_aa_str(parent)
+        parent_idxs = sequences.aa_idx_array_of_str(parent)
+
+        # make a np array with the same number of rows as the length of p_substitution
+        # and the same number of columns as the number of amino acids
+        selection_matrix = np.zeros((len(selection_factors), 20))
+
+        # Set each row to p_substitution/19, which is the probability of the
+        # corresponding site mutating to a given alternative amino acid.
+        selection_matrix[:, :] = selection_factors[:, np.newaxis] / 19.0
+
+        # Set "diagonal" elements to 1 - p_substitution for each corresponding amino
+        # acid in the parent, where "diagonal means keeping the same amino acid.
+        selection_matrix[np.arange(len(parent_idxs)), parent_idxs] = (
+            1.0 - selection_factors
+        )
+
+        # Assert that each row sums to 1.
+        assert np.allclose(selection_matrix.sum(axis=1), 1.0, atol=1e-5)
+
+        return torch.tensor(selection_matrix, dtype=torch.float)
