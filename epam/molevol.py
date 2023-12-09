@@ -46,7 +46,7 @@ def normalize_sub_probs(parent_idxs: Tensor, sub_probs: Tensor) -> Tensor:
 
 
 def build_mutation_matrices(
-    parent_codon_idxs_v: Tensor, mut_probs_v: Tensor, sub_probs_v: Tensor
+    parent_codon_idxs: Tensor, mut_probs: Tensor, sub_probs: Tensor
 ) -> Tensor:
     """
     Generate a sequence of 3x4 mutation matrices for parent codons along a sequence.
@@ -58,12 +58,12 @@ def build_mutation_matrices(
     in the ith parent codon mutating to the kth nucleotide (in indices).
 
     Parameters:
-    parent_codon_idxs_v (torch.Tensor): 2D tensor with each row containing indices representing
+    parent_codon_idxs (torch.Tensor): 2D tensor with each row containing indices representing
                                       the parent codon's nucleotides at each site along the sequence.
                                       Shape should be (codon_count, 3).
-    mut_probs_v (torch.Tensor): 2D tensor representing the mutation probabilities for each site in the codon,
+    mut_probs (torch.Tensor): 2D tensor representing the mutation probabilities for each site in the codon,
                               for each codon along the sequence. Shape should be (codon_count, 3).
-    sub_probs_v (torch.Tensor): 3D tensor representing substitution probabilities for each codon along the
+    sub_probs (torch.Tensor): 3D tensor representing substitution probabilities for each codon along the
                               sequence for each site.
                               Shape should be (codon_count, 3, 4).
 
@@ -72,8 +72,8 @@ def build_mutation_matrices(
                 of the jth position in the ith parent codon mutating to the kth nucleotide.
     """
 
-    codon_count = parent_codon_idxs_v.shape[0]
-    assert parent_codon_idxs_v.shape[1] == 3, "Each parent codon must be of length 3"
+    codon_count = parent_codon_idxs.shape[0]
+    assert parent_codon_idxs.shape[1] == 3, "Each parent codon must be of length 3"
 
     result_matrices = torch.empty((codon_count, 3, 4))
 
@@ -87,9 +87,9 @@ def build_mutation_matrices(
     # needed. So the arange(4) tensor is automatically expanded to match the
     # (codon_count, 3, 1) shape by implicitly turning it into a (1, 1, 4) shape
     # tensor, where it is then broadcasted to the shape (codon_count, 3, 4) to
-    # match the shape of parent_codon_idxs_v[:, :, None] for equality
+    # match the shape of parent_codon_idxs[:, :, None] for equality
     # testing.
-    mask_same_nt = torch.arange(4) == parent_codon_idxs_v[:, :, None]
+    mask_same_nt = torch.arange(4) == parent_codon_idxs[:, :, None]
 
     # Find the multi-dimensional indices where the nucleotide in the parent
     # codon is the same as the nucleotide in the mutation outcome (i.e., no
@@ -102,13 +102,11 @@ def build_mutation_matrices(
     # probability of a given nucleotide not mutating.
     result_matrices[
         same_nt_indices[:, 0], same_nt_indices[:, 1], same_nt_indices[:, 2]
-    ] = (1.0 - mut_probs_v[same_nt_indices[:, 0], same_nt_indices[:, 1]])
+    ] = (1.0 - mut_probs[same_nt_indices[:, 0], same_nt_indices[:, 1]])
 
     # Assign values where the nucleotide is different via broadcasting.
     mask_diff_nt = ~mask_same_nt
-    result_matrices[mask_diff_nt] = (mut_probs_v[:, :, None] * sub_probs_v)[
-        mask_diff_nt
-    ]
+    result_matrices[mask_diff_nt] = (mut_probs[:, :, None] * sub_probs)[mask_diff_nt]
 
     return result_matrices
 
@@ -144,24 +142,24 @@ def codon_probs_of_mutation_matrices(mut_matrix: Tensor) -> Tensor:
     )
 
 
-def aaprobs_of_codon_probs_v(codon_probs_v: Tensor) -> Tensor:
+def aaprobs_of_codon_probs(codon_probs: Tensor) -> Tensor:
     """
     Compute the probability of each amino acid from the probability of each codon, for each parent codon along the sequence.
 
     Parameters:
-    codon_probs_v (torch.Tensor): A 4D tensor representing the probability of mutating
-                                  to each codon for each parent codon along the sequence.
-                                  Shape should be (codon_count, 4, 4, 4).
+    codon_probs (torch.Tensor): A 4D tensor representing the probability of mutating
+                                to each codon for each parent codon along the sequence.
+                                Shape should be (codon_count, 4, 4, 4).
 
     Returns:
     torch.Tensor: A 2D tensor with shape (codon_count, 20) where the ij-th entry is the probability
                   of mutating to the amino acid j from the codon i for each parent codon along the sequence.
     """
-    codon_count = codon_probs_v.shape[0]
+    codon_count = codon_probs.shape[0]
 
     # Reshape such that we merge the last three dimensions into a single dimension while keeping
     # the `codon_count` dimension intact. This prepares the tensor for matrix multiplication.
-    reshaped_probs = codon_probs_v.reshape(codon_count, -1)
+    reshaped_probs = codon_probs.reshape(codon_count, -1)
 
     # Perform matrix multiplication to get unnormalized amino acid probabilities.
     aaprobs = torch.matmul(reshaped_probs, CODON_AA_INDICATOR_MATRIX)
@@ -173,20 +171,20 @@ def aaprobs_of_codon_probs_v(codon_probs_v: Tensor) -> Tensor:
     return aaprobs
 
 
-def aaprob_of_mut_and_sub_v(
-    parent_codon_idxs_v: Tensor, mut_probs_v: Tensor, sub_probs_v: Tensor
+def aaprob_of_mut_and_sub(
+    parent_codon_idxs: Tensor, mut_probs: Tensor, sub_probs: Tensor
 ) -> Tensor:
     """
     For a sequence of parent codons and given nucleotide mutability and substitution probabilities,
     compute the amino acid substitution probabilities for each codon along the sequence.
 
     Parameters:
-    parent_codon_idxs_v (torch.Tensor): A 2D tensor where each row contains indices representing
-                                       the parent codon's nucleotides at each site along the sequence.
-                                       Shape should be (codon_count, 3).
-    mut_probs_v (torch.Tensor): A 2D tensor representing the mutation probabilities for each site in the codon,
-                                for each codon along the sequence. Shape should be (codon_count, 3).
-    sub_probs_v (torch.Tensor): A 3D tensor representing substitution probabilities for each codon along the
+    parent_codon_idxs (torch.Tensor): A 2D tensor where each row contains indices representing
+                                      the parent codon's nucleotides at each site along the sequence.
+                                      Shape should be (codon_count, 3).
+    mut_probs (torch.Tensor): A 2D tensor representing the mutation probabilities for each site in the codon,
+                              for each codon along the sequence. Shape should be (codon_count, 3).
+    sub_probs (torch.Tensor): A 3D tensor representing substitution probabilities for each codon along the
                                 sequence for each site.
                                 Shape should be (codon_count, 3, 4).
 
@@ -194,11 +192,9 @@ def aaprob_of_mut_and_sub_v(
     torch.Tensor: A 2D tensor with shape (codon_count, 20) where the ij-th entry is the probability
                   of mutating to the amino acid j from the codon i for each parent codon along the sequence.
     """
-    mut_matrices = build_mutation_matrices(
-        parent_codon_idxs_v, mut_probs_v, sub_probs_v
-    )
+    mut_matrices = build_mutation_matrices(parent_codon_idxs, mut_probs, sub_probs)
     codon_probs = codon_probs_of_mutation_matrices(mut_matrices)
-    return aaprobs_of_codon_probs_v(codon_probs)
+    return aaprobs_of_codon_probs(codon_probs)
 
 
 def reshape_for_codons(array: Tensor) -> Tensor:
@@ -239,66 +235,66 @@ def aaprobs_of_parent_scaled_rates_and_sub_probs(
     mut_probs = 1.0 - torch.exp(-scaled_rates)
 
     # Reshape the inputs to include a codon dimension.
-    parent_codon_idxs_v = reshape_for_codons(parent_idxs)
-    codon_mut_probs_v = reshape_for_codons(mut_probs)
-    codon_subs_v = reshape_for_codons(sub_probs)
+    parent_codon_idxs = reshape_for_codons(parent_idxs)
+    codon_mut_probs = reshape_for_codons(mut_probs)
+    codon_sub_probs = reshape_for_codons(sub_probs)
 
     # Vectorized calculation of amino acid probabilities.
-    return aaprob_of_mut_and_sub_v(parent_codon_idxs_v, codon_mut_probs_v, codon_subs_v)
+    return aaprob_of_mut_and_sub(parent_codon_idxs, codon_mut_probs, codon_sub_probs)
 
 
-def build_codon_mutsel_v(
-    parent_codon_idxs_v: Tensor,
-    codon_mut_probs_v: Tensor,
-    codon_sub_probs_v: Tensor,
-    aa_sel_matrix_v: Tensor,
+def build_codon_mutsel(
+    parent_codon_idxs: Tensor,
+    codon_mut_probs: Tensor,
+    codon_sub_probs: Tensor,
+    aa_sel_matrices: Tensor,
 ) -> Tensor:
     """
     Build a sequence of codon mutation-selection matrices for codons along a sequence.
 
     Args:
-        parent_codon_idxs_v (torch.Tensor): The parent codons for each sequence. Shape: (codon_count, 3)
-        codon_mut_probs_v (torch.Tensor): The mutation probabilities for each site in each codon. Shape: (codon_count, 3)
-        codon_sub_probs_v (torch.Tensor): The substitution probabilities for each site in each codon. Shape: (codon_count, 3, 4)
-        aa_sel_matrix_v (torch.Tensor): The amino-acid selection matrices for each sequence. Shape: (codon_count, 20)
+        parent_codon_idxs (torch.Tensor): The parent codons for each sequence. Shape: (codon_count, 3)
+        codon_mut_probs (torch.Tensor): The mutation probabilities for each site in each codon. Shape: (codon_count, 3)
+        codon_sub_probs (torch.Tensor): The substitution probabilities for each site in each codon. Shape: (codon_count, 3, 4)
+        aa_sel_matrices (torch.Tensor): The amino-acid selection matrices for each site. Shape: (codon_count, 20)
 
     Returns:
         torch.Tensor: The probability of mutating to each codon, for each sequence. Shape: (codon_count, 4, 4, 4)
     """
-    mut_matrix_v = build_mutation_matrices(
-        parent_codon_idxs_v, codon_mut_probs_v, codon_sub_probs_v
+    mut_matrices = build_mutation_matrices(
+        parent_codon_idxs, codon_mut_probs, codon_sub_probs
     )
-    codon_probs_v = codon_probs_of_mutation_matrices(mut_matrix_v)
+    codon_probs = codon_probs_of_mutation_matrices(mut_matrices)
 
     # Calculate the codon selection matrix for each sequence via Einstein
     # summation, in which we sum over the repeated indices.
     # So, for each site (s) and codon (c), sum over amino acids (a):
-    # codon_sel_matrix_v[s, c] = sum_a(CODON_AA_INDICATOR_MATRIX[c, a] * aa_sel_matrix_v[s, a])
+    # codon_sel_matrices[s, c] = sum_a(CODON_AA_INDICATOR_MATRIX[c, a] * aa_sel_matrices[s, a])
     # Resulting shape is (S, C) where S is the number of sites and C is the number of codons.
-    codon_sel_matrix_v = torch.einsum(
-        "ca,sa->sc", CODON_AA_INDICATOR_MATRIX, aa_sel_matrix_v
+    codon_sel_matrices = torch.einsum(
+        "ca,sa->sc", CODON_AA_INDICATOR_MATRIX, aa_sel_matrices
     )
 
     # Multiply the codon probabilities by the selection matrices
-    codon_mutsel_v = codon_probs_v * codon_sel_matrix_v.view(-1, 4, 4, 4)
+    codon_mutsel = codon_probs * codon_sel_matrices.view(-1, 4, 4, 4)
 
     # Now we need to recalculate the probability of staying in the same codon.
     # In our setup, this is the probability of nothing happening.
     # To calculate this, we zero out the previously calculated probabilities...
-    codon_count = parent_codon_idxs_v.shape[0]
-    codon_mutsel_v[(torch.arange(codon_count), *parent_codon_idxs_v.T)] = 0.0
+    codon_count = parent_codon_idxs.shape[0]
+    codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 0.0
     # sum together their probabilities...
-    sums = codon_mutsel_v.sum(dim=(1, 2, 3))
+    sums = codon_mutsel.sum(dim=(1, 2, 3))
     # then set the parent codon probabilities to 1 minus the sum.
-    codon_mutsel_v[(torch.arange(codon_count), *parent_codon_idxs_v.T)] = 1.0 - sums
+    codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 1.0 - sums
 
-    return codon_mutsel_v
+    return codon_mutsel
 
 
-def neutral_aa_mut_prob_v(
-    parent_codon_idxs_v: Tensor,
-    codon_mut_probs_v: Tensor,
-    codon_sub_probs_v: Tensor,
+def neutral_aa_mut_probs(
+    parent_codon_idxs: Tensor,
+    codon_mut_probs: Tensor,
+    codon_sub_probs: Tensor,
 ) -> Tensor:
     """
     For every site, what is the probability that the amino acid will have a
@@ -309,35 +305,35 @@ def neutral_aa_mut_prob_v(
     this, but it's the cleanest. We could make it faster as needed.
 
     Args:
-        parent_codon_idxs_v (torch.Tensor): The parent codons for each sequence. Shape: (codon_count, 3)
-        codon_mut_probs_v (torch.Tensor): The mutation probabilities for each site in each codon. Shape: (codon_count, 3)
-        codon_sub_probs_v (torch.Tensor): The substitution probabilities for each site in each codon. Shape: (codon_count, 3, 4)
+        parent_codon_idxs (torch.Tensor): The parent codons for each sequence. Shape: (codon_count, 3)
+        codon_mut_probs (torch.Tensor): The mutation probabilities for each site in each codon. Shape: (codon_count, 3)
+        codon_sub_probs (torch.Tensor): The substitution probabilities for each site in each codon. Shape: (codon_count, 3, 4)
 
     Returns:
         torch.Tensor: The probability that each site will change amino acid.
                       Shape: (codon_count,)
     """
 
-    mut_matrix_v = build_mutation_matrices(
-        parent_codon_idxs_v, codon_mut_probs_v, codon_sub_probs_v
+    mut_matrices = build_mutation_matrices(
+        parent_codon_idxs, codon_mut_probs, codon_sub_probs
     )
-    codon_probs_v = codon_probs_of_mutation_matrices(mut_matrix_v).view(-1, 64)
+    codon_probs = codon_probs_of_mutation_matrices(mut_matrices).view(-1, 64)
 
     # Get the probability of mutating to each amino acid.
-    aa_probs_v = codon_probs_v @ CODON_AA_INDICATOR_MATRIX
+    aa_probs = codon_probs @ CODON_AA_INDICATOR_MATRIX
 
     # Next we build a table that will allow us to look up the amino acid index
     # from the codon indices. Argmax gets the aa index.
     aa_idx_from_codon = CODON_AA_INDICATOR_MATRIX.argmax(dim=1).view(4, 4, 4)
 
     # Get the amino acid index for each parent codon.
-    parent_aa_idxs_v = aa_idx_from_codon[
+    parent_aa_idxs = aa_idx_from_codon[
         (
-            parent_codon_idxs_v[:, 0],
-            parent_codon_idxs_v[:, 1],
-            parent_codon_idxs_v[:, 2],
+            parent_codon_idxs[:, 0],
+            parent_codon_idxs[:, 1],
+            parent_codon_idxs[:, 2],
         )
     ]
-    p_staying_same = aa_probs_v[(torch.arange(len(parent_aa_idxs_v)), parent_aa_idxs_v)]
+    p_staying_same = aa_probs[(torch.arange(len(parent_aa_idxs)), parent_aa_idxs)]
 
     return 1 - p_staying_same
