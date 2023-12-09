@@ -341,7 +341,7 @@ class MutSel(OptimizableSHMple):
             branch_length = torch.exp(log_branch_length)
             mut_probs = 1.0 - torch.exp(-branch_length * rates)
 
-            codon_mutsel_v = molevol.build_codon_mutsel_v(
+            codon_mutsel = molevol.build_codon_mutsel(
                 parent_idxs.reshape(-1, 3),
                 mut_probs.reshape(-1, 3),
                 sub_probs.reshape(-1, 3, 4),
@@ -349,7 +349,7 @@ class MutSel(OptimizableSHMple):
             )
 
             reshaped_child_idxs = child_idxs.reshape(-1, 3)
-            child_prob_vector = codon_mutsel_v[
+            child_prob_vector = codon_mutsel[
                 torch.arange(len(reshaped_child_idxs)),
                 reshaped_child_idxs[:, 0],
                 reshaped_child_idxs[:, 1],
@@ -372,14 +372,14 @@ class MutSel(OptimizableSHMple):
 
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
 
-        codon_mutsel_v = molevol.build_codon_mutsel_v(
+        codon_mutsel = molevol.build_codon_mutsel(
             parent_idxs.reshape(-1, 3),
             mut_probs.reshape(-1, 3),
             sub_probs.reshape(-1, 3, 4),
             sel_matrix,
         )
 
-        return molevol.aaprobs_of_codon_probs_v(codon_mutsel_v)
+        return molevol.aaprobs_of_codon_probs(codon_mutsel)
 
 
 class RandomMutSel(MutSel):
