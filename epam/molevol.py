@@ -106,9 +106,7 @@ def build_mutation_matrices(
 
     # Assign values where the nucleotide is different via broadcasting.
     mask_diff_nt = ~mask_same_nt
-    result_matrices[mask_diff_nt] = (mut_probs[:, :, None] * sub_probs)[
-        mask_diff_nt
-    ]
+    result_matrices[mask_diff_nt] = (mut_probs[:, :, None] * sub_probs)[mask_diff_nt]
 
     return result_matrices
 
@@ -194,9 +192,7 @@ def aaprob_of_mut_and_sub(
     torch.Tensor: A 2D tensor with shape (codon_count, 20) where the ij-th entry is the probability
                   of mutating to the amino acid j from the codon i for each parent codon along the sequence.
     """
-    mut_matrices = build_mutation_matrices(
-        parent_codon_idxs, mut_probs, sub_probs
-    )
+    mut_matrices = build_mutation_matrices(parent_codon_idxs, mut_probs, sub_probs)
     codon_probs = codon_probs_of_mutation_matrices(mut_matrices)
     return aaprobs_of_codon_probs(codon_probs)
 
