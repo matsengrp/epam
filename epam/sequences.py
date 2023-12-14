@@ -58,7 +58,7 @@ def subs_indicator_tensor_of(parent, child):
 
 
 def mask_tensor_of(seq_str, length=None):
-    """Return a mask tensor indicating non-empty and non-mask sites. Sites
+    """Return a mask tensor indicating non-empty and non-"N" sites. Sites
     beyond the length of the sequence are masked."""
     if length is None:
         length = len(seq_str)
