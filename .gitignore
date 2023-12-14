@@ -171,3 +171,4 @@ work/
 pcp_inputs/
 pcp_batched_inputs/
 output/
+_logs/
