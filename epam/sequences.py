@@ -83,7 +83,6 @@ def translate_sequences(nt_sequences):
         if len(seq) % 3 != 0:
             raise ValueError(f"The sequence '{seq}' is not a multiple of 3.")
         aa_seq = str(Seq(seq).translate())
-        aa_seq = aa_seq.replace("X", "N")
         if "*" in aa_seq:
             raise ValueError(f"The sequence '{seq}' contains a stop codon.")
         aa_sequences.append(aa_seq)
