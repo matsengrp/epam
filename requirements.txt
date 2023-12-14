@@ -3,7 +3,7 @@ black
 fair-esm
 h5py
 pytest
-shmple @ git+https://github.com/matsengrp/shmple@f1f3db0b67351bae7c23b96197b58c7674bb95bb
+shmple @ git+ssh://git@github.com/matsengrp/shmple.git@f1f3db0b67351bae7c23b96197b58c7674bb95bb
 snakemake
 tensorboardX
 typing_extensions
