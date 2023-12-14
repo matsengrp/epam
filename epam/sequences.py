@@ -24,12 +24,20 @@ def nt_idx_array_of_str(nt_str):
 
 def aa_idx_array_of_str(aa_str):
     """Return the indices of the amino acids in a string."""
-    return np.array([AA_STR_SORTED.index(aa) for aa in aa_str])
+    try:
+        return np.array([AA_STR_SORTED.index(aa) for aa in aa_str])
+    except ValueError:
+        print(f"Found an invalid amino acid in the string: {aa_str}")
+        raise
 
 
 def nt_idx_tensor_of_str(nt_str):
     """Return the indices of the nucleotides in a string."""
-    return torch.tensor([NT_STR_SORTED.index(nt) for nt in nt_str])
+    try:
+        return torch.tensor([NT_STR_SORTED.index(nt) for nt in nt_str])
+    except ValueError:
+        print(f"Found an invalid nucleotide in the string: {nt_str}")
+        raise
 
 
 def aa_onehot_tensor_of_str(aa_str):
@@ -37,6 +45,30 @@ def aa_onehot_tensor_of_str(aa_str):
     aa_indices_parent = aa_idx_array_of_str(aa_str)
     aa_onehot[torch.arange(len(aa_str)), aa_indices_parent] = 1
     return aa_onehot
+
+
+def subs_indicator_tensor_of(parent, child):
+    """Return a tensor indicating which positions in the parent sequence
+    are substituted in the child sequence.
+    """
+    return torch.tensor(
+        [0 if p == "N" else p != c for p, c in zip(parent, child)],
+        dtype=torch.float,
+    )
+
+
+def mask_tensor_of(seq_str, length=None):
+    """Return a mask tensor indicating non-empty and non-"N" sites. Sites
+    beyond the length of the sequence are masked."""
+    if length is None:
+        length = len(seq_str)
+    mask = torch.zeros(length, dtype=torch.bool)
+    if len(seq_str) < length:
+        seq_str += "N" * (length - len(seq_str))
+    else:
+        seq_str = seq_str[:length]
+    mask[[c != "N" for c in seq_str]] = 1
+    return mask
 
 
 def read_fasta_sequences(file_path):

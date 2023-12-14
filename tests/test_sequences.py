@@ -6,10 +6,12 @@ from Bio.Data import CodonTable
 from epam.sequences import (
     AA_STR_SORTED,
     CODONS,
-    nt_idx_array_of_str,
-    aa_onehot_tensor_of_str,
-    translate_sequences,
     CODON_AA_INDICATOR_MATRIX,
+    aa_onehot_tensor_of_str,
+    mask_tensor_of,
+    nt_idx_array_of_str,
+    subs_indicator_tensor_of,
+    translate_sequences,
 )
 
 
@@ -56,3 +58,18 @@ def test_indicator_matrix():
     table = CodonTable.unambiguous_dna_by_id[1]  # 1 is for the standard table
 
     assert reconstructed_codon_table == table.forward_table
+
+
+def test_subs_indicator_tensor_of():
+    parent = "NAAA"
+    child = "CAGA"
+    expected_output = torch.tensor([0, 0, 1, 0], dtype=torch.float)
+    output = subs_indicator_tensor_of(parent, child)
+    assert torch.equal(output, expected_output)
+
+
+def test_mask_tensor_of():
+    input_seq = "NAAA"
+    expected_output = torch.tensor([0, 1, 1, 1, 0], dtype=torch.bool)
+    output = mask_tensor_of(input_seq, length=5)
+    assert torch.equal(output, expected_output)
