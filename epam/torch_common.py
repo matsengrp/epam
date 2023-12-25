@@ -67,7 +67,7 @@ def optimize_branch_length(
 
     if step_idx == max_optimization_steps - 1:
         print(
-            f"Warning: optimization did not converge after {max_optimization_steps} steps"
+            f"Warning: optimization did not converge after {max_optimization_steps} steps; log branch length is {log_branch_length.detach().item()}"
         )
 
     return torch.exp(log_branch_length.detach()).item()
