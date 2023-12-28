@@ -275,7 +275,7 @@ class OptimizableSHMple(SHMple):
         starting_branch_length (float): The branch length used to initialize the optimization.
 
         Returns:
-        Tensor: The optimal branch length.
+        float: The optimal branch length.
         """
 
         rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
@@ -535,17 +535,17 @@ class WrappedBinaryMutSel(MutSel):
 
         # make a np array with the same number of rows as the length of p_substitution
         # and the same number of columns as the number of amino acids
-        selection_matrix = np.zeros((len(selection_factors), 20))
+        selection_matrix = torch.zeros((len(selection_factors), 20), dtype=torch.float)
 
         # Set each row to p_substitution/19, which is the probability of the
         # corresponding site mutating to a given alternative amino acid.
-        selection_matrix[:, :] = p_substitution[:, np.newaxis] / 19.0
+        selection_matrix[:, :] = p_substitution[:, None] / 19.0
 
         # Set "diagonal" elements to selection factors for each corresponding
         # amino acid in the parent, where "diagonal means keeping the same amino acid.
-        selection_matrix[np.arange(len(parent_idxs)), parent_idxs] = selection_factors
+        selection_matrix[torch.arange(len(parent_idxs)), parent_idxs] = selection_factors
 
         # Assert that each row sums to 1.
-        assert np.allclose(selection_matrix.sum(axis=1), 1.0, atol=1e-5)
+        assert torch.allclose(selection_matrix.sum(axis=1), torch.tensor(1.0), atol=1e-5)
 
-        return torch.tensor(selection_matrix, dtype=torch.float)
+        return selection_matrix
