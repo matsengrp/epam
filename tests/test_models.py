@@ -8,7 +8,14 @@ import epam.models
 from epam.esm_precompute import precompute_and_save
 from epam.esm_precompute import load_and_convert_to_dict
 from epam.sequences import translate_sequence
-from epam.models import AbLang, SHMple, OptimizableSHMple, MutSel, SHMpleESM
+from epam.models import (
+    AbLang,
+    SHMple,
+    OptimizableSHMple,
+    MutSel,
+    SHMpleESM,
+    WrappedBinaryMutSel,
+)
 
 parent_seqs = [
     "EVQLVESGPGLVQPGKSLRLSCVASGFTFSGYGMHWVRQAPGKGLEWIALIIYDESNKYYADSVKGRFTISRDNSKNTLYLQMSSLRAEDTAVFYCAKVKFYDPTAPNDYWGQGTLVTVSS",
@@ -106,6 +113,34 @@ def test_nasty_shmple_esm():
     shmple_esm = SHMpleESM(weights_directory=weights_path)
     shmple_esm.preload_esm_data(bad_esm_file)
     shmple_esm.write_aaprobs(bad_pcp_file, bad_out_file)
+
+
+class ConserveEverythingExceptTyrosine:
+    """
+    A fake selection model in which everything exept tyrosine is perfectly
+    conserved: Y is assigned a selection coefficient of 0, and all other amino
+    acids are assigned a selection coefficient of 1.
+    """
+
+    def selection_factors_of_aa_str(self, aa_str):
+        return torch.tensor(
+            [1.0 if aa_str[i] != "Y" else 0.0 for i in range(len(aa_str))]
+        )
+
+
+@pytest.fixture
+def wrapped_not_tyrosine():
+    not_tyrosine = ConserveEverythingExceptTyrosine()
+    return WrappedBinaryMutSel(not_tyrosine, weights_directory=weights_path)
+
+
+def test_wrapped_binary_mut_sel(wrapped_not_tyrosine):
+    nt_seq = "GCTTAT"
+    assert translate_sequence(nt_seq) == "AY"
+    not_tyrosine_out = wrapped_not_tyrosine.build_selection_matrix_from_parent(nt_seq)
+    assert torch.allclose(not_tyrosine_out.sum(axis=1), torch.ones(2))
+    assert not_tyrosine_out[0, 0] == 1.0
+    assert not_tyrosine_out[1, -1] == 0.0
 
 
 def hdf5_files_identical(path_1, path_2, tol=1e-4):
