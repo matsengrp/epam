@@ -134,9 +134,17 @@ class SHMple(BaseModel):
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         """
         super().__init__(model_name=model_name)
-        self.model = shmple.AttentionModel(
-            weights_dir=weights_directory, log_level=logging.WARNING
-        )
+        # It's a little strange to have no shmple model, but that's useful for
+        # cases when we've pre-recorded the mutabilities for our likelihood
+        # function and are just using this as a framework for branch length
+        # optimization. In any case this is going to change once we shift over
+        # to using netam models.
+        if weights_directory is None:
+            self.model = None
+        else:
+            self.model = shmple.AttentionModel(
+                weights_dir=weights_directory, log_level=logging.WARNING
+            )
 
     def predict_rates_and_normed_subs_probs(
         self, parent: str
