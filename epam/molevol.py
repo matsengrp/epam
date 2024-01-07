@@ -277,6 +277,8 @@ def build_codon_mutsel(
 
     # Multiply the codon probabilities by the selection matrices
     codon_mutsel = codon_probs * codon_sel_matrices.view(-1, 4, 4, 4)
+    # Clamp the codon_mutsel above by 1: these are probabilities.
+    codon_mutsel = codon_mutsel.clamp(max=1.0)
 
     # Now we need to recalculate the probability of staying in the same codon.
     # In our setup, this is the probability of nothing happening.
@@ -285,8 +287,11 @@ def build_codon_mutsel(
     codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 0.0
     # sum together their probabilities...
     sums = codon_mutsel.sum(dim=(1, 2, 3))
+    if sums.max() > 1.0:
+        print("Warning: codon_mutsel outbound probabilities sum to more than 1.0")
     # then set the parent codon probabilities to 1 minus the sum.
     codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 1.0 - sums
+    codon_mutsel = codon_mutsel.clamp(min=0.0)
 
     return codon_mutsel
 
