@@ -673,7 +673,7 @@ class WrappedBinaryMutSel(MutSel):
         selection_matrix = torch.zeros((len(selection_factors), 20), dtype=torch.float)
         # Every "off-diagonal" entry of the selection matrix is set to the selection
         # factor, where "diagonal" means keeping the same amino acid.
-        selection_matrix[:, :] = selection_factors[:, None] 
+        selection_matrix[:, :] = selection_factors[:, None]
         # Set "diagonal" elements to one.
         parent_idxs = sequences.aa_idx_array_of_str(parent)
         selection_matrix[torch.arange(len(parent_idxs)), parent_idxs] = 1.0
