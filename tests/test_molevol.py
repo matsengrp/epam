@@ -116,8 +116,10 @@ def test_aaprob_of_mut_and_sub():
     codon_mut_probs = mut_probs[0:3]
     codon_subs = torch.tensor(subs[0:3])
 
-    iterative_result = iterative_aaprob_of_mut_and_sub(parent_codon, codon_mut_probs, codon_subs)
-    
+    iterative_result = iterative_aaprob_of_mut_and_sub(
+        parent_codon, codon_mut_probs, codon_subs
+    )
+
     parent_codon_idxs = parent_codon_idxs.unsqueeze(0)
     codon_mut_probs = codon_mut_probs.unsqueeze(0)
     codon_subs = codon_subs.unsqueeze(0)
