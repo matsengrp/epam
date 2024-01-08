@@ -366,7 +366,7 @@ class MutSel(OptimizableSHMple):
 
             result = torch.sum(torch.log(child_prob_vector))
 
-            assert not torch.isnan(result)
+            assert torch.isfinite(result)
 
             return result
 
