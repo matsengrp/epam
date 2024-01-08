@@ -364,6 +364,9 @@ class MutSel(OptimizableSHMple):
                 reshaped_child_idxs[:, 2],
             ]
 
+            # TODO there is a clamp here
+            child_prob_vector = torch.clamp(child_prob_vector, min=1e-10, max=1.0)
+
             result = torch.sum(torch.log(child_prob_vector))
 
             assert torch.isfinite(result)
