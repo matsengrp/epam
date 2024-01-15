@@ -287,13 +287,18 @@ def build_codon_mutsel(
     codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 0.0
     # sum together their probabilities...
     sums = codon_mutsel.sum(dim=(1, 2, 3))
-    if sums.max() > 1.0:
-        print("Warning: codon_mutsel outbound probabilities sum to more than 1.0")
+    # if sums.max() > 1.0:
+    #    print("Warning: codon_mutsel outbound probabilities sum to more than 1.0")
     # then set the parent codon probabilities to 1 minus the sum.
     codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 1.0 - sums
     codon_mutsel = codon_mutsel.clamp(min=0.0)
 
-    return codon_mutsel
+    if sums.max() > 1.0:
+        sums_too_big = sums.max()
+    else:
+        sums_too_big = None
+
+    return codon_mutsel, sums_too_big
 
 
 def neutral_aa_mut_probs(

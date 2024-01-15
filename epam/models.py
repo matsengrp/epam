@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from importlib import resources
 import logging
+import time
 from typing import Tuple
 
 import torch
@@ -317,6 +318,12 @@ class MutSel(OptimizableSHMple):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        #  TODO temp
+        self.csv_file = open(
+            f"prob_sums_too_big_{int(time.time())}.csv", "w"
+        )
+        self.csv_file.write("parent,child,branch_length,sums_too_big\n")
+            
 
     @abstractmethod
     def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
@@ -349,12 +356,16 @@ class MutSel(OptimizableSHMple):
             branch_length = torch.exp(log_branch_length)
             mut_probs = 1.0 - torch.exp(-branch_length * rates)
 
-            codon_mutsel = molevol.build_codon_mutsel(
+            codon_mutsel, sums_too_big = molevol.build_codon_mutsel(
                 parent_idxs.reshape(-1, 3),
                 mut_probs.reshape(-1, 3),
                 sub_probs.reshape(-1, 3, 4),
                 sel_matrix,
             )
+
+            # TODO temp
+            if sums_too_big is not None:
+                self.csv_file.write(f"{parent},{child},{branch_length},{sums_too_big}\n")
 
             reshaped_child_idxs = child_idxs.reshape(-1, 3)
             child_prob_vector = codon_mutsel[
@@ -382,12 +393,17 @@ class MutSel(OptimizableSHMple):
 
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
 
-        codon_mutsel = molevol.build_codon_mutsel(
+        codon_mutsel, sums_too_big = molevol.build_codon_mutsel(
             parent_idxs.reshape(-1, 3),
             mut_probs.reshape(-1, 3),
             sub_probs.reshape(-1, 3, 4),
             sel_matrix,
         )
+
+        if sums_too_big:
+            print(
+                "Warning: some of the codon probability sums were too big for the codon mutsel calculation."
+            )
 
         return molevol.aaprobs_of_codon_probs(codon_mutsel)
 
