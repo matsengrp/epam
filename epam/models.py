@@ -558,7 +558,14 @@ class AbLang(BaseModel):
 
             same_probs = 1.0 - branch_length + sub_probs[no_sub_sites]
             diff_probs = sub_probs[~no_sub_sites]
+
+            same_probs = torch.clamp(same_probs, min=0.000001, max=0.99999998)
+            diff_probs = torch.clamp(diff_probs, min=0.000001, max=0.99999998)
+
             child_log_prob = torch.log(torch.cat([same_probs, diff_probs])).sum()
+
+            # print(f"same_probs = {same_probs}")
+            # print(f"diff_probs = {diff_probs}")
 
             return child_log_prob
         
