@@ -479,7 +479,7 @@ class AbLang(BaseModel):
             np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
 
-    def probability_array_of_seq(self, seq: str):
+    def probability_array_of_seq(self, seq: str) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
 
@@ -525,23 +525,53 @@ class AbLang(BaseModel):
                 else:
                     scaled_prob_arr[site, ordered_aa] = branch_length*prob_arr[site, ordered_aa]
         return scaled_prob_arr
+    
+    def _build_log_pcp_probability(self, parent: str, child: str, aa_probs: Tensor):
+        """Constructs the log_pcp_probability function specific to given sub_probs. 
 
-    # def unscaled_aaprobs_of_parent_child_pair(self, parent: str, child=None) -> np.ndarray:
-    #     """
-    #     Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
+        This function takes log_branch_length as input and returns the log
+        probability of the child sequence. It uses log of branch length to
+        ensure non-negativity.""" 
 
-    #     The rows of the array correspond to the amino acids sorted alphabetically.
+        parent_idx = sequences.aa_idx_tensor_of_str(parent)
+        child_idx = sequences.aa_idx_tensor_of_str(child)
 
-    #     Parameters:
-    #     parent (str): The parent sequence for which we want the array of probabilities.
-    #     child (str): The child sequence (ignored for AbLang model).
+        # scaling p_i for sites with no substitution: p_i = 1 - branch_length + p_i*branch_length
+        # scaling p_i for sites with substitution: p_i = p_i*branch_length
+        def log_pcp_probability(log_branch_length):
+            branch_length = torch.exp(log_branch_length)
+            sub_probs = branch_length*aa_probs
 
-    #     Returns:
-    #     numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+            no_sub_sites = parent_idx == child_idx
 
-    #     """
-    #     parent_aa = translate_sequence(parent)
-    #     return self.probability_array_of_seq(parent_aa)
+            same_probs = 1.0 - branch_length + sub_probs[no_sub_sites]
+            diff_probs = sub_probs[~no_sub_sites]
+            child_log_prob = torch.log(torch.cat([same_probs, diff_probs])).sum()
+
+            return child_log_prob
+        
+        return log_pcp_probability
+
+    def _find_optimal_branch_length(self, parent, child, starting_branch_length):
+        """Find the optimal branch length for a parent-child pair in terms of
+        amino acid likelihood.
+        
+        Parameters:
+        parent (str): The parent AA sequence.
+        child (str): The child AA sequence.
+        starting_branch_length (float): The branch length used to initialize the optimization.
+
+        """
+        prob_arr = self.probability_array_of_seq(parent)
+        prob_tensor = torch.tensor(prob_arr)
+        log_pcp_probability = self._build_log_pcp_probability(parent, child, prob_tensor)
+        return optimize_branch_length(
+            log_pcp_probability,
+            starting_branch_length,
+            self.learning_rate,
+            self.max_optimization_steps,
+            self.optimization_tol,
+        )
     
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         """
@@ -558,12 +588,13 @@ class AbLang(BaseModel):
 
         """
         base_branch_length = sequences.mutation_frequency(parent, child)
-        # branch_length = self._find_optimal_branch_length(
-        #     parent, child, base_branch_length
-        # )
         parent_aa = translate_sequence(parent)
+        child_aa = translate_sequence(child)
         unscaled_aaprob = self.probability_array_of_seq(parent_aa)
-        return self.scale_probability_array(unscaled_aaprob, parent_aa, base_branch_length)
+        branch_length = self._find_optimal_branch_length(
+            parent_aa, child_aa, base_branch_length
+        )
+        return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
 
 
 class CachedESM1v(BaseModel):
