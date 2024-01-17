@@ -526,8 +526,8 @@ class AbLang(BaseModel):
                     scaled_prob_arr[site, ordered_aa] = branch_length*prob_arr[site, ordered_aa]
         return scaled_prob_arr
     
-    def _build_log_pcp_probability(self, parent: str, child: str, aa_probs: Tensor):
-        """Constructs the log_pcp_probability function specific to given sub_probs. 
+    def _build_log_pcp_probability(self, parent: str, child: str, child_aa_probs: Tensor):
+        """Constructs the log_pcp_probability function specific to given aa_probs for the child sequence from AbLang. 
 
         This function takes log_branch_length as input and returns the log
         probability of the child sequence. It uses log of branch length to
@@ -540,7 +540,7 @@ class AbLang(BaseModel):
         # scaling p_i for sites with substitution: p_i = p_i*branch_length
         def log_pcp_probability(log_branch_length):
             branch_length = torch.exp(log_branch_length)
-            sub_probs = branch_length*aa_probs
+            sub_probs = branch_length*child_aa_probs
 
             no_sub_sites = parent_idx == child_idx
 
@@ -563,7 +563,8 @@ class AbLang(BaseModel):
 
         """
         prob_arr = self.probability_array_of_seq(parent)
-        prob_tensor = torch.tensor(prob_arr)
+        child_prob = self.probability_vector_of_child_seq(prob_arr, child)
+        prob_tensor = torch.tensor(child_prob, dtype=torch.float)
         log_pcp_probability = self._build_log_pcp_probability(parent, child, prob_tensor)
         return optimize_branch_length(
             log_pcp_probability,
