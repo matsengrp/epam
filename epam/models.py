@@ -459,13 +459,22 @@ class AbLang_default(BaseModel):
 
 
 class AbLang(BaseModel):
-    def __init__(self, chain="heavy", model_name=None):
+    def __init__(
+            self, chain="heavy", 
+            model_name=None,
+            max_optimization_steps=1000,
+            optimization_tol=1e-4,
+            learning_rate=0.1,
+            ):
         """
         Initialize AbLang model with specified chain and create amino acid string.
 
         Parameters:
         chain (str): Name of the chain, default is "heavy".
         model_name (str, optional): The name of the model. If not specified, the class name is used.
+        max_optimization_steps (int, optional): Maximum number of gradient descent steps. Default is 1000.
+        optimization_tol (float, optional): Tolerance for optimization of log(branch length). Default is 1e-4.
+        learning_rate (float, optional): Learning rate for torch's SGD. Default is 0.1.
 
         """
         super().__init__(model_name=model_name)
@@ -478,6 +487,9 @@ class AbLang(BaseModel):
         assert AA_STR_SORTED == "".join(
             np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
+        self.max_optimization_steps = max_optimization_steps
+        self.optimization_tol = optimization_tol
+        self.learning_rate = learning_rate
 
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
         """
