@@ -564,7 +564,7 @@ class AbLang(BaseModel):
         
         return log_pcp_probability
 
-    def _find_optimal_branch_length(self, parent, child, starting_branch_length):
+    def _find_optimal_branch_length(self, parent, child, starting_branch_length, prob_arr):
         """Find the optimal branch length for a parent-child pair in terms of
         amino acid likelihood.
         
@@ -572,9 +572,9 @@ class AbLang(BaseModel):
         parent (str): The parent AA sequence.
         child (str): The child AA sequence.
         starting_branch_length (float): The branch length used to initialize the optimization.
+        prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by AbLang.
 
         """
-        prob_arr = self.probability_array_of_seq(parent)
         child_prob = self.probability_vector_of_child_seq(prob_arr, child)
         prob_tensor = torch.tensor(child_prob, dtype=torch.float)
         log_pcp_probability = self._build_log_pcp_probability(parent, child, prob_tensor)
@@ -605,7 +605,7 @@ class AbLang(BaseModel):
         child_aa = translate_sequence(child)
         unscaled_aaprob = self.probability_array_of_seq(parent_aa)
         branch_length = self._find_optimal_branch_length(
-            parent_aa, child_aa, base_branch_length
+            parent_aa, child_aa, base_branch_length, unscaled_aaprob
         )
         return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
 
