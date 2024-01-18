@@ -533,9 +533,10 @@ class AbLang(BaseModel):
         for site in range(prob_arr.shape[0]):
             for ordered_aa in range(prob_arr.shape[1]):
                 if AA_STR_SORTED[ordered_aa] == parent[site]:
-                    scaled_prob_arr[site, ordered_aa] = 1 - branch_length + branch_length*(1 - prob_arr[site, ordered_aa])
+                    scaled_prob_arr[site, ordered_aa] = 1 - branch_length + branch_length*prob_arr[site, ordered_aa]
                 else:
                     scaled_prob_arr[site, ordered_aa] = branch_length*prob_arr[site, ordered_aa]
+        scaled_prob_arr = np.clip(scaled_prob_arr, a_min=0.000001, a_max=0.99999998)
         return scaled_prob_arr
     
     def _build_log_pcp_probability(self, parent: str, child: str, child_aa_probs: Tensor):
