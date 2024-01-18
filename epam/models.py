@@ -460,12 +460,13 @@ class AbLang_default(BaseModel):
 
 class AbLang(BaseModel):
     def __init__(
-            self, chain="heavy", 
-            model_name=None,
-            max_optimization_steps=1000,
-            optimization_tol=1e-4,
-            learning_rate=0.1,
-            ):
+        self,
+        chain="heavy",
+        model_name=None,
+        max_optimization_steps=1000,
+        optimization_tol=1e-4,
+        learning_rate=0.1,
+    ):
         """
         Initialize AbLang model with specified chain and create amino acid string.
 
@@ -515,10 +516,70 @@ class AbLang(BaseModel):
         assert len(seq) == arr_sorted.shape[0]
 
         return arr_sorted
-    
-    def scale_probability_array(self, prob_arr: np.ndarray, parent: str, branch_length: float) -> np.ndarray:
+
+    def _build_log_pcp_probability(
+        self, parent: str, child: str, child_aa_probs: Tensor
+    ):
+        """Constructs the log_pcp_probability function specific to given aa_probs for the child sequence from AbLang.
+
+        This function takes log_branch_length as input and returns the log
+        probability of the child sequence. It uses log of branch length to
+        ensure non-negativity."""
+
+        parent_idx = sequences.aa_idx_tensor_of_str(parent)
+        child_idx = sequences.aa_idx_tensor_of_str(child)
+
+        # scaling p_i for sites with no substitution: p_i = 1 - branch_length + p_i*branch_length
+        # scaling p_i for sites with substitution: p_i = p_i*branch_length
+        def log_pcp_probability(log_branch_length):
+            branch_length = torch.exp(log_branch_length)
+            sub_probs = torch.exp(-branch_length) * child_aa_probs
+
+            no_sub_sites = parent_idx == child_idx
+
+            same_probs = 1.0 - torch.exp(-branch_length) + sub_probs[no_sub_sites]
+            diff_probs = sub_probs[~no_sub_sites]
+
+            same_probs = torch.clamp(same_probs, min=0.000001, max=0.99999998)
+            diff_probs = torch.clamp(diff_probs, min=0.000001, max=0.99999998)
+
+            child_log_prob = torch.log(torch.cat([same_probs, diff_probs])).sum()
+
+            return child_log_prob
+
+        return log_pcp_probability
+
+    def _find_optimal_branch_length(
+        self, parent, child, starting_branch_length, prob_arr
+    ):
+        """Find the optimal branch length for a parent-child pair in terms of
+        amino acid likelihood.
+
+        Parameters:
+        parent (str): The parent AA sequence.
+        child (str): The child AA sequence.
+        starting_branch_length (float): The branch length used to initialize the optimization.
+        prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by AbLang.
+
         """
-        Scale the probability array by the branch length.
+        child_prob = self.probability_vector_of_child_seq(prob_arr, child)
+        prob_tensor = torch.tensor(child_prob, dtype=torch.float)
+        log_pcp_probability = self._build_log_pcp_probability(
+            parent, child, prob_tensor
+        )
+        return optimize_branch_length(
+            log_pcp_probability,
+            starting_branch_length,
+            self.learning_rate,
+            self.max_optimization_steps,
+            self.optimization_tol,
+        )
+
+    def scale_probability_array(
+        self, prob_arr: np.ndarray, parent: str, branch_length: float
+    ) -> np.ndarray:
+        """
+        Scale the probability array by the optimized branch length.
 
         Parameters:
         prob_arr (numpy.ndarray): A 2D array containing the normalized probabilities of the amino acids by site.
@@ -533,67 +594,20 @@ class AbLang(BaseModel):
         for site in range(prob_arr.shape[0]):
             for ordered_aa in range(prob_arr.shape[1]):
                 if AA_STR_SORTED[ordered_aa] == parent[site]:
-                    scaled_prob_arr[site, ordered_aa] = 1 - branch_length + branch_length*prob_arr[site, ordered_aa]
+                    scaled_prob_arr[site, ordered_aa] = (
+                        1 - np.exp(-branch_length) + np.exp(-branch_length) * prob_arr[site, ordered_aa]
+                    )
                 else:
-                    scaled_prob_arr[site, ordered_aa] = branch_length*prob_arr[site, ordered_aa]
+                    scaled_prob_arr[site, ordered_aa] = (
+                        np.exp(-branch_length) * prob_arr[site, ordered_aa]
+                    )
         scaled_prob_arr = np.clip(scaled_prob_arr, a_min=0.000001, a_max=0.99999998)
+        if not np.allclose(np.sum(scaled_prob_arr, axis=1), 1.0, atol=1e-5):
+            print(
+                f"Warning: rowsums of scaled_prob_arr do not sum to 1 with optimized branch length {branch_length}."
+            )
         return scaled_prob_arr
-    
-    def _build_log_pcp_probability(self, parent: str, child: str, child_aa_probs: Tensor):
-        """Constructs the log_pcp_probability function specific to given aa_probs for the child sequence from AbLang. 
 
-        This function takes log_branch_length as input and returns the log
-        probability of the child sequence. It uses log of branch length to
-        ensure non-negativity.""" 
-
-        parent_idx = sequences.aa_idx_tensor_of_str(parent)
-        child_idx = sequences.aa_idx_tensor_of_str(child)
-
-        # scaling p_i for sites with no substitution: p_i = 1 - branch_length + p_i*branch_length
-        # scaling p_i for sites with substitution: p_i = p_i*branch_length
-        def log_pcp_probability(log_branch_length):
-            branch_length = torch.exp(log_branch_length)
-            sub_probs = branch_length*child_aa_probs
-
-            no_sub_sites = parent_idx == child_idx
-
-            same_probs = 1.0 - branch_length + sub_probs[no_sub_sites]
-            diff_probs = sub_probs[~no_sub_sites]
-
-            same_probs = torch.clamp(same_probs, min=0.000001, max=0.99999998)
-            diff_probs = torch.clamp(diff_probs, min=0.000001, max=0.99999998)
-
-            child_log_prob = torch.log(torch.cat([same_probs, diff_probs])).sum()
-
-            # print(f"same_probs = {same_probs}")
-            # print(f"diff_probs = {diff_probs}")
-
-            return child_log_prob
-        
-        return log_pcp_probability
-
-    def _find_optimal_branch_length(self, parent, child, starting_branch_length, prob_arr):
-        """Find the optimal branch length for a parent-child pair in terms of
-        amino acid likelihood.
-        
-        Parameters:
-        parent (str): The parent AA sequence.
-        child (str): The child AA sequence.
-        starting_branch_length (float): The branch length used to initialize the optimization.
-        prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by AbLang.
-
-        """
-        child_prob = self.probability_vector_of_child_seq(prob_arr, child)
-        prob_tensor = torch.tensor(child_prob, dtype=torch.float)
-        log_pcp_probability = self._build_log_pcp_probability(parent, child, prob_tensor)
-        return optimize_branch_length(
-            log_pcp_probability,
-            starting_branch_length,
-            self.learning_rate,
-            self.max_optimization_steps,
-            self.optimization_tol,
-        )
-    
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model with a branch length optimization.
@@ -615,6 +629,7 @@ class AbLang(BaseModel):
         branch_length = self._find_optimal_branch_length(
             parent_aa, child_aa, base_branch_length, unscaled_aaprob
         )
+        print(f"Optimized branch length = {branch_length}")
         return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
 
 
