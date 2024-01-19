@@ -491,6 +491,10 @@ class AbLang(BaseModel):
         self.max_optimization_steps = max_optimization_steps
         self.optimization_tol = optimization_tol
         self.learning_rate = learning_rate
+        # TO DELETE
+        import time
+        self.csv_file = open(f"branch_opt_fails_{int(time.time())}", "w")
+        self.csv_file.write("parent,child,mut_freq,opt_branch_length,fail_to_converge\n")
 
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
         """
@@ -626,10 +630,11 @@ class AbLang(BaseModel):
         parent_aa = translate_sequence(parent)
         child_aa = translate_sequence(child)
         unscaled_aaprob = self.probability_array_of_seq(parent_aa)
-        branch_length = self._find_optimal_branch_length(
+        branch_length, converge_status = self._find_optimal_branch_length(
             parent_aa, child_aa, base_branch_length, unscaled_aaprob
         )
-        print(f"Optimized branch length = {branch_length}")
+        #print(f"Optimized branch length = {branch_length}")
+        self.csv_file.write(f"{parent_aa},{child_aa},{base_branch_length},{branch_length},{converge_status}\n")
         return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
 
 
