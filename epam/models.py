@@ -469,7 +469,7 @@ class AbLang(BaseModel):
         learning_rate=0.1,
     ):
         """
-        Initialize AbLang model with specified chain and create amino acid string.
+        Initialize AbLang model with specified chain and create amino acid string. This model extends the AbLang model by optimizing branch length for each parent-child pair for comparison with CTMC models.
 
         Parameters:
         chain (str): Name of the chain, default is "heavy".
@@ -596,13 +596,17 @@ class AbLang(BaseModel):
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
-        scaled_prob_arr[mask_parent] = (1 - bounded_bl + bounded_bl * prob_arr[mask_parent])
+        scaled_prob_arr[mask_parent] = (
+            1 - bounded_bl + bounded_bl * prob_arr[mask_parent]
+        )
         scaled_prob_arr[~mask_parent] = bounded_bl * prob_arr[~mask_parent]
-        
+
+        # Clip probabilities to avoid numerical issues.
         scaled_prob_arr = np.clip(
             scaled_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB)
         )
 
+        # Assert that each row/probability distribution sums to 1.
         if not np.allclose(np.sum(scaled_prob_arr, axis=1), 1.0, atol=1e-5):
             print(
                 f"Warning: rowsums of scaled_prob_arr do not sum to 1 with optimized branch length {branch_length}."
