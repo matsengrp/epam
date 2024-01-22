@@ -23,7 +23,7 @@ from epam.sequences import (
     translate_sequence,
     pcp_criteria_check,
 )
-from epam.torch_common import pick_device, optimize_branch_length
+from epam.torch_common import pick_device, optimize_branch_length, SMALL_PROB
 import epam.utils as utils
 
 with resources.path("epam", "__init__.py") as p:
@@ -33,6 +33,7 @@ with resources.path("epam", "__init__.py") as p:
 # pipeline.
 
 FULLY_SPECIFIED_MODELS = [
+    # ("AbLang_default", "AbLang_default", {"chain": "heavy"}),
     ("AbLang_heavy", "AbLang", {"chain": "heavy"}),
     (
         "SHMple_default",
@@ -491,10 +492,6 @@ class AbLang(BaseModel):
         self.max_optimization_steps = max_optimization_steps
         self.optimization_tol = optimization_tol
         self.learning_rate = learning_rate
-        # TO DELETE
-        import time
-        self.csv_file = open(f"branch_opt_fails_{int(time.time())}", "w")
-        self.csv_file.write("parent,child,mut_freq,opt_branch_length,fail_to_converge\n")
 
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
         """
@@ -533,19 +530,18 @@ class AbLang(BaseModel):
         parent_idx = sequences.aa_idx_tensor_of_str(parent)
         child_idx = sequences.aa_idx_tensor_of_str(child)
 
-        # scaling p_i for sites with no substitution: p_i = 1 - branch_length + p_i*branch_length
-        # scaling p_i for sites with substitution: p_i = p_i*branch_length
         def log_pcp_probability(log_branch_length):
             branch_length = torch.exp(log_branch_length)
-            sub_probs = torch.exp(-branch_length) * child_aa_probs
+            bounded_bl = torch.exp(-branch_length)
+            sub_probs = bounded_bl * child_aa_probs
 
             no_sub_sites = parent_idx == child_idx
 
-            same_probs = 1.0 - torch.exp(-branch_length) + sub_probs[no_sub_sites]
+            same_probs = 1.0 - bounded_bl + sub_probs[no_sub_sites]
             diff_probs = sub_probs[~no_sub_sites]
 
-            same_probs = torch.clamp(same_probs, min=0.000001, max=0.99999998)
-            diff_probs = torch.clamp(diff_probs, min=0.000001, max=0.99999998)
+            same_probs = torch.clamp(same_probs, min=SMALL_PROB, max=(1 - SMALL_PROB))
+            diff_probs = torch.clamp(diff_probs, min=SMALL_PROB, max=(1 - SMALL_PROB))
 
             child_log_prob = torch.log(torch.cat([same_probs, diff_probs])).sum()
 
@@ -594,22 +590,24 @@ class AbLang(BaseModel):
         numpy.ndarray: A 2D array containing the scaled probabilities of the amino acids by site.
 
         """
+        bounded_bl = np.exp(-branch_length)
         scaled_prob_arr = np.zeros(prob_arr.shape)
-        for site in range(prob_arr.shape[0]):
-            for ordered_aa in range(prob_arr.shape[1]):
-                if AA_STR_SORTED[ordered_aa] == parent[site]:
-                    scaled_prob_arr[site, ordered_aa] = (
-                        1 - np.exp(-branch_length) + np.exp(-branch_length) * prob_arr[site, ordered_aa]
-                    )
-                else:
-                    scaled_prob_arr[site, ordered_aa] = (
-                        np.exp(-branch_length) * prob_arr[site, ordered_aa]
-                    )
-        scaled_prob_arr = np.clip(scaled_prob_arr, a_min=0.000001, a_max=0.99999998)
+
+        parent_idx = sequences.aa_idx_array_of_str(parent)
+        mask_parent = np.eye(20, dtype=bool)[parent_idx]
+
+        scaled_prob_arr[mask_parent] = (1 - bounded_bl + bounded_bl * prob_arr[mask_parent])
+        scaled_prob_arr[~mask_parent] = bounded_bl * prob_arr[~mask_parent]
+        
+        scaled_prob_arr = np.clip(
+            scaled_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB)
+        )
+
         if not np.allclose(np.sum(scaled_prob_arr, axis=1), 1.0, atol=1e-5):
             print(
                 f"Warning: rowsums of scaled_prob_arr do not sum to 1 with optimized branch length {branch_length}."
             )
+
         return scaled_prob_arr
 
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
@@ -629,12 +627,12 @@ class AbLang(BaseModel):
         base_branch_length = sequences.mutation_frequency(parent, child)
         parent_aa = translate_sequence(parent)
         child_aa = translate_sequence(child)
+
         unscaled_aaprob = self.probability_array_of_seq(parent_aa)
-        branch_length, converge_status = self._find_optimal_branch_length(
+        branch_length = self._find_optimal_branch_length(
             parent_aa, child_aa, base_branch_length, unscaled_aaprob
         )
-        #print(f"Optimized branch length = {branch_length}")
-        self.csv_file.write(f"{parent_aa},{child_aa},{base_branch_length},{branch_length},{converge_status}\n")
+
         return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
 
 

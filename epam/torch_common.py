@@ -5,6 +5,8 @@ import torch
 import torch.optim as optim
 from torch import nn, Tensor
 
+SMALL_PROB = 1e-8
+
 
 def pick_device():
     # check that CUDA is usable
@@ -69,8 +71,5 @@ def optimize_branch_length(
         print(
             f"Warning: optimization did not converge after {max_optimization_steps} steps"
         )
-        failed_to_converge = True
-    else: 
-        failed_to_converge = False
 
-    return torch.exp(log_branch_length.detach()).item(), failed_to_converge
+    return torch.exp(log_branch_length.detach()).item()
