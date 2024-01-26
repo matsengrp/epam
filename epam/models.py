@@ -23,7 +23,7 @@ from epam.sequences import (
     translate_sequence,
     pcp_criteria_check,
 )
-from epam.torch_common import pick_device, optimize_branch_length
+from epam.torch_common import pick_device, optimize_branch_length, SMALL_PROB
 import epam.utils as utils
 
 with resources.path("epam", "__init__.py") as p:
@@ -395,13 +395,23 @@ class RandomMutSel(MutSel):
 
 
 class AbLang(BaseModel):
-    def __init__(self, chain="heavy", model_name=None):
+    def __init__(
+        self,
+        chain="heavy",
+        model_name=None,
+        max_optimization_steps=1000,
+        optimization_tol=1e-4,
+        learning_rate=0.1,
+    ):
         """
-        Initialize AbLang model with specified chain and create amino acid string.
+        Initialize AbLang model with specified chain and create amino acid string. This model rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
 
         Parameters:
         chain (str): Name of the chain, default is "heavy".
         model_name (str, optional): The name of the model. If not specified, the class name is used.
+        max_optimization_steps (int, optional): Maximum number of gradient descent steps. Default is 1000.
+        optimization_tol (float, optional): Tolerance for optimization of log(branch length). Default is 1e-4.
+        learning_rate (float, optional): Learning rate for torch's SGD. Default is 0.1.
 
         """
         super().__init__(model_name=model_name)
@@ -414,8 +424,11 @@ class AbLang(BaseModel):
         assert AA_STR_SORTED == "".join(
             np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
+        self.max_optimization_steps = max_optimization_steps
+        self.optimization_tol = optimization_tol
+        self.learning_rate = learning_rate
 
-    def probability_array_of_seq(self, seq: str):
+    def probability_array_of_seq(self, seq: str) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
 
@@ -440,9 +453,121 @@ class AbLang(BaseModel):
 
         return arr_sorted
 
-    def aaprobs_of_parent_child_pair(self, parent: str, child=None) -> np.ndarray:
+    def _build_log_pcp_probability(
+        self, parent: str, child: str, child_aa_probs: Tensor
+    ):
         """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
+        Constructs the log_pcp_probability function specific to given aa_probs for the child sequence from AbLang.
+
+        This function takes log_branch_length as input and returns the log
+        probability of the child sequence. It uses log of branch length to
+        ensure non-negativity. The probability of the child sequence is scaled
+        here by the probability of no substitution event (p_no_event), which is
+        equivalent to e^{-t} and bounded between 0 and 1.
+
+        """
+
+        parent_idx = sequences.aa_idx_tensor_of_str(parent)
+        child_idx = sequences.aa_idx_tensor_of_str(child)
+
+        def log_pcp_probability(log_branch_length):
+            branch_length = torch.exp(log_branch_length)
+            p_no_event = torch.exp(-branch_length)
+            sub_probs = p_no_event * child_aa_probs
+
+            no_sub_sites = parent_idx == child_idx
+
+            # Rescaling each site based on whether a substitution event occurred or not.
+            same_probs = 1.0 - p_no_event + sub_probs[no_sub_sites]
+            diff_probs = sub_probs[~no_sub_sites]
+
+            # Clip probabilities to avoid numerical issues.
+            same_probs = torch.clamp(same_probs, min=SMALL_PROB, max=(1 - SMALL_PROB))
+            diff_probs = torch.clamp(diff_probs, min=SMALL_PROB, max=(1 - SMALL_PROB))
+
+            child_log_prob = torch.log(torch.cat([same_probs, diff_probs])).sum()
+
+            return child_log_prob
+
+        return log_pcp_probability
+
+    def _find_optimal_branch_length(
+        self, parent, child, starting_branch_length, prob_arr
+    ):
+        """
+        Find the optimal branch length for a parent-child pair in terms of
+        amino acid likelihood.
+
+        Parameters:
+        parent (str): The parent AA sequence.
+        child (str): The child AA sequence.
+        starting_branch_length (float): The branch length used to initialize the optimization.
+        prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by AbLang.
+
+        """
+        child_prob = self.probability_vector_of_child_seq(prob_arr, child)
+        prob_tensor = torch.tensor(child_prob, dtype=torch.float)
+        log_pcp_probability = self._build_log_pcp_probability(
+            parent, child, prob_tensor
+        )
+        return optimize_branch_length(
+            log_pcp_probability,
+            starting_branch_length,
+            self.learning_rate,
+            self.max_optimization_steps,
+            self.optimization_tol,
+        )
+
+    def scale_probability_array(
+        self, prob_arr: np.ndarray, parent: str, branch_length: float
+    ) -> np.ndarray:
+        """
+        Rescale the amino acid probability matrix from AbLang with the optimized "branch length".
+
+        For fair comparison with CTMC models, we apply a linear rescaling of the amino acid probabilities. By itself,
+        AbLang does not any notion of branch length and will make the same predicition regardless of evolutionary
+        time between the parent and child sequence. We rescale each prob_arr with p_no_event, where the probability of
+        no subsititution is (1 - p_no_event) + p_no_event * prob_arr and the probability of subsitution is p_no_event * prob_arr.
+        For each PCP, the value of p_no_event is optimized to maximize the likelihood of the child sequence. This is
+        more or less equivalent to scaling the branch length in SHMple mut-sel models.
+
+
+        Parameters:
+        prob_arr (numpy.ndarray): A 2D array containing the normalized probabilities of the amino acids by site.
+        parent (str): The parent sequence.
+        branch_length (float): The branch length.
+
+        Returns:
+        numpy.ndarray: A 2D array containing the scaled probabilities of the amino acids by site.
+
+        """
+        p_no_event = np.exp(-branch_length)
+        scaled_prob_arr = np.zeros(prob_arr.shape)
+
+        parent_idx = sequences.aa_idx_array_of_str(parent)
+        mask_parent = np.eye(20, dtype=bool)[parent_idx]
+
+        scaled_prob_arr[mask_parent] = (
+            1 - p_no_event + p_no_event * prob_arr[mask_parent]
+        )
+        scaled_prob_arr[~mask_parent] = p_no_event * prob_arr[~mask_parent]
+
+        # Clip probabilities to avoid numerical issues.
+        scaled_prob_arr = np.clip(
+            scaled_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB)
+        )
+
+        # Assert that each row/probability distribution sums to 1.
+        if not np.allclose(np.sum(scaled_prob_arr, axis=1), 1.0, atol=1e-5):
+            print(
+                f"Warning: rowsums of scaled_prob_arr do not sum to 1 with optimized branch length {branch_length}."
+            )
+
+        return scaled_prob_arr
+
+    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model with a branch length optimization.
 
         The rows of the array correspond to the amino acids sorted alphabetically.
 
@@ -454,8 +579,16 @@ class AbLang(BaseModel):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
+        base_branch_length = sequences.mutation_frequency(parent, child)
         parent_aa = translate_sequence(parent)
-        return self.probability_array_of_seq(parent_aa)
+        child_aa = translate_sequence(child)
+
+        unscaled_aaprob = self.probability_array_of_seq(parent_aa)
+        branch_length = self._find_optimal_branch_length(
+            parent_aa, child_aa, base_branch_length, unscaled_aaprob
+        )
+
+        return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
 
 
 class CachedESM1v(BaseModel):

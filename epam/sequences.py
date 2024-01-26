@@ -40,6 +40,15 @@ def nt_idx_tensor_of_str(nt_str):
         raise
 
 
+def aa_idx_tensor_of_str(aa_str):
+    """Return the indices of the amino acids in a string."""
+    try:
+        return torch.tensor([AA_STR_SORTED.index(aa) for aa in aa_str])
+    except ValueError:
+        print(f"Found an invalid amino acid in the string: {aa_str}")
+        raise
+
+
 def aa_onehot_tensor_of_str(aa_str):
     aa_onehot = torch.zeros((len(aa_str), 20))
     aa_indices_parent = aa_idx_array_of_str(aa_str)

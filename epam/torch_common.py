@@ -5,6 +5,8 @@ import torch
 import torch.optim as optim
 from torch import nn, Tensor
 
+SMALL_PROB = 1e-8
+
 
 def pick_device():
     # check that CUDA is usable

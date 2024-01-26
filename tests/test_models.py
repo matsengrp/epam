@@ -141,7 +141,7 @@ def test_snapshot():
         # Because we're using a snapshot, we don't want to optimize:
         # optimization is fiddly and we want to be able to change it without
         # breaking the snapshot test.
-        if isinstance(model, OptimizableSHMple):
+        if isinstance(model, (OptimizableSHMple, AbLang)):
             model.max_optimization_steps = 0
         out_file = f"_ignore/{source}-{model_name}.hdf5"
         if model_name in ("ESM1v_default", "SHMple_ESM1v"):

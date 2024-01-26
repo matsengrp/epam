@@ -18,6 +18,7 @@ setup(
         "seaborn",
         "statsmodels",
         "fire",
+        "tables",
     ],
     python_requires="==3.9.*",
     classifiers=[
