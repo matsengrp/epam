@@ -400,7 +400,7 @@ class MutSel(OptimizableSHMple):
             sel_matrix,
         )
 
-        if sums_too_big:
+        if sums_too_big is not None:
             print(
                 "Warning: some of the codon probability sums were too big for the codon mutsel calculation."
             )
