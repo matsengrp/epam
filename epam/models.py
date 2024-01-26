@@ -323,7 +323,6 @@ class MutSel(OptimizableSHMple):
         #     f"prob_sums_too_big_{int(time.time())}.csv", "w"
         # )
         # self.csv_file.write("parent,child,branch_length,sums_too_big\n")
-            
 
     @abstractmethod
     def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
