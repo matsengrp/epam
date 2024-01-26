@@ -404,7 +404,7 @@ class AbLang(BaseModel):
         learning_rate=0.1,
     ):
         """
-        Initialize AbLang model with specified chain and create amino acid string. This model extends the AbLang model by optimizing branch length for each parent-child pair for comparison with CTMC models.
+        Initialize AbLang model with specified chain and create amino acid string. This model rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
 
         Parameters:
         chain (str): Name of the chain, default is "heavy".
@@ -456,25 +456,32 @@ class AbLang(BaseModel):
     def _build_log_pcp_probability(
         self, parent: str, child: str, child_aa_probs: Tensor
     ):
-        """Constructs the log_pcp_probability function specific to given aa_probs for the child sequence from AbLang.
+        """
+        Constructs the log_pcp_probability function specific to given aa_probs for the child sequence from AbLang.
 
         This function takes log_branch_length as input and returns the log
         probability of the child sequence. It uses log of branch length to
-        ensure non-negativity."""
+        ensure non-negativity. The probability of the child sequence is scaled
+        here by the probability of no substitution event (p_no_event), which is
+        equivalent to e^{-t} and bounded between 0 and 1.
+
+        """
 
         parent_idx = sequences.aa_idx_tensor_of_str(parent)
         child_idx = sequences.aa_idx_tensor_of_str(child)
 
         def log_pcp_probability(log_branch_length):
             branch_length = torch.exp(log_branch_length)
-            bounded_bl = torch.exp(-branch_length)
-            sub_probs = bounded_bl * child_aa_probs
+            p_no_event = torch.exp(-branch_length)
+            sub_probs = p_no_event * child_aa_probs
 
             no_sub_sites = parent_idx == child_idx
 
-            same_probs = 1.0 - bounded_bl + sub_probs[no_sub_sites]
+            # Rescaling each site based on whether a substitution event occurred or not.
+            same_probs = 1.0 - p_no_event + sub_probs[no_sub_sites]
             diff_probs = sub_probs[~no_sub_sites]
 
+            # Clip probabilities to avoid numerical issues.
             same_probs = torch.clamp(same_probs, min=SMALL_PROB, max=(1 - SMALL_PROB))
             diff_probs = torch.clamp(diff_probs, min=SMALL_PROB, max=(1 - SMALL_PROB))
 
@@ -487,7 +494,8 @@ class AbLang(BaseModel):
     def _find_optimal_branch_length(
         self, parent, child, starting_branch_length, prob_arr
     ):
-        """Find the optimal branch length for a parent-child pair in terms of
+        """
+        Find the optimal branch length for a parent-child pair in terms of
         amino acid likelihood.
 
         Parameters:
@@ -514,7 +522,15 @@ class AbLang(BaseModel):
         self, prob_arr: np.ndarray, parent: str, branch_length: float
     ) -> np.ndarray:
         """
-        Scale the probability array by the optimized branch length.
+        Rescale the amino acid probability matrix from AbLang with the optimized "branch length".
+
+        For fair comparison with CTMC models, we apply a linear rescaling of the amino acid probabilities. By itself,
+        AbLang does not any notion of branch length and will make the same predicition regardless of evolutionary
+        time between the parent and child sequence. We rescale each prob_arr with p_no_event, where the probability of
+        no subsititution is (1 - p_no_event) + p_no_event * prob_arr and the probability of subsitution is p_no_event * prob_arr.
+        For each PCP, the value of p_no_event is optimized to maximize the likelihood of the child sequence. This is
+        more or less equivalent to scaling the branch length in SHMple mut-sel models.
+
 
         Parameters:
         prob_arr (numpy.ndarray): A 2D array containing the normalized probabilities of the amino acids by site.
@@ -525,16 +541,16 @@ class AbLang(BaseModel):
         numpy.ndarray: A 2D array containing the scaled probabilities of the amino acids by site.
 
         """
-        bounded_bl = np.exp(-branch_length)
+        p_no_event = np.exp(-branch_length)
         scaled_prob_arr = np.zeros(prob_arr.shape)
 
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
         scaled_prob_arr[mask_parent] = (
-            1 - bounded_bl + bounded_bl * prob_arr[mask_parent]
+            1 - p_no_event + p_no_event * prob_arr[mask_parent]
         )
-        scaled_prob_arr[~mask_parent] = bounded_bl * prob_arr[~mask_parent]
+        scaled_prob_arr[~mask_parent] = p_no_event * prob_arr[~mask_parent]
 
         # Clip probabilities to avoid numerical issues.
         scaled_prob_arr = np.clip(
