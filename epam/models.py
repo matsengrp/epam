@@ -318,11 +318,11 @@ class MutSel(OptimizableSHMple):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        #  TODO temp
-        self.csv_file = open(
-            f"prob_sums_too_big_{int(time.time())}.csv", "w"
-        )
-        self.csv_file.write("parent,child,branch_length,sums_too_big\n")
+        # This is a diagonstic generating data for netam issue #7.
+        # self.csv_file = open(
+        #     f"prob_sums_too_big_{int(time.time())}.csv", "w"
+        # )
+        # self.csv_file.write("parent,child,branch_length,sums_too_big\n")
             
 
     @abstractmethod
@@ -363,9 +363,9 @@ class MutSel(OptimizableSHMple):
                 sel_matrix,
             )
 
-            # TODO temp
-            if sums_too_big is not None:
-                self.csv_file.write(f"{parent},{child},{branch_length},{sums_too_big}\n")
+            # This is a diagonstic generating data for netam issue #7.
+            # if sums_too_big is not None:
+            #     self.csv_file.write(f"{parent},{child},{branch_length},{sums_too_big}\n")
 
             reshaped_child_idxs = child_idxs.reshape(-1, 3)
             child_prob_vector = codon_mutsel[
