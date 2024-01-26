@@ -7,6 +7,10 @@
     make install
 Note: Depending on OS, a conda-forge or mamba install of [datrie](https://github.com/conda-forge/datrie-feedstock) may be required before running `make install`.
 
+To install `netam` in the epam conda env run the following from within the netam repo (separately cloned):
+
+    pip install -e .
+
 Installing on GPU:
 
     conda create -n epam-gpu python=3.9

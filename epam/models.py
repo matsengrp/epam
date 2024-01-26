@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from importlib import resources
 import logging
+import time
 from typing import Tuple
 
 import torch
@@ -134,9 +135,17 @@ class SHMple(BaseModel):
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         """
         super().__init__(model_name=model_name)
-        self.model = shmple.AttentionModel(
-            weights_dir=weights_directory, log_level=logging.WARNING
-        )
+        # It's a little strange to have no shmple model, but that's useful for
+        # cases when we've pre-recorded the mutabilities for our likelihood
+        # function and are just using this as a framework for branch length
+        # optimization. In any case this is going to change once we shift over
+        # to using netam models.
+        if weights_directory is None:
+            self.model = None
+        else:
+            self.model = shmple.AttentionModel(
+                weights_dir=weights_directory, log_level=logging.WARNING
+            )
 
     def predict_rates_and_normed_subs_probs(
         self, parent: str
@@ -275,7 +284,7 @@ class OptimizableSHMple(SHMple):
         starting_branch_length (float): The branch length used to initialize the optimization.
 
         Returns:
-        Tensor: The optimal branch length.
+        float: The optimal branch length.
         """
 
         rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
@@ -309,6 +318,11 @@ class MutSel(OptimizableSHMple):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # This is a diagonstic generating data for netam issue #7.
+        # self.csv_file = open(
+        #     f"prob_sums_too_big_{int(time.time())}.csv", "w"
+        # )
+        # self.csv_file.write("parent,child,branch_length,sums_too_big\n")
 
     @abstractmethod
     def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
@@ -341,12 +355,16 @@ class MutSel(OptimizableSHMple):
             branch_length = torch.exp(log_branch_length)
             mut_probs = 1.0 - torch.exp(-branch_length * rates)
 
-            codon_mutsel = molevol.build_codon_mutsel(
+            codon_mutsel, sums_too_big = molevol.build_codon_mutsel(
                 parent_idxs.reshape(-1, 3),
                 mut_probs.reshape(-1, 3),
                 sub_probs.reshape(-1, 3, 4),
                 sel_matrix,
             )
+
+            # This is a diagonstic generating data for netam issue #7.
+            # if sums_too_big is not None:
+            #     self.csv_file.write(f"{parent},{child},{branch_length},{sums_too_big}\n")
 
             reshaped_child_idxs = child_idxs.reshape(-1, 3)
             child_prob_vector = codon_mutsel[
@@ -356,9 +374,11 @@ class MutSel(OptimizableSHMple):
                 reshaped_child_idxs[:, 2],
             ]
 
+            child_prob_vector = torch.clamp(child_prob_vector, min=1e-10)
+
             result = torch.sum(torch.log(child_prob_vector))
 
-            assert not torch.isnan(result)
+            assert torch.isfinite(result)
 
             return result
 
@@ -372,12 +392,17 @@ class MutSel(OptimizableSHMple):
 
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
 
-        codon_mutsel = molevol.build_codon_mutsel(
+        codon_mutsel, sums_too_big = molevol.build_codon_mutsel(
             parent_idxs.reshape(-1, 3),
             mut_probs.reshape(-1, 3),
             sub_probs.reshape(-1, 3, 4),
             sel_matrix,
         )
+
+        if sums_too_big is not None:
+            print(
+                "Warning: some of the codon probability sums were too big for the codon mutsel calculation."
+            )
 
         return molevol.aaprobs_of_codon_probs(codon_mutsel)
 
@@ -661,25 +686,13 @@ class WrappedBinaryMutSel(MutSel):
 
     def build_selection_matrix_from_parent(self, parent: str):
         parent = translate_sequence(parent)
-        # We need to take our binary selection matrix and turn it into a selection matrix which gives the same weight to each off-diagonal element.
         selection_factors = self.selection_model.selection_factors_of_aa_str(parent)
+        selection_matrix = torch.zeros((len(selection_factors), 20), dtype=torch.float)
+        # Every "off-diagonal" entry of the selection matrix is set to the selection
+        # factor, where "diagonal" means keeping the same amino acid.
+        selection_matrix[:, :] = selection_factors[:, None]
+        # Set "diagonal" elements to one.
         parent_idxs = sequences.aa_idx_array_of_str(parent)
+        selection_matrix[torch.arange(len(parent_idxs)), parent_idxs] = 1.0
 
-        # make a np array with the same number of rows as the length of p_substitution
-        # and the same number of columns as the number of amino acids
-        selection_matrix = np.zeros((len(selection_factors), 20))
-
-        # Set each row to p_substitution/19, which is the probability of the
-        # corresponding site mutating to a given alternative amino acid.
-        selection_matrix[:, :] = selection_factors[:, np.newaxis] / 19.0
-
-        # Set "diagonal" elements to 1 - p_substitution for each corresponding amino
-        # acid in the parent, where "diagonal means keeping the same amino acid.
-        selection_matrix[np.arange(len(parent_idxs)), parent_idxs] = (
-            1.0 - selection_factors
-        )
-
-        # Assert that each row sums to 1.
-        assert np.allclose(selection_matrix.sum(axis=1), 1.0, atol=1e-5)
-
-        return torch.tensor(selection_matrix, dtype=torch.float)
+        return selection_matrix

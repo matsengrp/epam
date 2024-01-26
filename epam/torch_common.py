@@ -51,9 +51,9 @@ def optimize_branch_length(
         optimizer.zero_grad()
 
         loss = -log_prob_fn(log_branch_length)
-        assert not torch.isnan(
+        assert torch.isfinite(
             loss
-        ), "Loss is NaN: perhaps selection has given a probability of zero?"
+        ), f"Loss is not finite on step {step_idx}: perhaps selection has given a probability of zero?"
         loss.backward()
         torch.nn.utils.clip_grad_norm_([log_branch_length], max_norm=5.0)
         optimizer.step()
@@ -69,7 +69,7 @@ def optimize_branch_length(
 
     if step_idx == max_optimization_steps - 1:
         print(
-            f"Warning: optimization did not converge after {max_optimization_steps} steps"
+            f"Warning: optimization did not converge after {max_optimization_steps} steps; log branch length is {log_branch_length.detach().item()}"
         )
 
     return torch.exp(log_branch_length.detach()).item()
