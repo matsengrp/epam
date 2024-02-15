@@ -36,7 +36,7 @@ def optimize_branch_length(
     optimization_tol=1e-3,
     log_branch_length_lower_threshold=-10.0,
 ):
-    log_branch_length = torch.tensor(np.log(starting_branch_length), requires_grad=True)
+    log_branch_length = torch.tensor(np.log(starting_branch_length), requires_grad=True, dtype=torch.float32)
 
     optimizer = optim.Adam([log_branch_length], lr=learning_rate)
     prev_log_branch_length = log_branch_length.clone()
