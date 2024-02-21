@@ -37,6 +37,13 @@ def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
 
 
 def evaluate(aaprob_paths_str, model_performance_path):
+    """
+    Compute model performance metrics for a set of amino acid probability matrices. Used in Snakefile to evaluate the performance of a single model on a set of PCPs.
+
+    Args:
+        aaprob_paths_str (str): Comma-separated string of paths to the amino acid probability matrices.
+        model_performance_path (str): Path to the output CSV file containing the model performance metrics.
+    """
     aaprob_paths = aaprob_paths_str.split(",")
     evaluation.evaluate(aaprob_paths, model_performance_path)
 
@@ -49,10 +56,12 @@ def concatenate_csvs(
 ):
     """
     This function concatenates multiple CSV or TSV files into one CSV file.
-    :param input_csvs: A string of paths to the input CSV or TSV files separated by commas.
-    :param output_csv: Path to the output CSV file.
-    :param is_tsv: A boolean flag that determines whether the input files are TSV.
-    :param record_path: A boolean flag that adds a column recording the path of the input_csv.
+
+    Args:
+        input_csvs: A string of paths to the input CSV or TSV files separated by commas.
+        output_csv: Path to the output CSV file.
+        is_tsv: A boolean flag that determines whether the input files are TSV.
+        record_path: A boolean flag that adds a column recording the path of the input_csv.
     """
     input_csvs = input_csvs_str.split(",")
     dfs = []
@@ -72,9 +81,9 @@ def concatenate_hdf5s(input_files, output_file):
     """
     This function concatenates multiple HDF5 files into a single HDF5 file. Used to combine aaprobs HDF5 files across batches of PCPs.
 
-    Parameters:
-    :param input_files (str): A string of paths to input HDF5 files.
-    :param output_file (str): Path to the output merged HDF5 file.
+    Args:
+        input_files (str): A string of paths to input HDF5 files.
+        output_file (str): Path to the output merged HDF5 file.
     """
     input_hdf5s = input_files.split(",")
 
@@ -110,9 +119,10 @@ def concatenate_hdf5s(input_files, output_file):
 
 def esm_bulk_precompute(csv_path, output_hdf5_path):
     """
-    This subcommand precomputes ESM1v selection factors for a set of PCPs in bulk, and then saves those values in an HDF5 file for later use in SHMple-ESM.
+    This subcommand precomputes ESM-1v selection factors for a set of PCPs in bulk, and then saves those values in an HDF5 file for later use in SHMple-ESM.
 
-    :param csv_path: Path to a CSV file containing PCP data.
+    Args:
+        csv_path: Path to a CSV file containing PCP data.
     """
     esm_precompute.precompute_and_save(csv_path, output_hdf5_path)
 
@@ -122,8 +132,9 @@ def shmplify(weights_path, csv_path):
     This command precomputes SHMple rates and substitution probabilities, and then
     saves those values in an HDF5 file along with the whole original df from the CSV.
 
-    :param weights_path: Path to the directory containing the SHMple weights.
-    :param csv_path: Path to the CSV file containing the parent sequences.
+    Args:
+        weights_path: Path to the directory containing the SHMple weights.
+        csv_path: Path to the CSV file containing the parent sequences.
     """
     output_hdf5_path = csv_path.replace(".csv", ".shmple.hdf5")
     shmple_precompute.precompute_and_save(weights_path, csv_path, output_hdf5_path)
