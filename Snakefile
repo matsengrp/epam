@@ -67,9 +67,10 @@ rule precompute_esm:
         out_hdf5="pcp_batched_inputs/{pcp_input}_{part}.hdf5", 
     params:
         part=lambda wildcards: wildcards.part  # Define a dynamic wildcard for {part}
+        strategy="masked-marginals"
     shell:
         """
-        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5}
+        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} {params.strategy}
         """
 
 

@@ -38,7 +38,8 @@ def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
 
 def evaluate(aaprob_paths_str, model_performance_path):
     """
-    Compute model performance metrics for a set of amino acid probability matrices. Used in Snakefile to evaluate the performance of a single model on a set of PCPs.
+    Compute model performance metrics for a set of amino acid probability matrices. Used in 
+    Snakefile to evaluate the performance of a single model on a set of PCPs.
 
     Args:
         aaprob_paths_str (str): Comma-separated string of paths to the amino acid probability matrices.
@@ -79,7 +80,8 @@ def concatenate_csvs(
 
 def concatenate_hdf5s(input_files, output_file):
     """
-    This function concatenates multiple HDF5 files into a single HDF5 file. Used to combine aaprobs HDF5 files across batches of PCPs.
+    This function concatenates multiple HDF5 files into a single HDF5 file. Used to 
+    combine aaprobs HDF5 files across batches of PCPs.
 
     Args:
         input_files (str): A string of paths to input HDF5 files.
@@ -117,14 +119,17 @@ def concatenate_hdf5s(input_files, output_file):
         merged_file.attrs["pcp_filename"] = full_pcp_file_path
 
 
-def esm_bulk_precompute(csv_path, output_hdf5_path):
+def esm_bulk_precompute(csv_path, output_hdf5_path, esm_scoring_strategy):
     """
-    This subcommand precomputes ESM-1v selection factors for a set of PCPs in bulk, and then saves those values in an HDF5 file for later use in SHMple-ESM.
+    This subcommand precomputes ESM-1v selection factors for a set of PCPs in bulk, and then 
+    saves those values in an HDF5 file for later use in SHMple-ESM.
 
     Args:
-        csv_path: Path to a CSV file containing PCP data.
+        csv_path (str): Path to a CSV file containing PCP data.
+        output_hdf5_path (str): Path to the output HDF5 file with ESM selection factors for all unique sequences.
+        esm_scoring_strategy (str): The scoring strategy to use for ESM1v. Options are 'wt-marginals' and 'masked-marginals'.
     """
-    esm_precompute.precompute_and_save(csv_path, output_hdf5_path)
+    esm_precompute.precompute_and_save(csv_path, output_hdf5_path, esm_scoring_strategy)
 
 
 def shmplify(weights_path, csv_path):
@@ -133,8 +138,8 @@ def shmplify(weights_path, csv_path):
     saves those values in an HDF5 file along with the whole original df from the CSV.
 
     Args:
-        weights_path: Path to the directory containing the SHMple weights.
-        csv_path: Path to the CSV file containing the parent sequences.
+        weights_path (str): Path to the directory containing the SHMple weights.
+        csv_path (str): Path to the CSV file containing the parent sequences.
     """
     output_hdf5_path = csv_path.replace(".csv", ".shmple.hdf5")
     shmple_precompute.precompute_and_save(weights_path, csv_path, output_hdf5_path)
