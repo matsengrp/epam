@@ -12,6 +12,7 @@ from epam.sequences import (
     AA_STR_SORTED,
     translate_sequences,
     assert_pcp_lengths,
+    aa_idx_array_of_str
 )
 from epam.torch_common import pick_device
 from epam.utils import load_and_filter_pcp_df, generate_file_checksum
@@ -19,7 +20,7 @@ from epam.utils import load_and_filter_pcp_df, generate_file_checksum
 model_location = "esm1v_t33_650M_UR90S_1"
 
 
-def precompute_and_save(pcp_path, output_hdf5, scoring_strategy):
+def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, normalization_strategy=None):
     """
     Precompute ESM-1v selection factors for a full set of PCPs and save to an HDF5 file.
 
@@ -98,13 +99,19 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy):
         # attributes related to PCP data file
         outfile.attrs["checksum"] = checksum
         outfile.attrs["pcp_filename"] = pcp_path
-        outfile.attrs["model_name"] = "ESM1v_bulk"
+        outfile.attrs["model_name"] = f"ESM1v_bulk_{scoring_strategy}"
 
         for i in range(len(sequences_aa)):
             # Drop first and last element (adjusted for sequence length as ESM pads to largest seq len), which are the probability of the start
             # and end token.
             len_seq = len(sequences_aa[i])
-            matrix = aa_probs_np[i, 1 : len_seq + 1, :]
+            if normalization_strategy == "ratio":
+                non_norm_matrix = aa_probs_np[i, 1 : len_seq + 1, :]
+                parent_idx = aa_idx_array_of_str(sequences_aa[i])
+                parent_probs = non_norm_matrix[np.arange(len_seq), parent_idx]
+                matrix = non_norm_matrix / parent_probs[:, None]
+            else:
+                matrix = aa_probs_np[i, 1 : len_seq + 1, :]
             parent = sequences[i]
             outfile.create_dataset(
                 f"{parent}", data=matrix, compression="gzip", compression_opts=4
