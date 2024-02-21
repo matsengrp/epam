@@ -1,5 +1,5 @@
 """
-This module enables precomputation of ESM1v selection factors for a set of PCPs in bulk, and then loading those saved values into a dictionary.
+This module enables precomputation of ESM-1v selection factors for a set of PCPs in bulk, and then loading those saved values into a dictionary. Different scoring schemes can be used to compute ESM-1v selection factors. See Meier et al. (2021) and https://github.com/facebookresearch/esm/blob/2b369911bb5b4b0dda914521b9475cad1656b2ac/examples/variant-prediction/predict.py#L192-L225 for more details.
 """
 import numpy as np
 import pandas as pd
@@ -19,12 +19,13 @@ from epam.utils import load_and_filter_pcp_df, generate_file_checksum
 model_location = "esm1v_t33_650M_UR90S_1"
 
 
-def precompute_and_save(pcp_path, output_hdf5):
+def precompute_and_save(pcp_path, output_hdf5, scoring_strategy):
     """
-    Precompute ESM1v selection factors for a full set of PCPs and save to an HDF5 file.
+    Precompute ESM-1v selection factors for a full set of PCPs and save to an HDF5 file.
 
     pcp_path (str): Path to a CSV file containing PCP data.
     output_hdf5 (str): Path to the output HDF5 file.
+    scoring_strategy (str): Scoring strategy to use for ESM-1v. Currently 'wt-marginals' and 'masked-marginals' are supported.
     """
 
     device = pick_device()
@@ -49,18 +50,46 @@ def precompute_and_save(pcp_path, output_hdf5):
     sequences_aa = translate_sequences(sequences)
     protein_ids = [f"protein{i}" for i in range(len(sequences))]
 
-    data = list(zip(protein_ids, sequences_aa))
-    batch_tokens = batch_converter(data)[2]
+    if scoring_strategy == "wt-marginals":
 
-    # Get token probabilities before softmax so we can restrict to 20 amino
-    # acids in softmax calculation.
-    with torch.no_grad():
-        batch_tokens = batch_tokens.to(device)
-        token_probs_pre_softmax = model(batch_tokens)["logits"]
+        data = list(zip(protein_ids, sequences_aa))
+        batch_tokens = batch_converter(data)[2]
 
-    aa_probs = torch.softmax(token_probs_pre_softmax[..., aa_idxs], dim=-1)
+        # Single forward pass on the full sequence.
+        # Get token probabilities before softmax so we can restrict to 20 amino
+        # acids in softmax calculation.
+        with torch.no_grad():
+            batch_tokens = batch_tokens.to(device)
+            token_probs_pre_softmax = model(batch_tokens)["logits"]
 
-    aa_probs_np = aa_probs.cpu().numpy().squeeze()
+        aa_probs = torch.softmax(token_probs_pre_softmax[..., aa_idxs], dim=-1)
+
+        aa_probs_np = aa_probs.cpu().numpy().squeeze()
+    elif scoring_strategy == "masked-marginals":
+
+        for seq in range(len(sequences_aa)):
+            data = list(zip([protein_ids[seq]], [sequences_aa[seq]]))
+            batch_tokens = batch_converter(data)[2]
+
+            # Mask each site in the sequence to get token probabilities before softmax.
+            all_token_probs = []
+            for site in range(batch_tokens.size(1)):
+                batch_tokens_masked = batch_tokens.clone()
+                batch_tokens_masked[0, site] = alphabet.mask_idx
+
+                with torch.no_grad():
+                    batch_tokens_masked = batch_tokens_masked.to(device)
+                    token_probs_pre_softmax = model(batch_tokens_masked)["logits"]
+
+                all_token_probs.append(token_probs_pre_softmax[:, site])
+
+            token_probs = torch.cat(all_token_probs, dim=0).unsqueeze(0)
+
+            aa_probs = torch.softmax(token_probs[..., aa_idxs], dim=-1)
+
+            aa_probs_np = aa_probs.cpu().numpy().squeeze()
+    else:
+        raise ValueError(f"Invalid scoring strategy: {scoring_strategy}")
 
     # Save model output to HDF5 file
     checksum = generate_file_checksum(pcp_path)
