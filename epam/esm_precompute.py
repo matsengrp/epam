@@ -51,6 +51,9 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, normalization_s
     sequences_aa = translate_sequences(sequences)
     protein_ids = [f"protein{i}" for i in range(len(sequences))]
 
+    # Generate checksum for PCP file
+    checksum = generate_file_checksum(pcp_path)
+
     if scoring_strategy == "wt-marginals":
 
         data = list(zip(protein_ids, sequences_aa))
@@ -66,56 +69,96 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, normalization_s
         aa_probs = torch.softmax(token_probs_pre_softmax[..., aa_idxs], dim=-1)
 
         aa_probs_np = aa_probs.cpu().numpy().squeeze()
+
+        # Save model output to HDF5 file
+        with h5py.File(output_hdf5, "w") as outfile:
+            # attributes related to PCP data file
+            outfile.attrs["checksum"] = checksum
+            outfile.attrs["pcp_filename"] = pcp_path
+            outfile.attrs["model_name"] = f"ESM1v_bulk_{scoring_strategy}"
+
+            for i in range(len(sequences_aa)):
+                # Drop first and last element (adjusted for sequence length as ESM pads to largest seq len), which are the probability of the start
+                # and end token.
+                len_seq = len(sequences_aa[i])
+                matrix = aa_probs_np[i, 1 : len_seq + 1, :]
+                parent = sequences[i]
+                outfile.create_dataset(
+                    f"{parent}", data=matrix, compression="gzip", compression_opts=4
+                )
+
     elif scoring_strategy == "masked-marginals":
+        # Save model output to HDF5 file
+        with h5py.File(output_hdf5, "w") as outfile:
+            # attributes related to PCP data file
+            outfile.attrs["checksum"] = checksum
+            outfile.attrs["pcp_filename"] = pcp_path
+            outfile.attrs["model_name"] = f"ESM1v_bulk_{scoring_strategy}"
 
-        for seq in range(len(sequences_aa)):
-            data = list(zip([protein_ids[seq]], [sequences_aa[seq]]))
-            batch_tokens = batch_converter(data)[2]
+            for seq in range(len(sequences_aa)):
+                data = list(zip([protein_ids[seq]], [sequences_aa[seq]]))
+                batch_tokens = batch_converter(data)[2]
 
-            # Mask each site in the sequence to get token probabilities before softmax.
-            all_token_probs = []
-            for site in range(batch_tokens.size(1)):
-                batch_tokens_masked = batch_tokens.clone()
-                batch_tokens_masked[0, site] = alphabet.mask_idx
+                # Mask each site in the sequence to get token probabilities before softmax.
+                all_token_probs = []
+                for site in range(batch_tokens.size(1)):
+                    batch_tokens_masked = batch_tokens.clone()
+                    batch_tokens_masked[0, site] = alphabet.mask_idx
 
-                with torch.no_grad():
-                    batch_tokens_masked = batch_tokens_masked.to(device)
-                    token_probs_pre_softmax = model(batch_tokens_masked)["logits"]
+                    with torch.no_grad():
+                        batch_tokens_masked = batch_tokens_masked.to(device)
+                        token_probs_pre_softmax = model(batch_tokens_masked)["logits"]
 
-                all_token_probs.append(token_probs_pre_softmax[:, site])
+                    all_token_probs.append(token_probs_pre_softmax[:, site])
 
-            token_probs = torch.cat(all_token_probs, dim=0).unsqueeze(0)
+                token_probs = torch.cat(all_token_probs, dim=0).unsqueeze(0)
 
-            aa_probs = torch.softmax(token_probs[..., aa_idxs], dim=-1)
+                aa_probs = torch.softmax(token_probs[..., aa_idxs], dim=-1)
 
-            aa_probs_np = aa_probs.cpu().numpy().squeeze()
+                aa_probs_np = aa_probs.cpu().numpy().squeeze()
+
+                len_seq = len(sequences_aa[seq])
+                
+                if normalization_strategy == "ratio":
+                    non_norm_matrix = aa_probs_np[1 : len_seq + 1, :]
+                    parent_idx = aa_idx_array_of_str(sequences_aa[seq])
+                    parent_probs = non_norm_matrix[np.arange(len_seq), parent_idx]
+                    matrix = non_norm_matrix / parent_probs[:, None]
+                else:
+                    matrix = aa_probs_np[1 : len_seq + 1, :]
+                
+                parent = sequences[seq]
+                
+                outfile.create_dataset(
+                    f"{parent}", data=matrix, compression="gzip", compression_opts=4
+                )
     else:
         raise ValueError(f"Invalid scoring strategy: {scoring_strategy}")
 
-    # Save model output to HDF5 file
-    checksum = generate_file_checksum(pcp_path)
+    # # Save model output to HDF5 file
+    # checksum = generate_file_checksum(pcp_path)
 
-    with h5py.File(output_hdf5, "w") as outfile:
-        # attributes related to PCP data file
-        outfile.attrs["checksum"] = checksum
-        outfile.attrs["pcp_filename"] = pcp_path
-        outfile.attrs["model_name"] = f"ESM1v_bulk_{scoring_strategy}"
+    # with h5py.File(output_hdf5, "w") as outfile:
+    #     # attributes related to PCP data file
+    #     outfile.attrs["checksum"] = checksum
+    #     outfile.attrs["pcp_filename"] = pcp_path
+    #     outfile.attrs["model_name"] = f"ESM1v_bulk_{scoring_strategy}"
 
-        for i in range(len(sequences_aa)):
-            # Drop first and last element (adjusted for sequence length as ESM pads to largest seq len), which are the probability of the start
-            # and end token.
-            len_seq = len(sequences_aa[i])
-            if normalization_strategy == "ratio":
-                non_norm_matrix = aa_probs_np[i, 1 : len_seq + 1, :]
-                parent_idx = aa_idx_array_of_str(sequences_aa[i])
-                parent_probs = non_norm_matrix[np.arange(len_seq), parent_idx]
-                matrix = non_norm_matrix / parent_probs[:, None]
-            else:
-                matrix = aa_probs_np[i, 1 : len_seq + 1, :]
-            parent = sequences[i]
-            outfile.create_dataset(
-                f"{parent}", data=matrix, compression="gzip", compression_opts=4
-            )
+    #     for i in range(len(sequences_aa)):
+    #         # Drop first and last element (adjusted for sequence length as ESM pads to largest seq len), which are the probability of the start
+    #         # and end token.
+    #         len_seq = len(sequences_aa[i])
+    #         if normalization_strategy == "ratio":
+    #             non_norm_matrix = aa_probs_np[i, 1 : len_seq + 1, :]
+    #             parent_idx = aa_idx_array_of_str(sequences_aa[i])
+    #             parent_probs = non_norm_matrix[np.arange(len_seq), parent_idx]
+    #             matrix = non_norm_matrix / parent_probs[:, None]
+    #         else:
+    #             matrix = aa_probs_np[i, 1 : len_seq + 1, :]
+    #         parent = sequences[i]
+    #         outfile.create_dataset(
+    #             f"{parent}", data=matrix, compression="gzip", compression_opts=4
+    #         )
 
 
 def load_and_convert_to_dict(hdf5_path):
