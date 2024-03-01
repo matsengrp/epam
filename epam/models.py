@@ -302,11 +302,12 @@ class OptimizableSHMple(SHMple):
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         base_branch_length = sequences.mutation_frequency(parent, child)
-        branch_length = self._find_optimal_branch_length(
-            parent, child, base_branch_length
-        )
-        if branch_length > 0.5:
-            print(f"Warning: branch length of {branch_length} is surprisingly large.")
+        branch_length = base_branch_length # skipping bl optimization for now
+        # branch_length = self._find_optimal_branch_length(
+        #     parent, child, base_branch_length
+        # )
+        # if branch_length > 0.5:
+        #     print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
