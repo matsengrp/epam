@@ -220,6 +220,7 @@ class OptimizableSHMple(SHMple):
     def __init__(
         self,
         weights_directory,
+        sf_rescale,
         model_name=None,
         max_optimization_steps=1000,
         optimization_tol=1e-4,
@@ -244,6 +245,7 @@ class OptimizableSHMple(SHMple):
         self.max_optimization_steps = max_optimization_steps
         self.optimization_tol = optimization_tol
         self.learning_rate = learning_rate
+        self.sf_rescale = sf_rescale
 
     def _build_log_pcp_probability(
         self, parent: str, child: str, rates: Tensor, sub_probs: Tensor
@@ -302,12 +304,15 @@ class OptimizableSHMple(SHMple):
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         base_branch_length = sequences.mutation_frequency(parent, child)
-        branch_length = base_branch_length # skipping bl optimization for now
-        # branch_length = self._find_optimal_branch_length(
-        #     parent, child, base_branch_length
-        # )
-        # if branch_length > 0.5:
-        #     print(f"Warning: branch length of {branch_length} is surprisingly large.")
+        if self.sf_rescale == "softmax":
+            print("Skipping optimization of branch length.")
+            branch_length = base_branch_length
+        else:
+            branch_length = self._find_optimal_branch_length(
+                parent, child, base_branch_length
+            )
+        if branch_length > 0.5:
+            print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
@@ -388,7 +393,12 @@ class MutSel(OptimizableSHMple):
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> Tensor:
         rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
 
-        sel_matrix = self.build_selection_matrix_from_parent(parent)
+        if self.sf_rescale == "sigmoid":
+            ratio_sel_matrix = self.build_selection_matrix_from_parent(parent)
+            scaled_ratio = torch.pow(ratio_sel_matrix, 1)
+            sel_matrix = (1 / (1 + (1/scaled_ratio)))
+        else:
+            sel_matrix = self.build_selection_matrix_from_parent(parent)
         mut_probs = 1.0 - torch.exp(-branch_length * rates)
 
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
