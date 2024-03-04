@@ -60,7 +60,7 @@ def aa_onehot_tensor_of_str(aa_str):
     return aa_onehot
 
 
-def generic_indicator_tensor_of(ambig_symb, parent, child):
+def generic_subs_indicator_tensor_of(ambig_symb, parent, child):
     """Return a tensor indicating which positions in the parent sequence
     are substituted in the child sequence.
     """
@@ -70,17 +70,17 @@ def generic_indicator_tensor_of(ambig_symb, parent, child):
     )
 
 
-def nt_indicator_tensor_of(parent, child):
+def nt_subs_indicator_tensor_of(parent, child):
     """Return a tensor indicating which positions in the parent sequence
     are substituted in the child sequence.
     """
-    return generic_indicator_tensor_of("N", parent, child)
+    return generic_subs_indicator_tensor_of("N", parent, child)
 
 
-def aa_indicator_tensor_of(parent, child):
+def aa_subs_indicator_tensor_of(parent, child):
     """Return a tensor indicating which positions in the parent sequence
     are substituted in the child sequence."""
-    return generic_indicator_tensor_of("X", parent, child)
+    return generic_subs_indicator_tensor_of("X", parent, child)
 
 
 def read_fasta_sequences(file_path):
