@@ -301,7 +301,7 @@ class OptimizableSHMple(SHMple):
         )
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
-        base_branch_length = sequences.mutation_frequency(parent, child)
+        base_branch_length = sequences.nt_mutation_frequency(parent, child)
         branch_length = self._find_optimal_branch_length(
             parent, child, base_branch_length
         )
@@ -318,7 +318,7 @@ class MutSel(OptimizableSHMple):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # This is a diagonstic generating data for netam issue #7.
+        # This is a diagnostic generating data for netam issue #7.
         # self.csv_file = open(
         #     f"prob_sums_too_big_{int(time.time())}.csv", "w"
         # )
@@ -362,7 +362,7 @@ class MutSel(OptimizableSHMple):
                 sel_matrix,
             )
 
-            # This is a diagonstic generating data for netam issue #7.
+            # This is a diagnostic generating data for netam issue #7.
             # if sums_too_big is not None:
             #     self.csv_file.write(f"{parent},{child},{branch_length},{sums_too_big}\n")
 
@@ -597,14 +597,14 @@ class AbLang(BaseModel):
         The rows of the array correspond to the amino acids sorted alphabetically.
 
         Parameters:
-        parent (str): The parent sequence for which we want the array of probabilities.
-        child (str): The child sequence (ignored for AbLang model).
+        parent (str): The parent nucleotide sequence for which we want the array of probabilities.
+        child (str): The child nucleotide sequence (ignored for AbLang model).
 
         Returns:
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        base_branch_length = sequences.mutation_frequency(parent, child)
+        base_branch_length = sequences.nt_mutation_frequency(parent, child)
         parent_aa = translate_sequence(parent)
         child_aa = translate_sequence(child)
 
