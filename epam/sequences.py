@@ -60,14 +60,27 @@ def aa_onehot_tensor_of_str(aa_str):
     return aa_onehot
 
 
-def subs_indicator_tensor_of(parent, child):
+def generic_indicator_tensor_of(ambig_symb, parent, child):
     """Return a tensor indicating which positions in the parent sequence
     are substituted in the child sequence.
     """
     return torch.tensor(
-        [0 if p == "N" else p != c for p, c in zip(parent, child)],
+        [0 if (p == ambig_symb or c == ambig_symb) else p != c for p, c in zip(parent, child)],
         dtype=torch.float,
     )
+
+
+def nt_indicator_tensor_of(parent, child):
+    """Return a tensor indicating which positions in the parent sequence
+    are substituted in the child sequence.
+    """
+    return generic_indicator_tensor_of("N", parent, child)
+
+
+def aa_indicator_tensor_of(parent, child):
+    """Return a tensor indicating which positions in the parent sequence
+    are substituted in the child sequence."""
+    return generic_indicator_tensor_of("X", parent, child)
 
 
 def read_fasta_sequences(file_path):
@@ -98,10 +111,10 @@ def aa_index_of_codon(codon):
     return AA_STR_SORTED.index(aa)
 
 
-def generic_mutation_frequency(ambig_code, parent, child):
+def generic_mutation_frequency(ambig_symb, parent, child):
     """Return the fraction of sites that differ between the parent and child sequences."""
     return sum(
-        1 for p, c in zip(parent, child) if p != c and p != ambig_code and c != ambig_code
+        1 for p, c in zip(parent, child) if p != c and p != ambig_symb and c != ambig_symb
     ) / len(parent)
 
 
