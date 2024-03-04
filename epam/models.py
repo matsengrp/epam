@@ -366,6 +366,7 @@ class MutSel(OptimizableSHMple):
                 mut_probs.reshape(-1, 3),
                 sub_probs.reshape(-1, 3, 4),
                 sel_matrix,
+                self.sf_rescale, # delete later
             )
 
             # This is a diagonstic generating data for netam issue #7.

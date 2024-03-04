@@ -311,7 +311,10 @@ def calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs):
             if idx in pcp_sub_locations[i]:
                 log_probs_substitution.append(np.log(p_i))
             else:
-                log_probs_substitution.append(np.log(1 - p_i))
+                # temp fix for inf. cross entropy with softmax ratios
+                pp_i = np.min([p_i, np.nextafter(1,0)])
+                log_probs_substitution.append(np.log(1 - pp_i))
+                # log_probs_substitution.append(np.log(1 - p_i))
 
     cross_entropy_loss = (
         -1 / len(log_probs_substitution) * np.sum(log_probs_substitution)
