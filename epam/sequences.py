@@ -98,11 +98,21 @@ def aa_index_of_codon(codon):
     return AA_STR_SORTED.index(aa)
 
 
-def mutation_frequency(parent, child):
-    """Return the fraction of nucleotides that differ between the parent and child sequences."""
+def generic_mutation_frequency(ambig_code, parent, child):
+    """Return the fraction of sites that differ between the parent and child sequences."""
     return sum(
-        1 for p, c in zip(parent, child) if p != c and p != "N" and c != "N"
+        1 for p, c in zip(parent, child) if p != c and p != ambig_code and c != ambig_code
     ) / len(parent)
+
+
+def nt_mutation_frequency(parent, child):
+    """Return the fraction of nucleotide sites that differ between the parent and child sequences."""
+    return generic_mutation_frequency("N", parent, child)
+
+
+def aa_mutation_frequency(parent, child):
+    """Return the fraction of amino acid sites that differ between the parent and child sequences."""
+    return generic_mutation_frequency("X", parent, child)
 
 
 def assert_pcp_lengths(parent, child):
@@ -122,7 +132,7 @@ def pcp_criteria_check(parent, child, max_mut_freq=0.3):
     """Check that parent child pair undergoes mutation at a reasonable rate."""
     if parent == child:
         return False
-    elif mutation_frequency(parent, child) > max_mut_freq:
+    elif nt_mutation_frequency(parent, child) > max_mut_freq:
         return False
     else:
         return True
