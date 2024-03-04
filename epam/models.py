@@ -304,7 +304,7 @@ class OptimizableSHMple(SHMple):
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         base_branch_length = sequences.mutation_frequency(parent, child)
-        if self.sf_rescale == "softmax":
+        if self.sf_rescale != "sigmoid":
             print("Skipping optimization of branch length.")
             branch_length = base_branch_length
         else:
@@ -408,6 +408,7 @@ class MutSel(OptimizableSHMple):
             mut_probs.reshape(-1, 3),
             sub_probs.reshape(-1, 3, 4),
             sel_matrix,
+            self.sf_rescale, # delete later
         )
 
         if sums_too_big is not None:
@@ -415,7 +416,7 @@ class MutSel(OptimizableSHMple):
                 "Warning: some of the codon probability sums were too big for the codon mutsel calculation."
             )
 
-        return molevol.aaprobs_of_codon_probs(codon_mutsel)
+        return molevol.aaprobs_of_codon_probs(codon_mutsel, self.sf_rescale)
 
 
 class RandomMutSel(MutSel):

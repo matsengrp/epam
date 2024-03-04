@@ -142,7 +142,7 @@ def codon_probs_of_mutation_matrices(mut_matrix: Tensor) -> Tensor:
     )
 
 
-def aaprobs_of_codon_probs(codon_probs: Tensor) -> Tensor:
+def aaprobs_of_codon_probs(codon_probs: Tensor, sf_rescale: str) -> Tensor:
     """
     Compute the probability of each amino acid from the probability of each codon, for each parent codon along the sequence.
 
@@ -164,9 +164,13 @@ def aaprobs_of_codon_probs(codon_probs: Tensor) -> Tensor:
     # Perform matrix multiplication to get unnormalized amino acid probabilities.
     aaprobs = torch.matmul(reshaped_probs, CODON_AA_INDICATOR_MATRIX)
 
-    # # Normalize probabilities along the amino acid dimension.
-    # row_sums = aaprobs.sum(dim=1, keepdim=True)
-    # aaprobs /= row_sums
+    if sf_rescale == "softmax":
+        # Softmax aaprobs with ratios to get amino acid probabilities.
+        aaprobs = torch.nn.functional.softmax(aaprobs, dim=1)
+    else:
+        # Normalize probabilities along the amino acid dimension.
+        row_sums = aaprobs.sum(dim=1, keepdim=True)
+        aaprobs /= row_sums
 
     return aaprobs
 
@@ -248,6 +252,7 @@ def build_codon_mutsel(
     codon_mut_probs: Tensor,
     codon_sub_probs: Tensor,
     aa_sel_matrices: Tensor,
+    sf_rescale: str, # delete later
 ) -> Tensor:
     """
     Build a sequence of codon mutation-selection matrices for codons along a sequence.
@@ -277,26 +282,28 @@ def build_codon_mutsel(
 
     # Multiply the codon probabilities by the selection matrices
     codon_mutsel = codon_probs * codon_sel_matrices.view(-1, 4, 4, 4)
-    # # Clamp the codon_mutsel above by 1: these are probabilities.
-    # codon_mutsel = codon_mutsel.clamp(max=1.0)
 
-    # # Now we need to recalculate the probability of staying in the same codon.
-    # # In our setup, this is the probability of nothing happening.
-    # # To calculate this, we zero out the previously calculated probabilities...
-    # codon_count = parent_codon_idxs.shape[0]
-    # codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 0.0
-    # # sum together their probabilities...
-    # sums = codon_mutsel.sum(dim=(1, 2, 3))
-    # # then set the parent codon probabilities to 1 minus the sum.
-    # codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 1.0 - sums
-    # codon_mutsel = codon_mutsel.clamp(min=0.0)
+    if sf_rescale == "sigmoid":
+        # Clamp the codon_mutsel above by 1: these are probabilities.
+        codon_mutsel = codon_mutsel.clamp(max=1.0)
 
-    # if sums.max() > 1.0:
-    #     sums_too_big = sums.max()
-    # else:
-    #     sums_too_big = None
+        # Now we need to recalculate the probability of staying in the same codon.
+        # In our setup, this is the probability of nothing happening.
+        # To calculate this, we zero out the previously calculated probabilities...
+        codon_count = parent_codon_idxs.shape[0]
+        codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 0.0
+        # sum together their probabilities...
+        sums = codon_mutsel.sum(dim=(1, 2, 3))
+        # then set the parent codon probabilities to 1 minus the sum.
+        codon_mutsel[(torch.arange(codon_count), *parent_codon_idxs.T)] = 1.0 - sums
+        codon_mutsel = codon_mutsel.clamp(min=0.0)
 
-    sums_too_big = None
+        if sums.max() > 1.0:
+            sums_too_big = sums.max()
+        else:
+            sums_too_big = None
+    else:
+        sums_too_big = None
 
     return codon_mutsel, sums_too_big
 
