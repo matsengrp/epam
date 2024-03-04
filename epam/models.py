@@ -305,7 +305,6 @@ class OptimizableSHMple(SHMple):
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         base_branch_length = sequences.mutation_frequency(parent, child)
         if self.sf_rescale != "sigmoid":
-            print("Skipping optimization of branch length.")
             branch_length = base_branch_length
         else:
             branch_length = self._find_optimal_branch_length(
