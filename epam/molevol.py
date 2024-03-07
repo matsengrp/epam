@@ -142,7 +142,7 @@ def codon_probs_of_mutation_matrices(mut_matrix: Tensor) -> Tensor:
     )
 
 
-def aaprobs_of_codon_probs(codon_probs: Tensor, sf_rescale: str) -> Tensor:
+def aaprobs_of_codon_probs(codon_probs: Tensor, sf_rescale: str = None) -> Tensor:
     """
     Compute the probability of each amino acid from the probability of each codon, for each parent codon along the sequence.
 
