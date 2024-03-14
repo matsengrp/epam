@@ -20,7 +20,7 @@ from epam.utils import load_and_filter_pcp_df, generate_file_checksum
 model_location = "esm1v_t33_650M_UR90S_1"
 
 
-def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, normalization_strategy=None):
+def precompute_and_save(pcp_path, output_hdf5, scoring_strategy):
     """
     Precompute ESM-1v selection factors for a full set of PCPs and save to an HDF5 file.
 
@@ -81,13 +81,7 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, normalization_s
                 # Drop first and last element (adjusted for sequence length as ESM pads to largest seq len), which are the probability of the start
                 # and end token.
                 len_seq = len(sequences_aa[i])
-                if normalization_strategy == "ratio":
-                    non_norm_matrix = aa_probs_np[i, 1 : len_seq + 1, :]
-                    parent_idx = aa_idx_array_of_str(sequences_aa[i])
-                    parent_probs = non_norm_matrix[np.arange(len_seq), parent_idx]
-                    matrix = non_norm_matrix / parent_probs[:, None]
-                else:
-                    matrix = aa_probs_np[i, 1 : len_seq + 1, :]
+                matrix = aa_probs_np[i, 1 : len_seq + 1, :]
                 parent = sequences[i]
                 outfile.create_dataset(
                     f"{parent}", data=matrix, compression="gzip", compression_opts=4
@@ -123,15 +117,15 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, normalization_s
 
                 aa_probs_np = aa_probs.cpu().numpy().squeeze()
 
+                # Drop first and last element (adjusted for sequence length as ESM pads to largest seq len), which are the probability of the start
+                # and end token.
                 len_seq = len(sequences_aa[seq])
-                
-                if normalization_strategy == "ratio":
-                    non_norm_matrix = aa_probs_np[1 : len_seq + 1, :]
-                    parent_idx = aa_idx_array_of_str(sequences_aa[seq])
-                    parent_probs = non_norm_matrix[np.arange(len_seq), parent_idx]
-                    matrix = non_norm_matrix / parent_probs[:, None]
-                else:
-                    matrix = aa_probs_np[1 : len_seq + 1, :]
+                non_norm_matrix = aa_probs_np[1 : len_seq + 1, :]
+
+                # Normalize by the probability of the parent AA at each site.
+                parent_idx = aa_idx_array_of_str(sequences_aa[seq])
+                parent_probs = non_norm_matrix[np.arange(len_seq), parent_idx]
+                matrix = non_norm_matrix / parent_probs[:, None]
                 
                 parent = sequences[seq]
                 
@@ -140,31 +134,6 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, normalization_s
                 )
     else:
         raise ValueError(f"Invalid scoring strategy: {scoring_strategy}")
-
-    # # Save model output to HDF5 file
-    # checksum = generate_file_checksum(pcp_path)
-
-    # with h5py.File(output_hdf5, "w") as outfile:
-    #     # attributes related to PCP data file
-    #     outfile.attrs["checksum"] = checksum
-    #     outfile.attrs["pcp_filename"] = pcp_path
-    #     outfile.attrs["model_name"] = f"ESM1v_bulk_{scoring_strategy}"
-
-    #     for i in range(len(sequences_aa)):
-    #         # Drop first and last element (adjusted for sequence length as ESM pads to largest seq len), which are the probability of the start
-    #         # and end token.
-    #         len_seq = len(sequences_aa[i])
-    #         if normalization_strategy == "ratio":
-    #             non_norm_matrix = aa_probs_np[i, 1 : len_seq + 1, :]
-    #             parent_idx = aa_idx_array_of_str(sequences_aa[i])
-    #             parent_probs = non_norm_matrix[np.arange(len_seq), parent_idx]
-    #             matrix = non_norm_matrix / parent_probs[:, None]
-    #         else:
-    #             matrix = aa_probs_np[i, 1 : len_seq + 1, :]
-    #         parent = sequences[i]
-    #         outfile.create_dataset(
-    #             f"{parent}", data=matrix, compression="gzip", compression_opts=4
-    #         )
 
 
 def load_and_convert_to_dict(hdf5_path):
