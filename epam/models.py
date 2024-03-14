@@ -48,8 +48,13 @@ FULLY_SPECIFIED_MODELS = [
     ("ESM1v_default", "CachedESM1v", {}),
     (
         "SHMple_ESM1v",
-        "SHMpleESM",
+        "SHMpleESM_wt",
         {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
+    ),
+    (
+        "SHMple_ESM1v",
+        "SHMpleESM_mask",
+        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof", "sf_rescale": "sigmoid"},
     ),
 ]
 
@@ -220,11 +225,11 @@ class OptimizableSHMple(SHMple):
     def __init__(
         self,
         weights_directory,
-        sf_rescale,
         model_name=None,
         max_optimization_steps=1000,
         optimization_tol=1e-4,
         learning_rate=0.1,
+        sf_rescale=None,
     ):
         """
         Initialize a SHMple model that optimizes branch length for each parent-child pair.
@@ -240,6 +245,10 @@ class OptimizableSHMple(SHMple):
             Tolerance for optimization of log(branch length). Default is 1e-4.
         learning_rate : float, optional
             Learning rate for torch's SGD. Default is 0.1.
+        sf_rescale : str, optional
+            Selection factor rescaling approach used in SHMpleESM for ratios 
+            produced under mask-marginals scoring strategy. Using sigmoid transformation
+            currently and nothing for wt-marginals selection factors.
         """
         super().__init__(weights_directory, model_name)
         self.max_optimization_steps = max_optimization_steps
@@ -304,12 +313,9 @@ class OptimizableSHMple(SHMple):
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         base_branch_length = sequences.mutation_frequency(parent, child)
-        if self.sf_rescale != "sigmoid":
-            branch_length = base_branch_length
-        else:
-            branch_length = self._find_optimal_branch_length(
-                parent, child, base_branch_length
-            )
+        branch_length = self._find_optimal_branch_length(
+            parent, child, base_branch_length
+        )
         if branch_length > 0.5:
             print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
@@ -365,7 +371,6 @@ class MutSel(OptimizableSHMple):
                 mut_probs.reshape(-1, 3),
                 sub_probs.reshape(-1, 3, 4),
                 sel_matrix,
-                self.sf_rescale, # delete later
             )
 
             # This is a diagonstic generating data for netam issue #7.
@@ -393,6 +398,8 @@ class MutSel(OptimizableSHMple):
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> Tensor:
         rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
 
+        # Apply a sigmoid transformation for selection factors with some values greater than
+        # 1. This occurs when using ratios under ESM mask-marginals.
         if self.sf_rescale == "sigmoid":
             ratio_sel_matrix = self.build_selection_matrix_from_parent(parent)
             scaled_ratio = torch.pow(ratio_sel_matrix, 1)
@@ -408,7 +415,6 @@ class MutSel(OptimizableSHMple):
             mut_probs.reshape(-1, 3),
             sub_probs.reshape(-1, 3, 4),
             sel_matrix,
-            self.sf_rescale, # delete later
         )
 
         if sums_too_big is not None:
@@ -416,7 +422,7 @@ class MutSel(OptimizableSHMple):
                 "Warning: some of the codon probability sums were too big for the codon mutsel calculation."
             )
 
-        return molevol.aaprobs_of_codon_probs(codon_mutsel, self.sf_rescale)
+        return molevol.aaprobs_of_codon_probs(codon_mutsel)
 
 
 class RandomMutSel(MutSel):
