@@ -7,6 +7,9 @@ from torch import nn, Tensor
 
 SMALL_PROB = 1e-8
 
+# explictly set number of threads to 1 to avoid slowdowns during branch length optimization
+torch.set_num_threads(1)
+
 
 def pick_device():
     # check that CUDA is usable
