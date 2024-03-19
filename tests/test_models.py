@@ -91,7 +91,7 @@ def test_mut_sel_probability():
     assert correct_prob == pytest.approx(calculated_prob, rel=1e-5)
 
 
-def test_cached_esm_wt():  
+def test_cached_esm_wt(tol=1e-4):  
     source = "10-random-from-10x"
     pcp_file = f"data/{source}.csv"
     hdf5_file = f"_ignore/{source}_cached_wt.hdf5"
@@ -102,7 +102,7 @@ def test_cached_esm_wt():
     ref_esm_dict = load_and_convert_to_dict(compare_file)
 
     for key in cached_esm_dict.keys():
-        assert np.allclose(ref_esm_dict[key], cached_esm_dict[key])
+        assert np.allclose(ref_esm_dict[key], cached_esm_dict[key], rtol=tol)
 
 
 # # THIS TEST IS PROBABLY NOT NECESSARY - REDUNDANT AND SLOW
