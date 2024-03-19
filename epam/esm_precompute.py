@@ -12,7 +12,7 @@ from epam.sequences import (
     AA_STR_SORTED,
     translate_sequences,
     assert_pcp_lengths,
-    aa_idx_array_of_str
+    aa_idx_array_of_str,
 )
 from epam.torch_common import pick_device
 from epam.utils import load_and_filter_pcp_df, generate_file_checksum
@@ -55,7 +55,6 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy):
     checksum = generate_file_checksum(pcp_path)
 
     if scoring_strategy == "wt-marginals":
-
         data = list(zip(protein_ids, sequences_aa))
         batch_tokens = batch_converter(data)[2]
 
@@ -126,9 +125,9 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy):
                 parent_idx = aa_idx_array_of_str(sequences_aa[seq])
                 parent_probs = non_norm_matrix[np.arange(len_seq), parent_idx]
                 matrix = non_norm_matrix / parent_probs[:, None]
-                
+
                 parent = sequences[seq]
-                
+
                 outfile.create_dataset(
                     f"{parent}", data=matrix, compression="gzip", compression_opts=4
                 )

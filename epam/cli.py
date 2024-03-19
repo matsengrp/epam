@@ -38,7 +38,7 @@ def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
 
 def evaluate(aaprob_paths_str, model_performance_path):
     """
-    Compute model performance metrics for a set of amino acid probability matrices. Used in 
+    Compute model performance metrics for a set of amino acid probability matrices. Used in
     Snakefile to evaluate the performance of a single model on a set of PCPs.
 
     Args:
@@ -80,7 +80,7 @@ def concatenate_csvs(
 
 def concatenate_hdf5s(input_files, output_file):
     """
-    This function concatenates multiple HDF5 files into a single HDF5 file. Used to 
+    This function concatenates multiple HDF5 files into a single HDF5 file. Used to
     combine aaprobs HDF5 files across batches of PCPs.
 
     Args:
@@ -121,7 +121,7 @@ def concatenate_hdf5s(input_files, output_file):
 
 def esm_bulk_precompute(csv_path, output_hdf5_path, esm_scoring_strategy):
     """
-    This subcommand precomputes ESM-1v selection factors for a set of PCPs in bulk, and then 
+    This subcommand precomputes ESM-1v selection factors for a set of PCPs in bulk, and then
     saves those values in an HDF5 file for later use in SHMple-ESM.
 
     Args:

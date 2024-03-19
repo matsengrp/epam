@@ -54,7 +54,10 @@ FULLY_SPECIFIED_MODELS = [
     (
         "SHMple_ESM1v",
         "SHMpleESM_mask",
-        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof", "sf_rescale": "sigmoid"},
+        {
+            "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
+            "sf_rescale": "sigmoid",
+        },
     ),
 ]
 
@@ -246,7 +249,7 @@ class OptimizableSHMple(SHMple):
         learning_rate : float, optional
             Learning rate for torch's SGD. Default is 0.1.
         sf_rescale : str, optional
-            Selection factor rescaling approach used in SHMpleESM for ratios 
+            Selection factor rescaling approach used in SHMpleESM for ratios
             produced under mask-marginals scoring strategy. Using sigmoid transformation
             currently and nothing for wt-marginals selection factors.
         """
@@ -403,7 +406,7 @@ class MutSel(OptimizableSHMple):
         if self.sf_rescale == "sigmoid":
             ratio_sel_matrix = self.build_selection_matrix_from_parent(parent)
             scaled_ratio = torch.pow(ratio_sel_matrix, 1)
-            sel_matrix = (1 / (1 + (1/scaled_ratio)))
+            sel_matrix = 1 / (1 + (1 / scaled_ratio))
         else:
             sel_matrix = self.build_selection_matrix_from_parent(parent)
         mut_probs = 1.0 - torch.exp(-branch_length * rates)
