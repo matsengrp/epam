@@ -91,13 +91,13 @@ def test_mut_sel_probability():
     assert correct_prob == pytest.approx(calculated_prob, rel=1e-5)
 
 
-def test_cached_esm(): # UPDATE FOR SCORING STRATEGY
+def test_cached_esm_wt():  
     source = "10-random-from-10x"
     pcp_file = f"data/{source}.csv"
-    hdf5_file = f"_ignore/{source}_cached.hdf5"
-    compare_file = f"data/{source}.hdf5"
+    hdf5_file = f"_ignore/{source}_cached_wt.hdf5"
+    compare_file = f"data/{source}-wt.hdf5"
 
-    precompute_and_save(pcp_file, hdf5_file)
+    precompute_and_save(pcp_file, hdf5_file, "wt-marginals")
     cached_esm_dict = load_and_convert_to_dict(hdf5_file)
     ref_esm_dict = load_and_convert_to_dict(compare_file)
 
@@ -105,11 +105,26 @@ def test_cached_esm(): # UPDATE FOR SCORING STRATEGY
         assert np.allclose(ref_esm_dict[key], cached_esm_dict[key])
 
 
-def test_nasty_shmple_esm(): # UPDATE FOR SCORING STRATEGY
+# # THIS TEST IS PROBABLY NOT NECESSARY - REDUNDANT AND SLOW
+# def test_cached_esm_mask():  
+#     source = "10-random-from-10x"
+#     pcp_file = f"data/{source}.csv"
+#     hdf5_file = f"_ignore/{source}_cached_mask.hdf5"
+#     compare_file = f"data/{source}-mask.hdf5"
+
+#     precompute_and_save(pcp_file, hdf5_file, "masked-marginals")
+#     cached_esm_dict = load_and_convert_to_dict(hdf5_file)
+#     ref_esm_dict = load_and_convert_to_dict(compare_file)
+
+#     for key in cached_esm_dict.keys():
+#         assert np.allclose(ref_esm_dict[key], cached_esm_dict[key])
+
+
+def test_nasty_shmple_esm(): 
     bad_pcp_file = "data/wyatt_10x_loss_nan.csv"
     bad_esm_file = "_ignore/wyatt_10x_loss_nan_cached_esm.hdf5"
     bad_out_file = "_ignore/wyatt_10x_loss_nan.hdf5"
-    precompute_and_save(bad_pcp_file, bad_esm_file)
+    precompute_and_save(bad_pcp_file, bad_esm_file, "wt-marginals")
     shmple_esm = SHMpleESM(weights_directory=weights_path)
     shmple_esm.preload_esm_data(bad_esm_file)
     shmple_esm.write_aaprobs(bad_pcp_file, bad_out_file)
@@ -165,7 +180,7 @@ with resources.path("epam", "__init__.py") as p:
     pcp_hdf5_path = str(p.parent.parent) + "/data/10-random-from-10x.hdf5"
 
 
-def test_snapshot(): # UPDATE FOR SCORING STRATEGY
+def test_snapshot():  # UPDATE FOR SCORING STRATEGY
     """Test that the current code produces the same results as a previously-built snapshot."""
     os.makedirs("_ignore", exist_ok=True)
     for model_name, model_class_str, model_args in epam.models.FULLY_SPECIFIED_MODELS:
@@ -179,7 +194,7 @@ def test_snapshot(): # UPDATE FOR SCORING STRATEGY
         if isinstance(model, (OptimizableSHMple, AbLang)):
             model.max_optimization_steps = 0
         out_file = f"_ignore/{source}-{model_name}.hdf5"
-        if model_name in ("ESM1v_default", "SHMple_ESM1v"): 
+        if model_name in ("ESM1v_default", "SHMple_ESM1v"):
             model.preload_esm_data(pcp_hdf5_path)
         model.write_aaprobs(f"data/{source}.csv", out_file)
         compare_file = f"tests/test-data/{source}-{model_name}.hdf5"
