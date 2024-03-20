@@ -405,8 +405,7 @@ class MutSel(OptimizableSHMple):
         # 1. This occurs when using ratios under ESM mask-marginals.
         if self.sf_rescale == "sigmoid":
             ratio_sel_matrix = self.build_selection_matrix_from_parent(parent)
-            scaled_ratio = torch.pow(ratio_sel_matrix, 1)
-            sel_matrix = 1 / (1 + (1 / scaled_ratio))
+            sel_matrix =  utils.selection_factor_ratios_to_sigmoid(ratio_sel_matrix)
         else:
             sel_matrix = self.build_selection_matrix_from_parent(parent)
         mut_probs = 1.0 - torch.exp(-branch_length * rates)
