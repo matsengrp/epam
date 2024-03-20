@@ -47,13 +47,13 @@ FULLY_SPECIFIED_MODELS = [
     ),
     ("ESM1v_default", "CachedESM1v", {}),
     (
-        "SHMple_ESM1v",
-        "SHMpleESM_wt",
+        "SHMple_ESM1v_wt",
+        "SHMpleESM",
         {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
     ),
     (
-        "SHMple_ESM1v",
-        "SHMpleESM_mask",
+        "SHMple_ESM1v_mask",
+        "SHMpleESM",
         {
             "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
             "sf_rescale": "sigmoid",

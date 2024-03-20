@@ -149,6 +149,7 @@ def wrapped_not_tyrosine():
     return WrappedBinaryMutSel(not_tyrosine, weights_directory=weights_path)
 
 
+# FAILING
 def test_wrapped_binary_mut_sel(wrapped_not_tyrosine):
     nt_seq = "GCTTAT"
     assert translate_sequence(nt_seq) == "AY"
