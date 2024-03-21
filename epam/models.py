@@ -45,7 +45,7 @@ FULLY_SPECIFIED_MODELS = [
         "SHMple",
         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
     ),
-    ("ESM1v_default", "CachedESM1v", {"sf_rescale": "sigmoid"}),
+    ("ESM1v_default", "CachedESM1v", {}),
     (
         "SHMpleESM_wt",
         "SHMpleESM",
@@ -677,7 +677,7 @@ class CachedESM1v(BaseModel):
             # Sigmoid transformation for selection factors with some values greater than 1.
             ratio_sel_matrix = torch.tensor(self.selection_matrices[parent])
             sel_tensor = utils.selection_factor_ratios_to_sigmoid(ratio_sel_matrix)
-            
+
             # Normalize the selection matrix.
             row_sums = sel_tensor.sum(dim=1, keepdim=True)
             sel_tensor /= row_sums
