@@ -182,7 +182,7 @@ with resources.path("epam", "__init__.py") as p:
     pcp_hdf5_mask_path = str(p.parent.parent) + "/data/10-random-from-10x-mask.hdf5"
 
 
-def test_snapshot():  # UPDATE FOR SCORING STRATEGY
+def test_snapshot():
     """Test that the current code produces the same results as a previously-built snapshot."""
     os.makedirs("_ignore", exist_ok=True)
     for model_name, model_class_str, model_args in epam.models.FULLY_SPECIFIED_MODELS:
@@ -196,9 +196,9 @@ def test_snapshot():  # UPDATE FOR SCORING STRATEGY
         if isinstance(model, (OptimizableSHMple, AbLang)):
             model.max_optimization_steps = 0
         out_file = f"_ignore/{source}-{model_name}.hdf5"
-        if model_name in ("ESM1v_default", "SHMpleESM_wt"):
+        if model_name in ("ESM1v_wt", "SHMpleESM_wt"):
             model.preload_esm_data(pcp_hdf5_wt_path)
-        if model_name == "SHMpleESM_mask":
+        if model_name in ("ESM1v_mask", "SHMpleESM_mask"):
             model.preload_esm_data(pcp_hdf5_mask_path)
         model.write_aaprobs(f"data/{source}.csv", out_file)
         compare_file = f"tests/test-data/{source}-{model_name}.hdf5"

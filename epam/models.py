@@ -45,7 +45,8 @@ FULLY_SPECIFIED_MODELS = [
         "SHMple",
         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
     ),
-    ("ESM1v_default", "CachedESM1v", {}),
+    ("ESM1v_wt", "CachedESM1v", {}),
+    ("ESM1v_mask", "CachedESM1v", {"sf_rescale": "sigmoid"}),
     (
         "SHMpleESM_wt",
         "SHMpleESM",
