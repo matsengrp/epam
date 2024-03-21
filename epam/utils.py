@@ -72,9 +72,11 @@ def load_and_filter_pcp_df(pcp_path):
 def selection_factor_ratios_to_sigmoid(ratio_sel_matrix, scale_const=1):
     """
     Convert selection factors to sigmoid.
+    The log (base-e) of the selection factor is passed to the sigmoid function.
 
     Parameters:
-    selection_factors (torch.Tensor): selection factors.
+    selection_factors (torch.Tensor): selection factors. Expected range of each element is [0, infty].
+    scale_const (float): exponent applied to each selection factor.
 
     Returns:
     sigmoid_sel_matrix (torch.Tensor): sigmoid of selection factors.
