@@ -105,21 +105,6 @@ def test_cached_esm_wt(tol=1e-4):
         assert np.allclose(ref_esm_dict[key], cached_esm_dict[key], rtol=tol)
 
 
-# # THIS TEST IS PROBABLY NOT NECESSARY - REDUNDANT AND SLOW
-# def test_cached_esm_mask():
-#     source = "10-random-from-10x"
-#     pcp_file = f"data/{source}.csv"
-#     hdf5_file = f"_ignore/{source}_cached_mask.hdf5"
-#     compare_file = f"data/{source}-mask.hdf5"
-
-#     precompute_and_save(pcp_file, hdf5_file, "masked-marginals")
-#     cached_esm_dict = load_and_convert_to_dict(hdf5_file)
-#     ref_esm_dict = load_and_convert_to_dict(compare_file)
-
-#     for key in cached_esm_dict.keys():
-#         assert np.allclose(ref_esm_dict[key], cached_esm_dict[key])
-
-
 def test_nasty_shmple_esm():
     bad_pcp_file = "data/wyatt_10x_loss_nan.csv"
     bad_esm_file = "_ignore/wyatt_10x_loss_nan_cached_esm.hdf5"
@@ -149,7 +134,6 @@ def wrapped_not_tyrosine():
     return WrappedBinaryMutSel(not_tyrosine, weights_directory=weights_path)
 
 
-# FAILING
 def test_wrapped_binary_mut_sel(wrapped_not_tyrosine):
     nt_seq = "GCTTAT"
     assert translate_sequence(nt_seq) == "AY"
