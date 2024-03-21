@@ -45,7 +45,7 @@ FULLY_SPECIFIED_MODELS = [
         "SHMple",
         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
     ),
-    ("ESM1v_default", "CachedESM1v", {}),
+    ("ESM1v_default", "CachedESM1v", {"sf_rescale": "sigmoid"}),
     (
         "SHMpleESM_wt",
         "SHMpleESM",
@@ -405,7 +405,7 @@ class MutSel(OptimizableSHMple):
         # 1. This occurs when using ratios under ESM mask-marginals.
         if self.sf_rescale == "sigmoid":
             ratio_sel_matrix = self.build_selection_matrix_from_parent(parent)
-            sel_matrix =  utils.selection_factor_ratios_to_sigmoid(ratio_sel_matrix)
+            sel_matrix = utils.selection_factor_ratios_to_sigmoid(ratio_sel_matrix)
         else:
             sel_matrix = self.build_selection_matrix_from_parent(parent)
         mut_probs = 1.0 - torch.exp(-branch_length * rates)
@@ -637,14 +637,18 @@ class AbLang(BaseModel):
 
 
 class CachedESM1v(BaseModel):
-    def __init__(self, model_name=None):
+    def __init__(self, model_name=None, sf_rescale=None):
         """
         Initialize ESM1v with cached selection matrices generated in esm_precompute.py.
 
+        If sf_rescale is set to "sigmoid", the selection factors are rescaled using a sigmoid transformation.
+
         Parameters:
         model_name (str, optional): The name of the model.
+        sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy. Ignoring for wt-marginals selection factors.
         """
         super().__init__(model_name=model_name)
+        self.sf_rescale = sf_rescale
 
     def preload_esm_data(self, hdf5_path):
         """
@@ -669,7 +673,18 @@ class CachedESM1v(BaseModel):
         assert (
             parent in self.selection_matrices.keys()
         ), f"{parent} not present in CachedESM."
-        return self.selection_matrices[parent]
+        if self.sf_rescale == "sigmoid":
+            # Sigmoid transformation for selection factors with some values greater than 1.
+            ratio_sel_matrix = torch.tensor(self.selection_matrices[parent])
+            sel_tensor = utils.selection_factor_ratios_to_sigmoid(ratio_sel_matrix)
+            
+            # Normalize the selection matrix.
+            row_sums = sel_tensor.sum(dim=1, keepdim=True)
+            sel_tensor /= row_sums
+            sel_matrix = sel_tensor.numpy()
+        else:
+            sel_matrix = self.selection_matrices[parent]
+        return sel_matrix
 
 
 class SHMpleESM(MutSel):
