@@ -91,7 +91,7 @@ def test_mut_sel_probability():
     assert correct_prob == pytest.approx(calculated_prob, rel=1e-5)
 
 
-def test_cached_esm_wt(tol=1e-4):  
+def test_cached_esm_wt(tol=1e-4):
     source = "10-random-from-10x"
     pcp_file = f"data/{source}.csv"
     hdf5_file = f"_ignore/{source}_cached_wt.hdf5"
@@ -106,7 +106,7 @@ def test_cached_esm_wt(tol=1e-4):
 
 
 # # THIS TEST IS PROBABLY NOT NECESSARY - REDUNDANT AND SLOW
-# def test_cached_esm_mask():  
+# def test_cached_esm_mask():
 #     source = "10-random-from-10x"
 #     pcp_file = f"data/{source}.csv"
 #     hdf5_file = f"_ignore/{source}_cached_mask.hdf5"
@@ -120,7 +120,7 @@ def test_cached_esm_wt(tol=1e-4):
 #         assert np.allclose(ref_esm_dict[key], cached_esm_dict[key])
 
 
-def test_nasty_shmple_esm(): 
+def test_nasty_shmple_esm():
     bad_pcp_file = "data/wyatt_10x_loss_nan.csv"
     bad_esm_file = "_ignore/wyatt_10x_loss_nan_cached_esm.hdf5"
     bad_out_file = "_ignore/wyatt_10x_loss_nan.hdf5"

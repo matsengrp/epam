@@ -132,7 +132,9 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy):
                     f"{parent}", data=matrix, compression="gzip", compression_opts=4
                 )
     else:
-        raise ValueError(f"Invalid scoring strategy: {scoring_strategy}. Must be 'wt-marginals' or 'masked-marginals'.")
+        raise ValueError(
+            f"Invalid scoring strategy: {scoring_strategy}. Must be 'wt-marginals' or 'masked-marginals'."
+        )
 
 
 def load_and_convert_to_dict(hdf5_path):
