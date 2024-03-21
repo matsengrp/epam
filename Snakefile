@@ -12,11 +12,11 @@ model_name_to_spec = {
     for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS 
 }
 
-set1_models = ("AbLang_heavy", "ESM1v_default")
+set1_models = ("AbLang_heavy", "ESM1v_mask")
 set2_models = ("SHMple_default", "SHMple_productive")
-set3_models = "SHMple_ESM1v"
+set3_models = ("SHMpleESM_mask")
 
-model_combos = ["set1/AbLang_heavy", "set1/ESM1v_default", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMple_ESM1v"]
+model_combos = ["set1/AbLang_heavy", "set1/ESM1v_mask", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMpleESM_mask"]
 
 set1_model_name_to_spec = {
     key: model_name_to_spec[key] for key in set1_models
@@ -67,9 +67,9 @@ rule precompute_esm:
         out_hdf5="pcp_batched_inputs/{pcp_input}_{part}.hdf5", 
     params:
         part=lambda wildcards: wildcards.part  # Define a dynamic wildcard for {part}
-    shell:
+    shell: 
         """
-        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5}
+        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals"
         """
 
 

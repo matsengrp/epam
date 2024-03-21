@@ -277,6 +277,7 @@ def build_codon_mutsel(
 
     # Multiply the codon probabilities by the selection matrices
     codon_mutsel = codon_probs * codon_sel_matrices.view(-1, 4, 4, 4)
+
     # Clamp the codon_mutsel above by 1: these are probabilities.
     codon_mutsel = codon_mutsel.clamp(max=1.0)
 

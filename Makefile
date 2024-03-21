@@ -1,8 +1,8 @@
 default:
 
 install:
-	pip install -r requirements.txt
-	pip install -e .
+	python -m pip install -r requirements.txt
+	python -m pip install -e .
 
 install-cuda:
 	# Set up cuda

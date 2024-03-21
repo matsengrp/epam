@@ -2,6 +2,7 @@
 
 import hashlib
 import h5py
+import torch
 import pandas as pd
 from epam.sequences import pcp_criteria_check
 
@@ -66,3 +67,21 @@ def load_and_filter_pcp_df(pcp_path):
     ]
 
     return pcp_df
+
+
+def selection_factor_ratios_to_sigmoid(ratio_sel_matrix, scale_const=1):
+    """
+    Convert selection factors to sigmoid.
+    The log (base-e) of the selection factor is passed to the sigmoid function.
+
+    Parameters:
+    selection_factors (torch.Tensor): selection factors. Expected range of each element is [0, infty].
+    scale_const (float): exponent applied to each selection factor.
+
+    Returns:
+    sigmoid_sel_matrix (torch.Tensor): sigmoid of selection factors.
+
+    """
+    scaled_ratio = torch.pow(ratio_sel_matrix, scale_const)
+    sigmoid_sel_matrix = 1 / (1 + (1 / scaled_ratio))
+    return sigmoid_sel_matrix
