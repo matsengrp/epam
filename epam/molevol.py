@@ -300,6 +300,47 @@ def build_codon_mutsel(
     return codon_mutsel, sums_too_big
 
 
+def build_codon_mutsel_unnormalized(
+    parent_codon_idxs: Tensor,
+    codon_mut_probs: Tensor,
+    codon_sub_probs: Tensor,
+    aa_sel_matrices: Tensor,
+) -> Tensor:
+    """
+    Build a sequence of codon mutation-selection matrices for codons along a sequence.
+    No normalization is done to ensure the values for possible codons at a site sum to 1.
+    Used for GCReplay studies.
+
+    Args:
+        parent_codon_idxs (torch.Tensor): The parent codons for each sequence. Shape: (codon_count, 3)
+        codon_mut_probs (torch.Tensor): The mutation probabilities for each site in each codon. Shape: (codon_count, 3)
+        codon_sub_probs (torch.Tensor): The substitution probabilities for each site in each codon. Shape: (codon_count, 3, 4)
+        aa_sel_matrices (torch.Tensor): The amino-acid selection matrices for each site. Shape: (codon_count, 20)
+
+    Returns:
+        torch.Tensor: The probability times selection factor of mutating to each codon, for each sequence. Shape: (codon_count, 4, 4, 4)
+                      No clamping of values nor normalization across codons of a site is performed.
+    """
+    mut_matrices = build_mutation_matrices(
+        parent_codon_idxs, codon_mut_probs, codon_sub_probs
+    )
+    codon_probs = codon_probs_of_mutation_matrices(mut_matrices)
+
+    # Calculate the codon selection matrix for each sequence via Einstein
+    # summation, in which we sum over the repeated indices.
+    # So, for each site (s) and codon (c), sum over amino acids (a):
+    # codon_sel_matrices[s, c] = sum_a(CODON_AA_INDICATOR_MATRIX[c, a] * aa_sel_matrices[s, a])
+    # Resulting shape is (S, C) where S is the number of sites and C is the number of codons.
+    codon_sel_matrices = torch.einsum(
+        "ca,sa->sc", CODON_AA_INDICATOR_MATRIX, aa_sel_matrices
+    )
+
+    # Multiply the codon probabilities by the selection matrices
+    codon_mutsel = codon_probs * codon_sel_matrices.view(-1, 4, 4, 4)
+
+    return codon_mutsel
+
+
 def neutral_aa_mut_probs(
     parent_codon_idxs: Tensor,
     codon_mut_probs: Tensor,

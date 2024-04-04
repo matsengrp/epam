@@ -26,6 +26,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 data/shmple_weights/
+data/gcreplay/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -169,6 +170,7 @@ work/
 
 # local data
 pcp_inputs/
+pcp_gcreplay_inputs/
 pcp_batched_inputs/
 output/
 _logs/
