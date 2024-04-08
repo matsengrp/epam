@@ -27,11 +27,10 @@ def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
     try:
         ModelClass = getattr(models, model_name)
     except AttributeError:
-        pass
-    try:
-        ModelClass = getattr(gcreplay_models, model_name)
-    except AttributeError:
-        print(f'{model_name} model does not exist')
+        try:
+            ModelClass = getattr(gcreplay_models, model_name)
+        except AttributeError:
+            print(f"{model_name} model does not exist")
     model = ModelClass(**model_args)
     if model_name in ("CachedESM1v", "SHMpleESM"):
         if hdf5_path is None:

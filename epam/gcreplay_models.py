@@ -11,7 +11,7 @@ from epam.torch_common import optimize_branch_length
 
 
 class GCReplayDMS(models.BaseModel):
-    def __init__(self, dms_data_file: str, chain="heavy", model_name=None, scaling=1.):
+    def __init__(self, dms_data_file: str, chain="heavy", model_name=None, scaling=1.0):
         """
         Initialize a selection model from GCReplay DMS data.
 
@@ -25,30 +25,58 @@ class GCReplayDMS(models.BaseModel):
         self.scaling = scaling
         self.chain = chain[0].capitalize()
         dms_df = pd.read_csv(dms_data_file)
-        self.dms_chain_df = dms_df[dms_df['chain']==self.chain]
+        self.dms_chain_df = dms_df[dms_df["chain"] == self.chain]
 
         # Issue: When 'mutant' amino acid is the wildtype, binding information is not provided.
-        # Patch: Get binding of wildtype amino acid from a non-wildtype mutant: [bind_CGG] - [delta_bind_CGG]
-        # Note: the wildtype bind_CGG seems to be the same constant for all sites and both chains.
-        for site in self.dms_chain_df['position'].drop_duplicates():
-            site_df = self.dms_chain_df[self.dms_chain_df['position']==site]
-            non_wt_row_df = site_df[site_df['wildtype']!=site_df['mutant']].head(1)
-            wt_bind = non_wt_row_df['bind_CGG'].item() - non_wt_row_df['delta_bind_CGG'].item()
-            wt_iloc = site_df[site_df['wildtype']==site_df['mutant']].index.item()
-            self.dms_chain_df.loc[wt_iloc,'bind_CGG'] = wt_bind
-            self.dms_chain_df.loc[wt_iloc,'delta_bind_CGG'] = 0.
+        # Patch: Recover wildtype binding at a site from a non-wildtype mutant data: [bind_CGG] - [delta_bind_CGG]
+        for site in self.dms_chain_df["position"].drop_duplicates():
+            site_df = self.dms_chain_df[self.dms_chain_df["position"] == site]
+            non_wt_row_df = site_df[site_df["wildtype"] != site_df["mutant"]].head(1)
+            wt_bind = (
+                non_wt_row_df["bind_CGG"].item()
+                - non_wt_row_df["delta_bind_CGG"].item()
+            )
+            wt_iloc = site_df[site_df["wildtype"] == site_df["mutant"]].index.item()
+            self.dms_chain_df.loc[wt_iloc, "bind_CGG"] = wt_bind
+            self.dms_chain_df.loc[wt_iloc, "delta_bind_CGG"] = 0.0
 
         # Issue: Light chain DMS measurements at positions 129 (F,L), 134 (R) are missing.
         # Patch: Set the missing binding values to the wildtype value.
-        if self.chain=='L':
+        if self.chain == "L":
             patch_sites = [129, 134]
             for site in patch_sites:
-                site_df = self.dms_chain_df[self.dms_chain_df['position']==site]
-                wt_bind = site_df[site_df['wildtype']==site_df['mutant']]['bind_CGG'].item()
-                for i,row in site_df.iterrows():
-                    if np.isnan(row['bind_CGG']):
-                        self.dms_chain_df.loc[i,'bind_CGG'] = wt_bind
-                        self.dms_chain_df.loc[i,'delta_bind_CGG'] = 0.
+                site_df = self.dms_chain_df[self.dms_chain_df["position"] == site]
+                wt_bind = site_df[site_df["wildtype"] == site_df["mutant"]]["bind_CGG"].item()
+                for i, row in site_df.iterrows():
+                    if np.isnan(row["bind_CGG"]):
+                        self.dms_chain_df.loc[i, "bind_CGG"] = wt_bind
+                        self.dms_chain_df.loc[i, "delta_bind_CGG"] = 0.0
+
+    def _get_dms_ratios(self, parent_aa: str, site: int) -> np.ndarray:
+        """
+        Generate a numpy array of the ratios of association constants (K_A), according to DMS measurements,
+        between each amino acid to the parent amino acid at a specified site.
+
+        Parameters:
+        parent_aa (str): The parent amino acid sequence.
+        site (int): The site in the parent sequence to get K_A ratios for (0-based index).
+
+        Returns:
+        numpy.ndarray: An array containing the K_A ratios for the site.
+        """
+        if self.chain == "H":
+            # heavy chain has amino acid positions [1, 112] in DMS data
+            position = site + 1
+        else:
+            # light chain has amino acid positions [128, 235] in DMS data
+            position = site + 128
+
+        site_dms_df = self.dms_chain_df[self.dms_chain_df["position"] == position]
+        ref_bind = site_dms_df[site_dms_df["mutant"] == parent_aa[site]]["bind_CGG"].item()
+        assert(~np.isnan(ref_bind))
+
+        # log(10) because binding is log10[K_A]
+        return np.exp(site_dms_df["bind_CGG"].to_numpy() * np.log(10)) / np.exp(ref_bind * np.log(10))  
 
     def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
         """
@@ -68,17 +96,9 @@ class GCReplayDMS(models.BaseModel):
         matrix = []
 
         for i in range(len(parent_aa)):
-            if self.chain=='H':
-                # heavy chain has amino acid positions [1, 112] in DMS data
-                position = i+1
-            else:
-                # light chain has amino acid positions [128, 235] in DMS data
-                position = i+128
-
-            site_dms_df = self.dms_chain_df[self.dms_chain_df['position']==position]
-            ref_bind = site_dms_df[site_dms_df['mutant']==parent_aa[i]]['bind_CGG'].item()
-            sel_factors = np.exp(site_dms_df['bind_CGG'].to_numpy()*np.log(10))/np.exp(ref_bind*np.log(10))  # log(10) because binding is log10[K_A]
-            sel_factors = np.power(sel_factors, self.scaling)
+            dms_ratios = self._get_dms_ratios(parent_aa, i)
+            assert(True not in np.isnan(dms_ratios))
+            sel_factors = np.power(dms_ratios, self.scaling)
 
             # DMS data lists amino acid mutants in alphabetical order (convenient!)
             # Note: sel_factors results is float64, but seems like einsum wants float32
@@ -89,7 +109,7 @@ class GCReplayDMS(models.BaseModel):
 
 
 class GCReplayDMSSigmoid(GCReplayDMS):
-    def __init__(self, dms_data_file: str, chain="heavy", model_name=None, scaling=1.):
+    def __init__(self, dms_data_file: str, chain="heavy", model_name=None, scaling=1.0):
         """
         Initialize a selection model from GCReplay DMS data that feed into a sigmoid function
 
@@ -99,8 +119,13 @@ class GCReplayDMSSigmoid(GCReplayDMS):
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         scaling (float): multiplicative factor on the parent-child binding difference.
         """
-        super().__init__(dms_data_file=dms_data_file, chain=chain, model_name=model_name, scaling=scaling)
-                        
+        super().__init__(
+            dms_data_file=dms_data_file,
+            chain=chain,
+            model_name=model_name,
+            scaling=scaling,
+        )
+
     def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to DMS measurements.
@@ -119,17 +144,11 @@ class GCReplayDMSSigmoid(GCReplayDMS):
         matrix = []
 
         for i in range(len(parent_aa)):
-            if self.chain=='H':
-                # heavy chain has amino acid positions [1, 112] in DMS data
-                position = i+1
-            else:
-                # light chain has amino acid positions [128, 235] in DMS data
-                position = i+128
-
-            site_dms_df = self.dms_chain_df[self.dms_chain_df['position']==position]
-            ref_bind = site_dms_df[site_dms_df['mutant']==parent_aa[i]]['bind_CGG'].item()
-            sel_ratios = np.exp(site_dms_df['bind_CGG'].to_numpy()*np.log(10))/np.exp(ref_bind*np.log(10))  # log(10) because binding is log10[K_A]            
-            sel_factors = epam.utils.selection_factor_ratios_to_sigmoid(torch.tensor(sel_ratios), scale_const=self.scaling)
+            dms_ratios = self._get_dms_ratios(parent_aa, i)
+            assert(True not in np.isnan(dms_ratios))
+            sel_factors = epam.utils.selection_factor_ratios_to_sigmoid(
+                torch.tensor(dms_ratios), scale_const=self.scaling
+            )
 
             # DMS data lists amino acid mutants in alphabetical order (convenient!)
             # Note: sel_factors results is float64, but seems like einsum wants float32
@@ -150,13 +169,15 @@ class GCReplaySHM(models.BaseModel):
         """
         super().__init__(model_name=model_name)
         shm_df = pd.read_csv(shm_data_file)
-        cols = list('ACGT')
+        cols = list("ACGT")
 
         # remove the last row because (?) it's not part of the sequence, also not multiple of 3 so truncated anyway
         shm_df = shm_df[cols].drop(shm_df.index[-1], axis=0, inplace=False)
 
-        self.mut_probs = shm_df[cols].sum(axis=1).to_numpy()                 # mutability probabilities
-        self.sub_probs = shm_df[cols].div(self.mut_probs, axis=0).to_numpy() # substitution probabilities given mutation has occurred
+        self.mut_probs = shm_df[cols].sum(axis=1).to_numpy()  # mutability probabilities
+        self.sub_probs = (
+            shm_df[cols].div(self.mut_probs, axis=0).to_numpy()
+        )  # substitution probabilities given mutation has occurred
 
     def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
         """
@@ -176,11 +197,17 @@ class GCReplaySHM(models.BaseModel):
 
         # Reshape the inputs to include a codon dimension.
         parent_codon_idxs = molevol.reshape_for_codons(parent_idxs)
-        codon_mut_probs = molevol.reshape_for_codons(torch.tensor(self.mut_probs, dtype=torch.float))
-        codon_sub_probs = molevol.reshape_for_codons(torch.tensor(self.sub_probs, dtype=torch.float))
+        codon_mut_probs = molevol.reshape_for_codons(
+            torch.tensor(self.mut_probs, dtype=torch.float)
+        )
+        codon_sub_probs = molevol.reshape_for_codons(
+            torch.tensor(self.sub_probs, dtype=torch.float)
+        )
 
         # Vectorized calculation of amino acid probabilities.
-        return molevol.aaprob_of_mut_and_sub(parent_codon_idxs, codon_mut_probs, codon_sub_probs).numpy()
+        return molevol.aaprob_of_mut_and_sub(
+            parent_codon_idxs, codon_mut_probs, codon_sub_probs
+        ).numpy()
 
 
 class GCReplayOptSHM(GCReplaySHM):
@@ -211,7 +238,7 @@ class GCReplayOptSHM(GCReplaySHM):
         self.max_optimization_steps = max_optimization_steps
         self.optimization_tol = optimization_tol
         self.learning_rate = learning_rate
-        
+
     def _build_log_pcp_probability(
         self, parent: str, child: str, rates: torch.Tensor, sub_probs: torch.Tensor
     ):
@@ -239,7 +266,7 @@ class GCReplayOptSHM(GCReplaySHM):
             return child_log_prob
 
         return log_pcp_probability
-    
+
     def _find_optimal_branch_length(self, parent, child, starting_branch_length):
         """
         Find the optimal branch length for a parent-child pair in terms of
@@ -298,7 +325,7 @@ class GCReplayOptSHM(GCReplaySHM):
         branch_length = self._find_optimal_branch_length(
             parent, child, base_branch_length
         )
-        
+
         # if branch_length > 0.5:
         #     print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
@@ -368,7 +395,9 @@ class GCReplayMutSel(GCReplayOptSHM):
 
         return log_pcp_probability
 
-    def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> torch.Tensor:
+    def _aaprobs_of_parent_and_branch_length(
+        self, parent, branch_length
+    ) -> torch.Tensor:
         rates = torch.tensor(-np.log(1 - self.mut_probs), dtype=torch.float)
         sub_probs = torch.tensor(self.sub_probs, dtype=torch.float)
 
@@ -387,102 +416,15 @@ class GCReplayMutSel(GCReplayOptSHM):
         return molevol.aaprobs_of_codon_probs(codon_mutsel)
 
 
-class GCReplaySHMDMS(GCReplaySHM):
-    def __init__(self, shm_data_file:str, dms_data_file:str, chain="heavy", model_name=None, scaling=1.):
-        """
-        Initialize a mutation-selection model from GCReplay passenger mouse and DMS data.
-        No branch optimization is performed.
-
-        Parameters:
-        shm_data_file (str): File path to the mutation rates from passenger mouse data.
-        dms_data_file (str): File path to the DMS measurements data.
-        chain (str): Name of the chain, default is "heavy".
-        model_name (str, optional): The name of the model. If not specified, the class name is used.
-        scaling (float): multiplicative factor on the parent-child binding difference.
-        """
-        super().__init__(shm_data_file, model_name)
-        self.selection_model = GCReplayDMS(dms_data_file, chain, model_name, scaling)
-
-    def build_selection_matrix_from_parent(self, parent):
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
-
-    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
-        """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to DMS measurements.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
-
-        Parameters:
-        parent (str): The parent nucleotide sequence for which we want the array of probabilities.
-        child (str): The child nucleotide sequence. (ignored)
-
-        Returns:
-        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
-
-        """
-        sel_matrix = self.build_selection_matrix_from_parent(parent)
-        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-
-        # Note: No clamping of values nor normalization across codons of a site will performed for this tensor.
-        #       The standard normalization across amino acids of a site will be performed in molevol.aaprobs_of_codon_probs().
-        codon_mutsel = molevol.build_codon_mutsel_unnormalized(
-            parent_idxs.reshape(-1, 3),
-            torch.tensor(self.mut_probs, dtype=torch.float).reshape(-1, 3),
-            torch.tensor(self.sub_probs, dtype=torch.float).reshape(-1, 3, 4),
-            sel_matrix,
-        )
-
-        return molevol.aaprobs_of_codon_probs(codon_mutsel)
-
-
-class GCReplaySHMDMSSigmoid(GCReplaySHM):
-    def __init__(self, shm_data_file:str, dms_data_file:str, chain="heavy", model_name=None, scaling=1.):
-        """
-        Initialize a mutation-selection model from GCReplay passenger mouse and DMS data with sigmoid function.
-        No branch optimization is performed.
-
-        Parameters:
-        shm_data_file (str): File path to the mutation rates from passenger mouse data.
-        dms_data_file (str): File path to the DMS measurements data.
-        chain (str): Name of the chain, default is "heavy".
-        model_name (str, optional): The name of the model. If not specified, the class name is used.
-        scaling (float): multiplicative factor on the parent-child binding difference.
-        """
-        super().__init__(shm_data_file, model_name)
-        self.selection_model = GCReplayDMSSigmoid(dms_data_file, chain, model_name, scaling)
-
-    def build_selection_matrix_from_parent(self, parent):
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
-
-    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
-        """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to DMS measurements.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
-
-        Parameters:
-        parent (str): The parent nucleotide sequence for which we want the array of probabilities.
-        child (str): The child nucleotide sequence. (ignored)
-
-        Returns:
-        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
-
-        """
-        sel_matrix = self.build_selection_matrix_from_parent(parent)
-        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-
-        codon_mutsel, sums_too_big = molevol.build_codon_mutsel(
-            parent_idxs.reshape(-1, 3),
-            torch.tensor(self.mut_probs, dtype=torch.float).reshape(-1, 3),
-            torch.tensor(self.sub_probs, dtype=torch.float).reshape(-1, 3, 4),
-            sel_matrix,
-        )
-
-        return molevol.aaprobs_of_codon_probs(codon_mutsel)
-
-
 class GCReplayOptSHMDMSSigmoid(GCReplayMutSel):
-    def __init__(self, shm_data_file:str, dms_data_file:str, chain="heavy", model_name=None, scaling=1.):
+    def __init__(
+        self,
+        shm_data_file: str,
+        dms_data_file: str,
+        chain="heavy",
+        model_name=None,
+        scaling=1.0,
+    ):
         """
         Initialize a mutation-selection model from GCReplay passenger mouse and DMS data with sigmoid function.
         Branch optimization is performed.
@@ -495,14 +437,23 @@ class GCReplayOptSHMDMSSigmoid(GCReplayMutSel):
         scaling (float): multiplicative factor on the parent-child binding difference.
         """
         super().__init__(shm_data_file, model_name)
-        self.selection_model = GCReplayDMSSigmoid(dms_data_file, chain, model_name, scaling)
+        self.selection_model = GCReplayDMSSigmoid(
+            dms_data_file, chain, model_name, scaling
+        )
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
 
 
 class GCReplaySHMpleDMS(models.MutSel):
-    def __init__(self, weights_directory:str, dms_data_file:str, chain="heavy", model_name=None, scaling=1.):
+    def __init__(
+        self,
+        weights_directory: str,
+        dms_data_file: str,
+        chain="heavy",
+        model_name=None,
+        scaling=1.0,
+    ):
         """
         Initialize a mutation-selection model for GC-Replay data using SHMple for the mutation part and
         DMS measurements with sigmoid function for the selection part.
@@ -515,7 +466,9 @@ class GCReplaySHMpleDMS(models.MutSel):
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         """
         super().__init__(weights_directory, model_name)
-        self.selection_model = GCReplayDMSSigmoid(dms_data_file, chain, model_name, scaling)
+        self.selection_model = GCReplayDMSSigmoid(
+            dms_data_file, chain, model_name, scaling
+        )
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
