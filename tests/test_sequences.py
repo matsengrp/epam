@@ -9,7 +9,7 @@ from epam.sequences import (
     CODON_AA_INDICATOR_MATRIX,
     aa_onehot_tensor_of_str,
     nt_idx_array_of_str,
-    subs_indicator_tensor_of,
+    nt_subs_indicator_tensor_of,
     translate_sequences,
 )
 
@@ -63,5 +63,5 @@ def test_subs_indicator_tensor_of():
     parent = "NAAA"
     child = "CAGA"
     expected_output = torch.tensor([0, 0, 1, 0], dtype=torch.float)
-    output = subs_indicator_tensor_of(parent, child)
+    output = nt_subs_indicator_tensor_of(parent, child)
     assert torch.equal(output, expected_output)

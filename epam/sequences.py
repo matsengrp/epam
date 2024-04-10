@@ -60,14 +60,27 @@ def aa_onehot_tensor_of_str(aa_str):
     return aa_onehot
 
 
-def subs_indicator_tensor_of(parent, child):
+def generic_subs_indicator_tensor_of(ambig_symb, parent, child):
     """Return a tensor indicating which positions in the parent sequence
     are substituted in the child sequence.
     """
     return torch.tensor(
-        [0 if p == "N" else p != c for p, c in zip(parent, child)],
+        [0 if (p == ambig_symb or c == ambig_symb) else p != c for p, c in zip(parent, child)],
         dtype=torch.float,
     )
+
+
+def nt_subs_indicator_tensor_of(parent, child):
+    """Return a tensor indicating which positions in the parent sequence
+    are substituted in the child sequence.
+    """
+    return generic_subs_indicator_tensor_of("N", parent, child)
+
+
+def aa_subs_indicator_tensor_of(parent, child):
+    """Return a tensor indicating which positions in the parent sequence
+    are substituted in the child sequence."""
+    return generic_subs_indicator_tensor_of("X", parent, child)
 
 
 def read_fasta_sequences(file_path):
@@ -98,11 +111,21 @@ def aa_index_of_codon(codon):
     return AA_STR_SORTED.index(aa)
 
 
-def mutation_frequency(parent, child):
-    """Return the fraction of nucleotides that differ between the parent and child sequences."""
+def generic_mutation_frequency(ambig_symb, parent, child):
+    """Return the fraction of sites that differ between the parent and child sequences."""
     return sum(
-        1 for p, c in zip(parent, child) if p != c and p != "N" and c != "N"
+        1 for p, c in zip(parent, child) if p != c and p != ambig_symb and c != ambig_symb
     ) / len(parent)
+
+
+def nt_mutation_frequency(parent, child):
+    """Return the fraction of nucleotide sites that differ between the parent and child sequences."""
+    return generic_mutation_frequency("N", parent, child)
+
+
+def aa_mutation_frequency(parent, child):
+    """Return the fraction of amino acid sites that differ between the parent and child sequences."""
+    return generic_mutation_frequency("X", parent, child)
 
 
 def assert_pcp_lengths(parent, child):
@@ -122,7 +145,7 @@ def pcp_criteria_check(parent, child, max_mut_freq=0.3):
     """Check that parent child pair undergoes mutation at a reasonable rate."""
     if parent == child:
         return False
-    elif mutation_frequency(parent, child) > max_mut_freq:
+    elif nt_mutation_frequency(parent, child) > max_mut_freq:
         return False
     else:
         return True
