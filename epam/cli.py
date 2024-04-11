@@ -6,7 +6,7 @@ import numpy as np
 import h5py
 
 import os
-from epam import evaluation, models, gcreplay_models, shmple_precompute, esm_precompute
+from epam import evaluation, models, shmple_precompute, esm_precompute
 from epam.utils import generate_file_checksum
 
 
@@ -24,13 +24,7 @@ def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
     Examples:
         epam aaprob SHMple '{"weights_directory":"data/shmple_weights/my_shmoof"}' in_path out_path
     """
-    try:
-        ModelClass = getattr(models, model_name)
-    except AttributeError:
-        try:
-            ModelClass = getattr(gcreplay_models, model_name)
-        except AttributeError:
-            print(f"{model_name} model does not exist")
+    ModelClass = getattr(models, model_name)
     model = ModelClass(**model_args)
     if model_name in ("CachedESM1v", "SHMpleESM"):
         if hdf5_path is None:

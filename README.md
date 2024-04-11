@@ -24,12 +24,6 @@ Getting SHMple weights:
     scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/my_shmoof data/shmple_weights/
     scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/prod_shmple data/shmple_weights/
 
-Getting GCReplay-DMS data:
-
-    mkdir data/gcreplay
-    scp <username>@quokka:/fh/fast/matsen_e/ksung2/epam-gcreplay/final_variant_scores.csv data/gcreplay/
-    scp <username>@quokka:/fh/fast/matsen_e/ksung2/epam-gcreplay/chigy_?c_mutation_rates_nt.csv data/gcreplay/
-
 ## Terminology
 
 * An "aaprob" matrix is a matrix that expresses the probability of various child amino acid substitutions for each site, laid out with sites on the rows and amino acids on the columns.

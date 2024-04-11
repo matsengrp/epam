@@ -2,7 +2,6 @@
 This module enables precomputation of SHMple rates and substitution
 probabilities, and then loading of those saved values into tensors.
 """
-
 import logging
 
 import h5py

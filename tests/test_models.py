@@ -56,6 +56,7 @@ def test_shmple():
 
 
 class MutSelThreonine(MutSel):
+
     """A mutation selection model with a selection matrix that loves Threonine."""
 
     def __init__(self, weights_directory, modelname="SillyMutSel"):

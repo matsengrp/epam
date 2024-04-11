@@ -4,7 +4,6 @@ fair-esm
 h5py
 pytest
 shmple @ git+ssh://git@github.com/matsengrp/shmple.git@f1f3db0b67351bae7c23b96197b58c7674bb95bb
-pulp==2.7.0   # see issue https://github.com/snakemake/snakemake/issues/2607
 snakemake
 tensorboardX
 typing_extensions

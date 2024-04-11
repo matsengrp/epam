@@ -1,7 +1,6 @@
 """
 This module enables precomputation of ESM-1v selection factors for a set of PCPs in bulk, and then loading those saved values into a dictionary. Different scoring schemes can be used to compute ESM-1v selection factors. See Meier et al. (2021) and https://github.com/facebookresearch/esm/blob/2b369911bb5b4b0dda914521b9475cad1656b2ac/examples/variant-prediction/predict.py#L192-L225 for more details.
 """
-
 import numpy as np
 import pandas as pd
 import torch
