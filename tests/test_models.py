@@ -117,13 +117,13 @@ def test_nasty_shmple_esm():
 class ConserveEverythingExceptTyrosine:
     """
     A fake selection model in which everything exept tyrosine is perfectly
-    conserved: Y is assigned a selection coefficient of 1, and all other amino
-    acids are assigned a selection coefficient of 0.
+    conserved: Y is assigned a selection coefficient of 0, and all other amino
+    acids are assigned a selection coefficient of 1.
     """
 
     def selection_factors_of_aa_str(self, aa_str):
         return torch.tensor(
-            [1.0 if aa_str[i] == "Y" else 0.0 for i in range(len(aa_str))]
+            [1.0 if aa_str[i] != "Y" else 0.0 for i in range(len(aa_str))]
         )
 
 
@@ -136,10 +136,10 @@ def wrapped_not_tyrosine():
 def test_wrapped_binary_mut_sel(wrapped_not_tyrosine):
     nt_seq = "GCTTAT"
     assert translate_sequence(nt_seq) == "AY"
-    selection_matrix = wrapped_not_tyrosine.build_selection_matrix_from_parent(nt_seq)
-    assert torch.allclose(selection_matrix.sum(axis=1), torch.tensor([1., 20.]))
-    assert selection_matrix[0, 0] == 1.0
-    assert (selection_matrix <= 1.0).all()
+    not_tyrosine_out = wrapped_not_tyrosine.build_selection_matrix_from_parent(nt_seq)
+    assert torch.allclose(not_tyrosine_out.sum(axis=1), torch.ones(2))
+    assert not_tyrosine_out[0, 0] == 1.0
+    assert not_tyrosine_out[1, -1] == 0.0
 
 
 def hdf5_files_identical(path_1, path_2, tol=1e-4):
