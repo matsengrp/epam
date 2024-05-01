@@ -3,9 +3,12 @@
 import h5py
 import pandas as pd
 import numpy as np
+import bisect
 from epam.sequences import AA_STR_SORTED
 from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
 from epam.sequences import translate_sequences, pcp_criteria_check
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Rectangle
 
 
 def evaluate(aaprob_paths, model_performance_path):
@@ -318,3 +321,189 @@ def calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs):
     )
 
     return cross_entropy_loss
+
+
+def get_site_mutabilities_df(aaprob_path):
+    """
+    Computes the amino acid site mutability probabilities for every site of every parent in a dataset.
+    Returns a dataframe that annotates for each site the index of the PCP it belongs to,
+    the site position in the amino acid sequence, and whether a mutation is observed in the child sequence.
+
+    Parameters:
+    aaprob_path (str): path to aaprob matrix for parent-child pairs.
+
+    Returns:
+    output_df (pd.DataFrame): dataframe with columns pcp_index, site, prob, mutation.
+    """
+    pcp_path = pcp_path_of_aaprob_path(aaprob_path)
+    pcp_df = load_and_filter_pcp_df(pcp_path)
+    nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
+    aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
+    parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
+
+    pcp_index_col = []
+    sites_col = []
+    site_sub_probs = []
+    site_sub_flags = []
+    with h5py.File(aaprob_path, "r") as matfile:
+        for index in range(len(parent_aa_seqs)):
+            pcp_index = pcp_df.index[index]
+            grp = matfile[
+                "matrix" + str(pcp_index)
+            ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
+            matrix = grp["data"]
+
+            parent = parent_aa_seqs[index]
+            child = child_aa_seqs[index]
+
+            pcp_index_col = np.concatenate((pcp_index_col, [pcp_index] * len(parent)))
+            sites_col = np.concatenate((sites_col, np.arange(len(parent))))
+            site_sub_probs = np.concatenate(
+                (
+                    site_sub_probs,
+                    calculate_site_substitution_probabilities(matrix, parent),
+                )
+            )
+            site_sub_flags = np.concatenate(
+                (site_sub_flags, [p != c for p, c in zip(parent, child)])
+            )
+
+    output_df = pd.DataFrame(columns=["pcp_index", "site", "prob", "mutation"])
+    output_df["pcp_index"] = pcp_index_col
+    output_df["site"] = sites_col
+    output_df["prob"] = site_sub_probs
+    output_df["mutation"] = site_sub_flags
+
+    return output_df
+
+
+def plot_observed_vs_expected(
+    df,
+    axs,
+    logprobs=True,
+    binning=np.linspace(-4.5, 0, 101),
+    model_color="#0072B2",
+    model_name="Expected",
+    xlabel="$\log_{10}$(mutability probability)",
+    logy=False,
+):
+    """
+    Draws a 2-panel figure with observed vs expected number of mutations in bins of mutability probability in the upper panel,
+    and per bin residual between observed and expected in the lower panel.
+
+    Parameters:
+    df (pd.DataFrame): dataframe of site mutabilities, requiring 'prob' and 'mutation' columns
+    axs (list of fig.ax): figure axes for plotting (at least 2 axes).
+    logprobs (bool): whether to plot log-probabilities (True) or plot probabilities (False)
+    binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins)
+    model_color (str): color for the plot of expected number of mutations
+    model_name (str): legend label for the plot of expected number of mutations
+    xlabel (str): x-axis label
+    logy (bool): whether to show y-axis in log-scale.
+
+    Returns:
+    axs (list of fig.ax): updated figure axes.
+    """
+    model_probs = df["prob"].to_numpy()
+    modp_per_bin = [[] for i in range(len(binning) - 1)]
+    for p in model_probs:
+        if logprobs:
+            index = bisect.bisect(binning, np.log10(p)) - 1
+        else:
+            index = bisect.bisect(binning, p) - 1
+        modp_per_bin[index].append(p)
+
+    expected = [sum(modp_per_bin[i]) for i in range(len(modp_per_bin))]
+
+    exp_err = [
+        np.sqrt(sum([p * (1 - p) for p in modp_per_bin[i]]))
+        for i in range(len(modp_per_bin))
+    ]
+
+    if logprobs:
+        obs_probs = np.log10(df[df["mutation"] > 0]["prob"].to_numpy())
+    else:
+        obs_probs = df[df["mutation"] > 0]["prob"].to_numpy()
+    observed = np.histogram(obs_probs, binning)[0]
+
+    # midpoints of each bin
+    xvals = [0.5 * (binning[i] + binning[i + 1]) for i in range(len(binning) - 1)]
+
+    # bin widths
+    binw = [(binning[i + 1] - binning[i]) for i in range(len(binning) - 1)]
+
+
+    # observed vs expected number of mutations
+    axs[0].bar(
+        xvals,
+        expected,
+        width=binw,
+        facecolor="white",
+        edgecolor=model_color,
+        label=model_name,
+    )
+    axs[0].plot(
+        xvals,
+        observed,
+        marker="o",
+        markersize=4,
+        linewidth=0,
+        color="#000000",
+        label="Observed",
+    )
+    axs[0].tick_params(axis="y", labelsize=16)
+    axs[0].set_ylabel("number of mutations", fontsize=20, labelpad=10)
+
+    # For some reason, regardless of draw order, legend labels are always ordered:
+    #   Observed
+    #   Model
+    # Force reverse the order.
+    leg_handles, leg_labels = axs[0].get_legend_handles_labels()
+    axs[0].legend(leg_handles[::-1], leg_labels[::-1], fontsize=15)
+
+    if logy:
+        axs[0].set_yscale("log")
+
+    boxes0 = [
+        Rectangle(
+            (binning[ibin], expected[ibin] - exp_err[ibin]),
+            binning[ibin + 1] - binning[ibin],
+            2 * exp_err[ibin],
+        )
+        for ibin in range(len(exp_err))
+    ]
+    pc0 = PatchCollection(
+        boxes0, facecolor="none", edgecolor="grey", linewidth=0, hatch="//////"
+    )
+    axs[0].add_collection(pc0)
+
+
+    # observed vs expected difference
+    axs[1].errorbar(
+        xvals,
+        [yo - ye for yo, ye in zip(observed, expected)],
+        marker="o",
+        markersize=4,
+        linewidth=0,
+        color="#000000",
+    )
+    axs[1].axhline(y=0, color="k", linestyle="--")
+    axs[1].tick_params(axis="x", labelsize=16)
+    axs[1].set_xlabel(xlabel, fontsize=20, labelpad=10)
+    axs[1].tick_params(axis="y", labelsize=16)
+    axs[1].set_ylabel("Obs - Exp", fontsize=20, labelpad=10)
+
+    boxes1 = [
+        Rectangle(
+            (binning[ibin], -exp_err[ibin]),
+            binning[ibin + 1] - binning[ibin],
+            2 * exp_err[ibin],
+        )
+        for ibin in range(len(exp_err))
+    ]
+    pc1 = PatchCollection(
+        boxes1, facecolor="none", edgecolor="grey", linewidth=0, hatch="//////"
+    )
+    axs[1].add_collection(pc1)
+
+    return axs
