@@ -403,6 +403,11 @@ def plot_observed_vs_expected(
 
     Returns:
     axs (list of fig.ax): updated figure axes.
+    overlap (float): area of overlap between observed and expected, divided by the average of the two areas
+    residual (float): square root of the sum of squared bin-by-bin differences between observed and expected
+    chisq (float): Pearson's chi-square test statistic
+    ndof (int): number of degrees of freedom for Pearson's chi-square test
+
     """
     model_probs = df["prob"].to_numpy()
     modp_per_bin = [[] for i in range(len(binning) - 1)]
@@ -426,12 +431,26 @@ def plot_observed_vs_expected(
         obs_probs = df[df["mutation"] > 0]["prob"].to_numpy()
     observed = np.histogram(obs_probs, binning)[0]
 
+    # compute overlap metric
+    intersect = np.sum([min(observed[i], expected[i]) for i in range(len(observed))])
+    denom = 0.5 * (np.sum(observed) + np.sum(expected))
+    overlap = intersect / denom
+
+    # compute residual metric
+    diff = [observed[i] - expected[i] for i in range(len(observed))]
+    residual = np.sqrt(np.sum([diff[i] * diff[i] for i in range(len(diff))]))
+
+    # compute chi-square test statistic
+    chisq = np.sum(
+        [diff[i] * diff[i] / expected[i] for i in range(len(diff)) if expected[i] != 0]
+    )
+    ndof = np.count_nonzero(expected)
+
     # midpoints of each bin
     xvals = [0.5 * (binning[i] + binning[i + 1]) for i in range(len(binning) - 1)]
 
     # bin widths
     binw = [(binning[i + 1] - binning[i]) for i in range(len(binning) - 1)]
-
 
     # observed vs expected number of mutations
     axs[0].bar(
@@ -477,7 +496,6 @@ def plot_observed_vs_expected(
     )
     axs[0].add_collection(pc0)
 
-
     # observed vs expected difference
     axs[1].errorbar(
         xvals,
@@ -506,4 +524,4 @@ def plot_observed_vs_expected(
     )
     axs[1].add_collection(pc1)
 
-    return axs
+    return axs, overlap, residual, chisq, ndof
