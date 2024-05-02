@@ -390,9 +390,12 @@ def plot_observed_vs_expected(
     """
     Draws a 2-panel figure with observed vs expected number of mutations in bins of mutability probability in the upper panel,
     and per bin residual between observed and expected in the lower panel.
+    The input dataframe of site mutabilities requires 'prob' (amino acid mutation probability) 
+    and 'mutation' (1 or 0 if site has an observed mutation or not) columns.
+    Each dataframe row corresponds to an amino acid site.
 
     Parameters:
-    df (pd.DataFrame): dataframe of site mutabilities, requiring 'prob' and 'mutation' columns
+    df (pd.DataFrame): dataframe of site mutabilities.
     axs (list of fig.ax): figure axes for plotting (at least 2 axes).
     logprobs (bool): whether to plot log-probabilities (True) or plot probabilities (False)
     binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins)
