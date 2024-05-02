@@ -386,6 +386,7 @@ def plot_observed_vs_expected(
     model_name="Expected",
     xlabel="$\log_{10}$(mutability probability)",
     logy=False,
+    normalize=False
 ):
     """
     Draws a 2-panel figure with observed vs expected number of mutations in bins of mutability probability in the upper panel,
@@ -393,16 +394,18 @@ def plot_observed_vs_expected(
     The input dataframe of site mutabilities requires 'prob' (amino acid mutation probability) 
     and 'mutation' (1 or 0 if site has an observed mutation or not) columns.
     Each dataframe row corresponds to an amino acid site.
+    The total number of rows is the total number of sites from all sequences in the dataset.
 
     Parameters:
     df (pd.DataFrame): dataframe of site mutabilities.
     axs (list of fig.ax): figure axes for plotting (at least 2 axes).
-    logprobs (bool): whether to plot log-probabilities (True) or plot probabilities (False)
-    binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins)
-    model_color (str): color for the plot of expected number of mutations
-    model_name (str): legend label for the plot of expected number of mutations
-    xlabel (str): x-axis label
+    logprobs (bool): whether to plot log-probabilities (True) or plot probabilities (False).
+    binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins).
+    model_color (str): color for the plot of expected number of mutations.
+    model_name (str): legend label for the plot of expected number of mutations.
+    xlabel (str): x-axis label.
     logy (bool): whether to show y-axis in log-scale.
+    normalize (bool): whether to scale the area of the expected mutations distribution to match the observed mutations distribution.
 
     Returns:
     axs (list of fig.ax): updated figure axes.
@@ -433,6 +436,11 @@ def plot_observed_vs_expected(
     else:
         obs_probs = df[df["mutation"] > 0]["prob"].to_numpy()
     observed = np.histogram(obs_probs, binning)[0]
+    
+    if normalize==True:
+        fnorm = np.sum(observed)/np.sum(expected)
+        expected = [fnorm*val for val in expected]
+        exp_err = [fnorm*err for err in exp_err]
 
     # compute overlap metric
     intersect = np.sum([min(observed[i], expected[i]) for i in range(len(observed))])
