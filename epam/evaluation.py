@@ -384,7 +384,6 @@ def plot_observed_vs_expected(
     binning=np.linspace(-4.5, 0, 101),
     model_color="#0072B2",
     model_name="Expected",
-    xlabel="$\log_{10}$(mutability probability)",
     logy=False,
     normalize=False
 ):
@@ -403,7 +402,6 @@ def plot_observed_vs_expected(
     binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins).
     model_color (str): color for the plot of expected number of mutations.
     model_name (str): legend label for the plot of expected number of mutations.
-    xlabel (str): x-axis label.
     logy (bool): whether to show y-axis in log-scale.
     normalize (bool): whether to scale the area of the expected mutations distribution to match the observed mutations distribution.
 
@@ -433,8 +431,10 @@ def plot_observed_vs_expected(
 
     if logprobs:
         obs_probs = np.log10(df[df["mutation"] > 0]["prob"].to_numpy())
+        xlabel = "$\log_{10}$(mutability probability)"
     else:
         obs_probs = df[df["mutation"] > 0]["prob"].to_numpy()
+        xlabel = "mutability probability"
     observed = np.histogram(obs_probs, binning)[0]
     
     if normalize==True:
@@ -508,7 +508,7 @@ def plot_observed_vs_expected(
     axs[0].add_collection(pc0)
 
     # observed vs expected difference
-    axs[1].errorbar(
+    axs[1].plot(
         xvals,
         [yo - ye for yo, ye in zip(observed, expected)],
         marker="o",
