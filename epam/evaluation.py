@@ -392,8 +392,8 @@ def plot_observed_vs_expected(
     and per bin residual between observed and expected in the lower panel.
     The input dataframe of site mutabilities requires 'prob' (amino acid mutation probability) 
     and 'mutation' (1 or 0 if site has an observed mutation or not) columns.
-    Each dataframe row corresponds to an amino acid site.
-    The total number of rows is the total number of sites from all sequences in the dataset.
+    Each dataframe row corresponds to an amino acid site in a specific sequence.
+    Thus, the total number of rows is the total number of sites from all sequences in the dataset.
 
     Parameters:
     df (pd.DataFrame): dataframe of site mutabilities.
