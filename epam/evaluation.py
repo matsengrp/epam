@@ -406,11 +406,10 @@ def plot_observed_vs_expected(
     normalize (bool): whether to scale the area of the expected mutations distribution to match the observed mutations distribution.
 
     Returns:
-    axs (list of fig.ax): updated figure axes.
+    A dictionary with results labeled:
     overlap (float): area of overlap between observed and expected, divided by the average of the two areas
     residual (float): square root of the sum of squared bin-by-bin differences between observed and expected
     chisq (float): Pearson's chi-square test statistic
-    ndof (int): number of degrees of freedom for Pearson's chi-square test
 
     """
     model_probs = df["prob"].to_numpy()
@@ -455,7 +454,6 @@ def plot_observed_vs_expected(
     chisq = np.sum(
         [diff[i] * diff[i] / expected[i] for i in range(len(diff)) if expected[i] != 0]
     )
-    ndof = np.count_nonzero(expected)
 
     # midpoints of each bin
     xvals = [0.5 * (binning[i] + binning[i + 1]) for i in range(len(binning) - 1)]
@@ -535,4 +533,4 @@ def plot_observed_vs_expected(
     )
     axs[1].add_collection(pc1)
 
-    return axs, overlap, residual, chisq, ndof
+    return {"overlap": overlap, "residual": residual, "chisq": chisq}
