@@ -381,7 +381,7 @@ def plot_observed_vs_expected(
     df,
     axs,
     logprobs=True,
-    binning=np.linspace(-4.5, 0, 101),
+    binning=None,
     model_color="#0072B2",
     model_name="Expected",
     logy=False,
@@ -399,7 +399,7 @@ def plot_observed_vs_expected(
     df (pd.DataFrame): dataframe of site mutabilities.
     axs (list of fig.ax): figure axes for plotting (at least 2 axes).
     logprobs (bool): whether to plot log-probabilities (True) or plot probabilities (False).
-    binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins).
+    binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins). If None, a default binning is used.
     model_color (str): color for the plot of expected number of mutations.
     model_name (str): legend label for the plot of expected number of mutations.
     logy (bool): whether to show y-axis in log-scale.
@@ -413,6 +413,16 @@ def plot_observed_vs_expected(
 
     """
     model_probs = df["prob"].to_numpy()
+    
+    # set default binning if None specified
+    if binning is None:
+        if logprobs:
+            min_logprob = 1.05*np.log10(model_probs).min()
+            binning = np.linspace(min_logprob, 0, 101)
+        else:
+            max_prob = min(1, 1.05*model_probs.max())
+            binning = np.linspace(0, max_prob, 101)
+    
     modp_per_bin = [[] for i in range(len(binning) - 1)]
     for p in model_probs:
         if logprobs:
