@@ -390,9 +390,9 @@ def plot_observed_vs_expected(
     """
     Draws a 2-panel figure with observed vs expected number of mutations in bins of mutability probability in the upper panel,
     and per bin residual between observed and expected in the lower panel.
-    The input dataframe of site mutabilities requires 'prob' (amino acid mutation probability) 
-    and 'mutation' (1 or 0 if site has an observed mutation or not) columns.
-    Each dataframe row corresponds to an amino acid site in a specific sequence.
+    The input dataframe requires two columns: 'prob' (site mutability -- may be at level of nucleotide, or codon, or amino acid, etc.) 
+    and 'mutation' (1 or 0 if the site has an observed mutation or not).
+    Each dataframe row corresponds to a site in a specific sequence.
     Thus, the total number of rows is the total number of sites from all sequences in the dataset.
 
     Parameters:
