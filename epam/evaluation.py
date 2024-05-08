@@ -379,7 +379,9 @@ def get_site_mutabilities_df(aaprob_path):
 
 def plot_observed_vs_expected(
     df,
-    axs,
+    counts_ax,
+    oe_ax,
+    diff_ax,
     logprobs=True,
     binning=None,
     model_color="#0072B2",
@@ -388,8 +390,9 @@ def plot_observed_vs_expected(
     normalize=False
 ):
     """
-    Draws a 2-panel figure with observed vs expected number of mutations in bins of mutability probability in the upper panel,
-    and per bin residual between observed and expected in the lower panel.
+    Draws a figure with up to 3 panels showing: counts of sites in bins of mutability probability,
+    observed vs expected number of mutations in bins of mutability probability,
+    and per bin differences between observed and expected.
     The expected number of mutations is computed as the total probability of the sites that fall in that mutability bin.
     The input dataframe requires two columns: 'prob' (site mutability -- may be at level of nucleotide, or codon, or amino acid, etc.) 
     and 'mutation' (1 or 0 if the site has an observed mutation or not).
@@ -398,7 +401,9 @@ def plot_observed_vs_expected(
 
     Parameters:
     df (pd.DataFrame): dataframe of site mutabilities.
-    axs (list of fig.ax): figure axes for plotting (at least 2 axes).
+    counts_ax (fig.ax): figure axis for plotting site counts.
+    oe_ax (fig.ax): figure axis for plotting observed vs expected number of mutations.
+    diff_ax (fig.ax): figure axis for ploting observed vs expected differences.
     logprobs (bool): whether to plot log-probabilities (True) or plot probabilities (False).
     binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins). If None, a default binning is used.
     model_color (str): color for the plot of expected number of mutations.
@@ -408,9 +413,8 @@ def plot_observed_vs_expected(
 
     Returns:
     A dictionary with results labeled:
-    overlap (float): area of overlap between observed and expected, divided by the average of the two areas
-    residual (float): square root of the sum of squared bin-by-bin differences between observed and expected
-    chisq (float): Pearson's chi-square test statistic
+    overlap (float): area of overlap between observed and expected, divided by the average of the two areas.
+    residual (float): square root of the sum of squared bin-by-bin differences between observed and expected, divided by total expected.
 
     """
     model_probs = df["prob"].to_numpy()
@@ -424,6 +428,7 @@ def plot_observed_vs_expected(
             max_prob = min(1, 1.05*model_probs.max())
             binning = np.linspace(0, max_prob, 101)
     
+    # compute expectation
     modp_per_bin = [[] for i in range(len(binning) - 1)]
     for p in model_probs:
         if logprobs:
@@ -439,6 +444,7 @@ def plot_observed_vs_expected(
         for i in range(len(modp_per_bin))
     ]
 
+    # count observed mutations
     if logprobs:
         obs_probs = np.log10(df[df["mutation"] > 0]["prob"].to_numpy())
         xlabel = "$\log_{10}$(mutability probability)"
@@ -447,6 +453,7 @@ def plot_observed_vs_expected(
         xlabel = "mutability probability"
     observed = np.histogram(obs_probs, binning)[0]
     
+    # normalize total expected to equal total observed
     if normalize==True:
         fnorm = np.sum(observed)/np.sum(expected)
         expected = [fnorm*val for val in expected]
@@ -459,89 +466,122 @@ def plot_observed_vs_expected(
 
     # compute residual metric
     diff = [observed[i] - expected[i] for i in range(len(observed))]
-    residual = np.sqrt(np.sum([diff[i] * diff[i] for i in range(len(diff))]))
+    residual = np.sqrt(np.sum([diff[i] * diff[i] for i in range(len(diff))]))/np.sum(expected)
 
-    # compute chi-square test statistic
-    chisq = np.sum(
-        [diff[i] * diff[i] / expected[i] for i in range(len(diff)) if expected[i] != 0]
-    )
-
+    
     # midpoints of each bin
     xvals = [0.5 * (binning[i] + binning[i + 1]) for i in range(len(binning) - 1)]
 
     # bin widths
     binw = [(binning[i + 1] - binning[i]) for i in range(len(binning) - 1)]
-
-    # observed vs expected number of mutations
-    axs[0].bar(
-        xvals,
-        expected,
-        width=binw,
-        facecolor="white",
-        edgecolor=model_color,
-        label=model_name,
-    )
-    axs[0].plot(
-        xvals,
-        observed,
-        marker="o",
-        markersize=4,
-        linewidth=0,
-        color="#000000",
-        label="Observed",
-    )
-    axs[0].tick_params(axis="y", labelsize=16)
-    axs[0].set_ylabel("number of mutations", fontsize=20, labelpad=10)
-
-    # For some reason, regardless of draw order, legend labels are always ordered:
-    #   Observed
-    #   Model
-    # Force reverse the order.
-    leg_handles, leg_labels = axs[0].get_legend_handles_labels()
-    axs[0].legend(leg_handles[::-1], leg_labels[::-1], fontsize=15)
-
-    if logy:
-        axs[0].set_yscale("log")
-
-    boxes0 = [
-        Rectangle(
-            (binning[ibin], expected[ibin] - exp_err[ibin]),
-            binning[ibin + 1] - binning[ibin],
-            2 * exp_err[ibin],
+    
+    
+    # plot site counts
+    counts_twinx_ax=None
+    if counts_ax is not None:
+        if logprobs:
+            hist_data = np.log10(model_probs)
+        else:
+            hist_data = model_probs
+        counts_ax.hist(
+            hist_data,
+            bins=binning,
+            color=model_color
         )
-        for ibin in range(len(exp_err))
-    ]
-    pc0 = PatchCollection(
-        boxes0, facecolor="none", edgecolor="grey", linewidth=0, hatch="//////"
-    )
-    axs[0].add_collection(pc0)
-
-    # observed vs expected difference
-    axs[1].plot(
-        xvals,
-        [yo - ye for yo, ye in zip(observed, expected)],
-        marker="o",
-        markersize=4,
-        linewidth=0,
-        color="#000000",
-    )
-    axs[1].axhline(y=0, color="k", linestyle="--")
-    axs[1].tick_params(axis="x", labelsize=16)
-    axs[1].set_xlabel(xlabel, fontsize=20, labelpad=10)
-    axs[1].tick_params(axis="y", labelsize=16)
-    axs[1].set_ylabel("Obs - Exp", fontsize=20, labelpad=10)
-
-    boxes1 = [
-        Rectangle(
-            (binning[ibin], -exp_err[ibin]),
-            binning[ibin + 1] - binning[ibin],
-            2 * exp_err[ibin],
+        counts_ax.tick_params(axis="y", labelsize=16)
+        counts_ax.set_ylabel("number of sites", fontsize=20, labelpad=10)
+        counts_ax.grid()
+        
+        if logy:
+            counts_ax.set_yscale("log")
+        
+        if logprobs:
+            yvals = np.power(10, xvals)
+        else:
+            yvals = xvals
+            
+        counts_twinx_ax = counts_ax.twinx()
+        counts_twinx_ax.plot(
+            xvals,
+            yvals,
+            color='r'
         )
-        for ibin in range(len(exp_err))
-    ]
-    pc1 = PatchCollection(
-        boxes1, facecolor="none", edgecolor="grey", linewidth=0, hatch="//////"
-    )
-    axs[1].add_collection(pc1)
+        counts_twinx_ax.tick_params(axis='y', labelcolor='r', labelsize=16)
+        counts_twinx_ax.set_ylabel("probability", fontsize=20, labelpad=10)
+        counts_twinx_ax.set_ylim(0,1)
 
-    return {"overlap": overlap, "residual": residual, "chisq": chisq}
+    # plot observed vs expected number of mutations
+    if oe_ax is not None:
+        oe_ax.bar(
+            xvals,
+            expected,
+            width=binw,
+            facecolor="white",
+            edgecolor=model_color,
+            label=model_name,
+        )
+        oe_ax.plot(
+            xvals,
+            observed,
+            marker="o",
+            markersize=4,
+            linewidth=0,
+            color="#000000",
+            label="Observed",
+        )
+        oe_ax.tick_params(axis="y", labelsize=16)
+        oe_ax.set_ylabel("number of mutations", fontsize=20, labelpad=10)
+
+        # For some reason, regardless of draw order, legend labels are always ordered:
+        #   Observed
+        #   Model
+        # Force reverse the order.
+        leg_handles, leg_labels = oe_ax.get_legend_handles_labels()
+        oe_ax.legend(leg_handles[::-1], leg_labels[::-1], fontsize=15)
+
+        if logy:
+            oe_ax.set_yscale("log")
+
+        boxes0 = [
+            Rectangle(
+                (binning[ibin], expected[ibin] - exp_err[ibin]),
+                binning[ibin + 1] - binning[ibin],
+                2 * exp_err[ibin],
+            )
+            for ibin in range(len(exp_err))
+        ]
+        pc0 = PatchCollection(
+            boxes0, facecolor="none", edgecolor="grey", linewidth=0, hatch="//////"
+        )
+        oe_ax.add_collection(pc0)
+
+    # plot observed vs expected difference
+    if diff_ax is not None:
+        diff_ax.plot(
+            xvals,
+            [yo - ye for yo, ye in zip(observed, expected)],
+            marker="o",
+            markersize=4,
+            linewidth=0,
+            color="#000000",
+        )
+        diff_ax.axhline(y=0, color="k", linestyle="--")
+        diff_ax.tick_params(axis="x", labelsize=16)
+        diff_ax.set_xlabel(xlabel, fontsize=20, labelpad=10)
+        diff_ax.tick_params(axis="y", labelsize=16)
+        diff_ax.set_ylabel("Obs - Exp", fontsize=20, labelpad=10)
+
+        boxes1 = [
+            Rectangle(
+                (binning[ibin], -exp_err[ibin]),
+                binning[ibin + 1] - binning[ibin],
+                2 * exp_err[ibin],
+            )
+            for ibin in range(len(exp_err))
+        ]
+        pc1 = PatchCollection(
+            boxes1, facecolor="none", edgecolor="grey", linewidth=0, hatch="//////"
+        )
+        diff_ax.add_collection(pc1)
+
+    return {"overlap": overlap, "residual": residual, "counts_twinx_ax": counts_twinx_ax }
