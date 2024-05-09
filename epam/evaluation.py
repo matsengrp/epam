@@ -403,9 +403,9 @@ def plot_observed_vs_expected(
 
     Parameters:
     df (pd.DataFrame): dataframe of site mutabilities.
-    counts_ax (fig.ax): figure axis for plotting site counts.
-    oe_ax (fig.ax): figure axis for plotting observed vs expected number of mutations.
-    diff_ax (fig.ax): figure axis for ploting observed vs expected differences.
+    counts_ax (fig.ax): figure axis for plotting site counts. If None, plot is not drawn.
+    oe_ax (fig.ax): figure axis for plotting observed vs expected number of mutations. If None, plot is not drawn.
+    diff_ax (fig.ax): figure axis for ploting observed vs expected differences. If None, plot is not drawn.
     logprobs (bool): whether to plot log-probabilities (True) or plot probabilities (False).
     binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins). If None, a default binning is used.
     counts_color (str): color for the counts of sites plot.
