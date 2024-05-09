@@ -384,6 +384,8 @@ def plot_observed_vs_expected(
     diff_ax,
     logprobs=True,
     binning=None,
+    counts_color="#B3CDE3",
+    pcurve_color="#D95F02",
     model_color="#0072B2",
     model_name="Expected",
     logy=False,
@@ -406,6 +408,8 @@ def plot_observed_vs_expected(
     diff_ax (fig.ax): figure axis for ploting observed vs expected differences.
     logprobs (bool): whether to plot log-probabilities (True) or plot probabilities (False).
     binning (list): list of bin boundaries (i.e. n+1 boundaries for n bins). If None, a default binning is used.
+    counts_color (str): color for the counts of sites plot.
+    pcurve_color (str): color for the probability curve in the counts of sites plot.
     model_color (str): color for the plot of expected number of mutations.
     model_name (str): legend label for the plot of expected number of mutations.
     logy (bool): whether to show y-axis in log-scale.
@@ -415,6 +419,7 @@ def plot_observed_vs_expected(
     A dictionary with results labeled:
     overlap (float): area of overlap between observed and expected, divided by the average of the two areas.
     residual (float): square root of the sum of squared bin-by-bin differences between observed and expected, divided by total expected.
+    counts_twinx_ax (fig.ax): handle to the probability y-axis (right side) of the counts plot, if drawn.
 
     """
     model_probs = df["prob"].to_numpy()
@@ -486,7 +491,7 @@ def plot_observed_vs_expected(
         counts_ax.hist(
             hist_data,
             bins=binning,
-            color=model_color
+            color=counts_color
         )
         counts_ax.tick_params(axis="y", labelsize=16)
         counts_ax.set_ylabel("number of sites", fontsize=20, labelpad=10)
@@ -499,14 +504,14 @@ def plot_observed_vs_expected(
             yvals = np.power(10, xvals)
         else:
             yvals = xvals
-            
+        
         counts_twinx_ax = counts_ax.twinx()
         counts_twinx_ax.plot(
             xvals,
             yvals,
-            color='r'
+            color=pcurve_color
         )
-        counts_twinx_ax.tick_params(axis='y', labelcolor='r', labelsize=16)
+        counts_twinx_ax.tick_params(axis='y', labelcolor=pcurve_color, labelsize=16)
         counts_twinx_ax.set_ylabel("probability", fontsize=20, labelpad=10)
         counts_twinx_ax.set_ylim(0,1)
 
