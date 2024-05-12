@@ -427,20 +427,23 @@ def plot_observed_vs_expected(
             binning = np.linspace(0, max_prob, 101)
     
     # compute expectation
-    modp_per_bin = [[] for i in range(len(binning) - 1)]
+    bin_index_col=[]
     for p in model_probs:
         if logprobs:
             index = bisect.bisect(binning, np.log10(p)) - 1
         else:
             index = bisect.bisect(binning, p) - 1
-        modp_per_bin[index].append(p)
+        bin_index_col.append(index)
+    df['bin_index'] = bin_index_col
 
-    expected = [sum(modp_per_bin[i]) for i in range(len(modp_per_bin))]
-
-    exp_err = [
-        np.sqrt(sum([p * (1 - p) for p in modp_per_bin[i]]))
-        for i in range(len(modp_per_bin))
-    ]
+    expected = []
+    exp_err = []
+    for i in range(len(binning)-1):
+        binprobs = df[df['bin_index']==i]['prob'].to_numpy()
+        expected.append(np.sum(binprobs))
+        exp_err.append(np.sqrt(np.sum(binprobs*(1-binprobs))))
+    expected = np.array(expected)
+    exp_err = np.array(exp_err)
 
     # count observed mutations
     if logprobs:
@@ -454,17 +457,17 @@ def plot_observed_vs_expected(
     # normalize total expected to equal total observed
     if normalize==True:
         fnorm = np.sum(observed)/np.sum(expected)
-        expected = [fnorm*val for val in expected]
-        exp_err = [fnorm*err for err in exp_err]
+        expected = fnorm*expected
+        exp_err = fnorm*exp_err
 
     # compute overlap metric
-    intersect = np.sum([min(observed[i], expected[i]) for i in range(len(observed))])
+    intersect = np.sum(np.minimum(observed, expected))
     denom = 0.5 * (np.sum(observed) + np.sum(expected))
     overlap = intersect / denom
 
     # compute residual metric
-    diff = [observed[i] - expected[i] for i in range(len(observed))]
-    residual = np.sqrt(np.sum([diff[i] * diff[i] for i in range(len(diff))]))/np.sum(expected)
+    diff = observed - expected
+    residual = np.sqrt(np.sum(diff*diff))/np.sum(expected)
 
     
     # midpoints of each bin
