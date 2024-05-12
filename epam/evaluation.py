@@ -356,23 +356,16 @@ def get_site_mutabilities_df(aaprob_path):
             parent = parent_aa_seqs[index]
             child = child_aa_seqs[index]
 
-            pcp_index_col = np.concatenate((pcp_index_col, [pcp_index] * len(parent)))
-            sites_col = np.concatenate((sites_col, np.arange(len(parent))))
-            site_sub_probs = np.concatenate(
-                (
-                    site_sub_probs,
-                    calculate_site_substitution_probabilities(matrix, parent),
-                )
-            )
-            site_sub_flags = np.concatenate(
-                (site_sub_flags, [p != c for p, c in zip(parent, child)])
-            )
+            pcp_index_col.append([pcp_index]*len(parent))
+            sites_col.append(np.arange(len(parent)))
+            site_sub_probs.append(calculate_site_substitution_probabilities(matrix, parent))
+            site_sub_flags.append([p != c for p, c in zip(parent, child)])
 
     output_df = pd.DataFrame(columns=["pcp_index", "site", "prob", "mutation"])
-    output_df["pcp_index"] = pcp_index_col
-    output_df["site"] = sites_col
-    output_df["prob"] = site_sub_probs
-    output_df["mutation"] = site_sub_flags
+    output_df["pcp_index"] = np.concatenate(pcp_index_col)
+    output_df["site"] = np.concatenate(sites_col)
+    output_df["prob"] = np.concatenate(site_sub_probs)
+    output_df["mutation"] = np.concatenate(site_sub_flags)
 
     return output_df
 
