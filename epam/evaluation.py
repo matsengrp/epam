@@ -325,9 +325,12 @@ def calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs):
 
 def get_site_mutabilities_df(aaprob_path):
     """
-    Computes the amino acid site mutability probabilities for every site of every parent in a dataset.
-    Returns a dataframe that annotates for each site the index of the PCP it belongs to,
-    the site position in the amino acid sequence, and whether a mutation is observed in the child sequence.
+    Computes the amino acid site mutability probabilities
+    for every site of every parent in a dataset.
+    Returns a dataframe that annotates for each site 
+    the index of the PCP it belongs to,
+    the site position in the amino acid sequence,
+    and whether a mutation is observed in the child sequence.
 
     Parameters:
     aaprob_path (str): path to aaprob matrix for parent-child pairs.
@@ -356,9 +359,11 @@ def get_site_mutabilities_df(aaprob_path):
             parent = parent_aa_seqs[index]
             child = child_aa_seqs[index]
 
-            pcp_index_col.append([pcp_index]*len(parent))
+            pcp_index_col.append([pcp_index] * len(parent))
             sites_col.append(np.arange(len(parent)))
-            site_sub_probs.append(calculate_site_substitution_probabilities(matrix, parent))
+            site_sub_probs.append(
+                calculate_site_substitution_probabilities(matrix, parent)
+            )
             site_sub_flags.append([p != c for p, c in zip(parent, child)])
 
     output_df = pd.DataFrame(columns=["pcp_index", "site", "prob", "mutation"])
@@ -382,17 +387,21 @@ def plot_observed_vs_expected(
     model_color="#0072B2",
     model_name="Expected",
     logy=False,
-    normalize=False
+    normalize=False,
 ):
     """
-    Draws a figure with up to 3 panels showing: counts of sites in bins of mutability probability,
+    Draws a figure with up to 3 panels showing:
+    counts of sites in bins of mutability probability,
     observed vs expected number of mutations in bins of mutability probability,
     and per bin differences between observed and expected.
-    The expected number of mutations is computed as the total probability of the sites that fall in that mutability bin.
-    The input dataframe requires two columns: 'prob' (site mutability -- may be at level of nucleotide, or codon, or amino acid, etc.) 
+    The expected number of mutations is computed as the total probability
+    of the sites that fall in that mutability bin.
+    The input dataframe requires two columns: 'prob'
+    (site mutability -- may be at level of nucleotide, or codon, or amino acid, etc.)
     and 'mutation' (1 or 0 if the site has an observed mutation or not).
     Each dataframe row corresponds to a site in a specific sequence.
-    Thus, the total number of rows is the total number of sites from all sequences in the dataset.
+    Thus, the total number of rows is the total number of sites from
+    all sequences in the dataset.
 
     Parameters:
     df (pd.DataFrame): dataframe of site mutabilities.
@@ -416,32 +425,32 @@ def plot_observed_vs_expected(
 
     """
     model_probs = df["prob"].to_numpy()
-    
+
     # set default binning if None specified
     if binning is None:
         if logprobs:
-            min_logprob = 1.05*np.log10(model_probs).min()
+            min_logprob = 1.05 * np.log10(model_probs).min()
             binning = np.linspace(min_logprob, 0, 101)
         else:
-            max_prob = min(1, 1.05*model_probs.max())
+            max_prob = min(1, 1.05 * model_probs.max())
             binning = np.linspace(0, max_prob, 101)
-    
+
     # compute expectation
-    bin_index_col=[]
+    bin_index_col = []
     for p in model_probs:
         if logprobs:
             index = bisect.bisect(binning, np.log10(p)) - 1
         else:
             index = bisect.bisect(binning, p) - 1
         bin_index_col.append(index)
-    df['bin_index'] = bin_index_col
+    df["bin_index"] = bin_index_col
 
     expected = []
     exp_err = []
-    for i in range(len(binning)-1):
-        binprobs = df[df['bin_index']==i]['prob'].to_numpy()
+    for i in range(len(binning) - 1):
+        binprobs = df[df["bin_index"] == i]["prob"].to_numpy()
         expected.append(np.sum(binprobs))
-        exp_err.append(np.sqrt(np.sum(binprobs*(1-binprobs))))
+        exp_err.append(np.sqrt(np.sum(binprobs * (1 - binprobs))))
     expected = np.array(expected)
     exp_err = np.array(exp_err)
 
@@ -453,12 +462,12 @@ def plot_observed_vs_expected(
         obs_probs = df[df["mutation"] > 0]["prob"].to_numpy()
         xlabel = "mutability probability"
     observed = np.histogram(obs_probs, binning)[0]
-    
+
     # normalize total expected to equal total observed
-    if normalize==True:
-        fnorm = np.sum(observed)/np.sum(expected)
-        expected = fnorm*expected
-        exp_err = fnorm*exp_err
+    if normalize == True:
+        fnorm = np.sum(observed) / np.sum(expected)
+        expected = fnorm * expected
+        exp_err = fnorm * exp_err
 
     # compute overlap metric
     intersect = np.sum(np.minimum(observed, expected))
@@ -467,49 +476,39 @@ def plot_observed_vs_expected(
 
     # compute residual metric
     diff = observed - expected
-    residual = np.sqrt(np.sum(diff*diff))/np.sum(expected)
+    residual = np.sqrt(np.sum(diff * diff)) / np.sum(expected)
 
-    
     # midpoints of each bin
     xvals = [0.5 * (binning[i] + binning[i + 1]) for i in range(len(binning) - 1)]
 
     # bin widths
     binw = [(binning[i + 1] - binning[i]) for i in range(len(binning) - 1)]
-    
-    
+
     # plot site counts
-    counts_twinx_ax=None
+    counts_twinx_ax = None
     if counts_ax is not None:
         if logprobs:
             hist_data = np.log10(model_probs)
         else:
             hist_data = model_probs
-        counts_ax.hist(
-            hist_data,
-            bins=binning,
-            color=counts_color
-        )
+        counts_ax.hist(hist_data, bins=binning, color=counts_color)
         counts_ax.tick_params(axis="y", labelsize=16)
         counts_ax.set_ylabel("number of sites", fontsize=20, labelpad=10)
         counts_ax.grid()
-        
+
         if logy:
             counts_ax.set_yscale("log")
-        
+
         if logprobs:
             yvals = np.power(10, xvals)
         else:
             yvals = xvals
-        
+
         counts_twinx_ax = counts_ax.twinx()
-        counts_twinx_ax.plot(
-            xvals,
-            yvals,
-            color=pcurve_color
-        )
-        counts_twinx_ax.tick_params(axis='y', labelcolor=pcurve_color, labelsize=16)
+        counts_twinx_ax.plot(xvals, yvals, color=pcurve_color)
+        counts_twinx_ax.tick_params(axis="y", labelcolor=pcurve_color, labelsize=16)
         counts_twinx_ax.set_ylabel("probability", fontsize=20, labelpad=10)
-        counts_twinx_ax.set_ylim(0,1)
+        counts_twinx_ax.set_ylim(0, 1)
 
     # plot observed vs expected number of mutations
     if oe_ax is not None:
@@ -585,4 +584,8 @@ def plot_observed_vs_expected(
         )
         diff_ax.add_collection(pc1)
 
-    return {"overlap": overlap, "residual": residual, "counts_twinx_ax": counts_twinx_ax }
+    return {
+        "overlap": overlap,
+        "residual": residual,
+        "counts_twinx_ax": counts_twinx_ax,
+    }
