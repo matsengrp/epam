@@ -134,38 +134,43 @@ class BaseModel(ABC):
                     )
 
 
-class SHMple(BaseModel):
-    def __init__(self, weights_directory: str, model_name=None):
+class MutModel(BaseModel):
+    def __init__(
+        self,
+        model_name=None,
+        max_optimization_steps=1000,
+        optimization_tol=1e-4,
+        learning_rate=0.1,
+        sf_rescale=None,
+    ):
         """
-        Initialize a SHMple model with specified directory to trained model weights.
+        Initialize a new instance of the MutModel for neutral nucelotide mutations.
 
         Parameters:
-        weights_directory (str): directory path to trained model weights.
-        model_name (str, optional): The name of the model. If not specified, the class name is used.
+        model_name : str, optional
+            Model name. Default is None, setting the model name to the class name.
+        max_optimization_steps : int, optional
+            Maximum number of gradient descent steps. Default is 1000.
+        optimization_tol : float, optional
+            Tolerance for optimization of log(branch length). Default is 1e-4.
+        learning_rate : float, optional
+            Learning rate for torch's SGD. Default is 0.1.
+        sf_rescale : str, optional
+            Selection factor rescaling approach used in SHMpleESM for ratios
+            produced under mask-marginals scoring strategy. Using sigmoid transformation
+            currently and nothing for wt-marginals selection factors.
         """
         super().__init__(model_name=model_name)
-        # It's a little strange to have no shmple model, but that's useful for
-        # cases when we've pre-recorded the mutabilities for our likelihood
-        # function and are just using this as a framework for branch length
-        # optimization. In any case this is going to change once we shift over
-        # to using netam models.
-        if weights_directory is None:
-            self.model = None
-        else:
-            self.model = shmple.AttentionModel(
-                weights_dir=weights_directory, log_level=logging.WARNING
-            )
+        self.max_optimization_steps = max_optimization_steps
+        self.optimization_tol = optimization_tol
+        self.learning_rate = learning_rate
+        self.sf_rescale = sf_rescale
 
-    def predict_rates_and_normed_subs_probs(
-        self, parent: str
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    @abstractmethod
+    def predict_rates_and_normed_subs_probs(self, parent: str) -> Tuple[torch.Tensor, torch.Tensor]:
         """
-        A wrapper for the predict_mutabilities_and_substitutions method of the
-        SHMple model that normalizes the substitution probabilities, as well as
-        unpacking and squeezing the results.
-
-        We have to do this because the SHMple model returns substitution
-        probabilities that are nearly normalized, but not quite.
+        Get the mutability rates and (normalized) substitution probabilities predicted
+        by the SHM model that, given a parent nucleotide sequence.
 
         Parameters:
         parent (str): The parent sequence.
@@ -175,19 +180,10 @@ class SHMple(BaseModel):
         Tuple[torch.Tensor, torch.Tensor]: A tuple containing the rates and
             substitution probabilities as Torch tensors.
         """
-        [rates], [subs] = self.model.predict_mutabilities_and_substitutions(
-            [parent], [1.0]
-        )
-        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return torch.tensor(
-            rates.squeeze(), dtype=torch.float
-        ), molevol.normalize_sub_probs(
-            parent_idxs, torch.tensor(subs, dtype=torch.float)
-        )
+        pass
 
-    def _aaprobs_of_parent_and_branch_length(
-        self, parent: str, branch_length: float
-    ) -> torch.Tensor:
+    @abstractmethod
+    def _aaprobs_of_parent_and_branch_length(self, parent: str, branch_length: float) -> torch.Tensor:
         """
         Calculate the amino acid probabilities for a given parent and branch length.
 
@@ -202,64 +198,8 @@ class SHMple(BaseModel):
         Returns:
         np.ndarray: The aaprobs for every codon of the parent sequence.
         """
-        rates, subs = self.predict_rates_and_normed_subs_probs(parent)
-        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
-            parent_idxs, rates * branch_length, subs
-        )
-
-    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
-        """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to a SHMple model.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
-
-        Parameters:
-        parent (str): The parent sequence for which we want the array of probabilities.
-        child (str): The child sequence.
-
-        Returns:
-        np.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
-        """
-        branch_length = np.mean([a != b for a, b in zip(parent, child)])
-        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
-
-
-class OptimizableSHMple(SHMple):
-    def __init__(
-        self,
-        weights_directory,
-        model_name=None,
-        max_optimization_steps=1000,
-        optimization_tol=1e-4,
-        learning_rate=0.1,
-        sf_rescale=None,
-    ):
-        """
-        Initialize a SHMple model that optimizes branch length for each parent-child pair.
-
-        Parameters:
-        weights_directory : str
-            Directory containing the trained model weights.
-        model_name : str, optional
-            Model name. Default is None, setting the model name to the class name.
-        max_optimization_steps : int, optional
-            Maximum number of gradient descent steps. Default is 1000.
-        optimization_tol : float, optional
-            Tolerance for optimization of log(branch length). Default is 1e-4.
-        learning_rate : float, optional
-            Learning rate for torch's SGD. Default is 0.1.
-        sf_rescale : str, optional
-            Selection factor rescaling approach used in SHMpleESM for ratios
-            produced under mask-marginals scoring strategy. Using sigmoid transformation
-            currently and nothing for wt-marginals selection factors.
-        """
-        super().__init__(weights_directory, model_name)
-        self.max_optimization_steps = max_optimization_steps
-        self.optimization_tol = optimization_tol
-        self.learning_rate = learning_rate
-        self.sf_rescale = sf_rescale
-
+        pass
+    
     def _build_log_pcp_probability(
         self, parent: str, child: str, rates: Tensor, sub_probs: Tensor
     ):
@@ -325,12 +265,78 @@ class OptimizableSHMple(SHMple):
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
-class MutSel(OptimizableSHMple):
-    """A mutation selection model using SHMple for the mutation part.
+class SHMple(MutModel):
+    def __init__(self, weights_directory: str, *args, **kwargs):
+        """
+        Initialize a SHMple model with specified directory to trained model weights.
+
+        Parameters:
+        weights_directory (str): directory path to trained model weights.
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
+        """
+        super().__init__(*args, **kwargs)
+        self.model = shmple.AttentionModel(
+            weights_dir=weights_directory, log_level=logging.WARNING
+        )
+
+    def predict_rates_and_normed_subs_probs(
+        self, parent: str
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        A wrapper for the predict_mutabilities_and_substitutions method of the
+        SHMple model that normalizes the substitution probabilities, as well as
+        unpacking and squeezing the results.
+
+        We have to do this because the SHMple model returns substitution
+        probabilities that are nearly normalized, but not quite.
+
+        Parameters:
+        parent (str): The parent sequence.
+        branch_length (float): The branch length.
+
+        Returns:
+        Tuple[torch.Tensor, torch.Tensor]: A tuple containing the rates and
+            substitution probabilities as Torch tensors.
+        """
+        [rates], [subs] = self.model.predict_mutabilities_and_substitutions(
+            [parent], [1.0]
+        )
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
+        return torch.tensor(
+            rates.squeeze(), dtype=torch.float
+        ), molevol.normalize_sub_probs(
+            parent_idxs, torch.tensor(subs, dtype=torch.float)
+        )
+
+    def _aaprobs_of_parent_and_branch_length(
+        self, parent: str, branch_length: float
+    ) -> torch.Tensor:
+        """
+        Calculate the amino acid probabilities for a given parent and branch length.
+
+        This is the key function that needs to be overridden for implementing a new model.
+
+        Parameters:
+        parent: str
+            The parent nucleotide sequence.
+        branch_length: float
+            The length of the branch.
+
+        Returns:
+        np.ndarray: The aaprobs for every codon of the parent sequence.
+        """
+        rates, subs = self.predict_rates_and_normed_subs_probs(parent)
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
+        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
+            parent_idxs, rates * branch_length, subs
+        )
+
+
+class MutSelModel(MutModel):
+    """A mutation selection model.
 
     Note that stop codons are assumed to have zero selection probability.
     """
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # This is a diagnostic generating data for netam issue #7.
@@ -338,7 +344,23 @@ class MutSel(OptimizableSHMple):
         #     f"prob_sums_too_big_{int(time.time())}.csv", "w"
         # )
         # self.csv_file.write("parent,child,branch_length,sums_too_big\n")
-
+    
+    @property
+    def mutation_model(self) -> MutModel:
+        return self._mutation_model
+    
+    @mutation_model.setter
+    def mutation_model(self, model: MutModel):
+        self._mutation_model = model
+    
+    @property
+    def selection_model(self) -> BaseModel:
+        return self._selection_model
+    
+    @selection_model.setter
+    def selection_model(self, model:BaseModel):
+        self._selection_model = model
+    
     @abstractmethod
     def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
         """Build the selection matrix (i.e. F matrix) from a parent nucleotide
@@ -347,6 +369,9 @@ class MutSel(OptimizableSHMple):
         The shape of this numpy array should be (len(parent) // 3, 20).
         """
         pass
+
+    def predict_rates_and_normed_subs_probs(self, parent: str) -> Tuple[torch.Tensor, torch.Tensor]:
+        return self.mutation_model.predict_rates_and_normed_subs_probs(parent)
 
     def _build_log_pcp_probability(
         self, parent: str, child: str, rates: Tensor, sub_probs: Tensor
@@ -427,12 +452,13 @@ class MutSel(OptimizableSHMple):
 
         return molevol.aaprobs_of_codon_probs(codon_mutsel)
 
-
-class RandomMutSel(MutSel):
+    
+class RandomMutSel(MutSelModel):
     """A mutation selection model with a random selection matrix."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, weights_directory, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.mutation_model = SHMple(weights_directory=weights_directory)
 
     def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
         matrix = torch.rand(len(parent) // 3, 20)
@@ -688,8 +714,8 @@ class CachedESM1v(BaseModel):
         return sel_matrix
 
 
-class SHMpleESM(MutSel):
-    def __init__(self, *args, **kwargs):
+class SHMpleESM(MutSelModel):
+    def __init__(self, weights_directory, *args, **kwargs):
         """
         Initialize a mutation-selection model using SHMple for the mutation part and ESM-1v_1 for the selection part.
 
@@ -698,6 +724,7 @@ class SHMpleESM(MutSel):
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         """
         super().__init__(*args, **kwargs)
+        self.mutation_model = SHMple(weights_directory=weights_directory)
 
     def preload_esm_data(self, hdf5_path):
         """
@@ -713,11 +740,12 @@ class SHMpleESM(MutSel):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
 
 
-class WrappedBinaryMutSel(MutSel):
+class WrappedBinaryMutSel(MutSelModel):
     """A mutation selection model that is built from a model that has a `selection_factors_of_aa_str` method."""
 
-    def __init__(self, selection_model, *args, **kwargs):
+    def __init__(self, weights_directory, selection_model, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.mutation_model = SHMple(weights_directory=weights_directory)
         self.selection_model = selection_model
 
     def build_selection_matrix_from_parent(self, parent: str):
