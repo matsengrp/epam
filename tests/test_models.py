@@ -180,9 +180,7 @@ def test_snapshot():
             models_list = epam.gcreplay_models.GCREPLAY_MODELS
         
         for model_name, model_class_str, model_args in models_list:
-        # for model_name, model_class_str, model_args in epam.models.FULLY_SPECIFIED_MODELS:
             print(f"Snapshot testing {model_name}")
-            # source = "10-random-from-10x"
             if source == "10-random-from-10x":
                 ModelClass = getattr(epam.models, model_class_str)
             elif source == "10-random-from-gcreplay":
@@ -201,18 +199,3 @@ def test_snapshot():
             model.write_aaprobs(f"data/{source}.csv", out_file)
             compare_file = f"tests/test-data/{source}-{model_name}.hdf5"
             assert hdf5_files_identical(out_file, compare_file)
-    
-    # for model_name, model_class_str, model_args in epam.gcreplay_models.GCREPLAY_MODELS:
-    #     print(f"Snapshot testing {model_name}")
-    #     source = "10-random-from-gcreplay"
-    #     ModelClass = getattr(epam.gcreplay_models, model_class_str)
-    #     model = ModelClass(**model_args)
-    #     # Because we're using a snapshot, we don't want to optimize:
-    #     # optimization is fiddly and we want to be able to change it without
-    #     # breaking the snapshot test.
-    #     if isinstance(model, MutModel):
-    #         model.max_optimization_steps = 0
-    #     out_file = f"_ignore/{source}-{model_name}.hdf5"
-    #     model.write_aaprobs(f"data/{source}.csv", out_file)
-    #     compare_file = f"tests/test-data/{source}-{model_name}.hdf5"
-    #     assert hdf5_files_identical(out_file, compare_file)
