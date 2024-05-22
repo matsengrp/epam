@@ -132,7 +132,9 @@ def concatenate_hdf5s(input_files, output_file):
         merged_file.attrs["pcp_filename"] = full_pcp_file_path
 
 
-def esm_bulk_precompute(csv_path, output_hdf5_path, esm_scoring_strategy):
+def esm_bulk_precompute(
+    csv_path, output_hdf5_path, esm_scoring_strategy, esm_model_number=1
+):
     """
     This subcommand precomputes ESM-1v selection factors for a set of PCPs in bulk, and then
     saves those values in an HDF5 file for later use in SHMple-ESM.
@@ -141,8 +143,11 @@ def esm_bulk_precompute(csv_path, output_hdf5_path, esm_scoring_strategy):
         csv_path (str): Path to a CSV file containing PCP data.
         output_hdf5_path (str): Path to the output HDF5 file with ESM selection factors for all unique sequences.
         esm_scoring_strategy (str): The scoring strategy to use for ESM1v. Options are 'wt-marginals' and 'masked-marginals'.
+        esm_model_number (int): Number of model used from ESM1v ensemble. Must be between 1 and 5.
     """
-    esm_precompute.precompute_and_save(csv_path, output_hdf5_path, esm_scoring_strategy)
+    esm_precompute.precompute_and_save(
+        csv_path, output_hdf5_path, esm_scoring_strategy, esm_model_number
+    )
 
 
 def shmplify(weights_path, csv_path):
