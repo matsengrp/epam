@@ -80,8 +80,12 @@ class BaseModel(ABC):
         self.model_name = model_name
         self.logging = logging
         if self.logging == True:
-            self.csv_file = open(f"{self.model_name}_branch_opt_fails_{int(time.time())}.csv", "w")
-            self.csv_file.write("pcp_index,parent,child,mut_freq,opt_branch_length,fail_to_converge\n")
+            self.csv_file = open(
+                f"{self.model_name}_branch_opt_fails_{int(time.time())}.csv", "w"
+            )
+            self.csv_file.write(
+                "pcp_index,parent,child,mut_freq,opt_branch_length,fail_to_converge\n"
+            )
 
     @abstractmethod
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
@@ -134,7 +138,7 @@ class BaseModel(ABC):
                 if pcp_criteria_check(parent, child):
                     if self.logging == True:
                         self.csv_file.write(f"{i},")
-                                        
+
                     matrix = self.aaprobs_of_parent_child_pair(parent, child)
 
                     # create a group for each matrix
@@ -486,7 +490,7 @@ class AbLang1(BaseModel):
         self.max_optimization_steps = max_optimization_steps
         self.optimization_tol = optimization_tol
         self.learning_rate = learning_rate
-       
+
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
@@ -537,7 +541,9 @@ class AbLang1(BaseModel):
             no_sub_sites = parent_idx == child_idx
 
             # Rescaling each site based on whether a substitution event occurred or not.
-            same_probs = p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
+            same_probs = (
+                p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
+            )
             diff_probs = child_aa_probs[~no_sub_sites] - sub_probs[~no_sub_sites]
 
             # Clip probabilities to avoid numerical issues.
@@ -606,8 +612,8 @@ class AbLang1(BaseModel):
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
-        scaled_prob_arr[mask_parent] = (
-            p_no_event + ((1 - p_no_event) * prob_arr[mask_parent])
+        scaled_prob_arr[mask_parent] = p_no_event + (
+            (1 - p_no_event) * prob_arr[mask_parent]
         )
         scaled_prob_arr[~mask_parent] = (1 - p_no_event) * prob_arr[~mask_parent]
 
@@ -645,12 +651,14 @@ class AbLang1(BaseModel):
         unscaled_aaprob = self.probability_array_of_seq(parent_aa)
         if self.optimize == False:
             return unscaled_aaprob
-        
+
         branch_length, converge_status = self._find_optimal_branch_length(
             parent_aa, child_aa, base_branch_length, unscaled_aaprob
         )
         if self.logging == True:
-            self.csv_file.write(f"{parent_aa},{child_aa},{base_branch_length},{branch_length},{converge_status}\n")
+            self.csv_file.write(
+                f"{parent_aa},{child_aa},{base_branch_length},{branch_length},{converge_status}\n"
+            )
 
         return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
 
@@ -688,7 +696,12 @@ class AbLang2(BaseModel):
         vocab_dict = self.model.tokenizer.aa_to_token
         self.aa_sorted_indices = [vocab_dict[aa] for aa in AA_STR_SORTED]
         assert AA_STR_SORTED == "".join(
-            [key for value in self.aa_sorted_indices for key, v in vocab_dict.items() if v == value]
+            [
+                key
+                for value in self.aa_sorted_indices
+                for key, v in vocab_dict.items()
+                if v == value
+            ]
         )
         self.optimize = optimize
         self.max_optimization_steps = max_optimization_steps
@@ -709,13 +722,17 @@ class AbLang2(BaseModel):
 
         """
         assert self.masking in [True, False], "masking must be set to True or False"
-        likelihoods = self.model([seq, ""], mode="likelihood", stepwise_masking=self.masking)
+        likelihoods = self.model(
+            [seq, ""], mode="likelihood", stepwise_masking=self.masking
+        )
         seq_likelihoods = likelihoods[0]
 
         # Apply softmax to the second dimension. Skipping the first and last
         # elements (which are the probability of the start, end, and heavy|light divider token),
         # as well as all tokens not corresponding to the 20 AAs.
-        arr_sorted = np.apply_along_axis(softmax, 1, seq_likelihoods[1:-2, self.aa_sorted_indices])
+        arr_sorted = np.apply_along_axis(
+            softmax, 1, seq_likelihoods[1:-2, self.aa_sorted_indices]
+        )
 
         if self.masking == False:
             assert len(seq) == arr_sorted.shape[0]
@@ -764,7 +781,9 @@ class AbLang2(BaseModel):
             no_sub_sites = parent_idx == child_idx
 
             # Rescaling each site based on whether a substitution event occurred or not.
-            same_probs = p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
+            same_probs = (
+                p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
+            )
             diff_probs = child_aa_probs[~no_sub_sites] - sub_probs[~no_sub_sites]
 
             # Clip probabilities to avoid numerical issues.
@@ -833,8 +852,8 @@ class AbLang2(BaseModel):
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
-        scaled_prob_arr[mask_parent] = (
-            p_no_event + ((1 - p_no_event) * prob_arr[mask_parent])
+        scaled_prob_arr[mask_parent] = p_no_event + (
+            (1 - p_no_event) * prob_arr[mask_parent]
         )
         scaled_prob_arr[~mask_parent] = (1 - p_no_event) * prob_arr[~mask_parent]
 
@@ -872,12 +891,14 @@ class AbLang2(BaseModel):
         unscaled_aaprob = self.probability_array_of_seq(parent_aa)
         if self.optimize == False:
             return unscaled_aaprob
-        
+
         branch_length, converge_status = self._find_optimal_branch_length(
             parent_aa, child_aa, base_branch_length, unscaled_aaprob
         )
         if self.logging == True:
-            self.csv_file.write(f"{parent_aa},{child_aa},{base_branch_length},{branch_length},{converge_status}\n")
+            self.csv_file.write(
+                f"{parent_aa},{child_aa},{base_branch_length},{branch_length},{converge_status}\n"
+            )
 
         return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
 

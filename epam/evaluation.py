@@ -327,7 +327,7 @@ def get_site_mutabilities_df(aaprob_path):
     """
     Computes the amino acid site mutability probabilities
     for every site of every parent in a dataset.
-    Returns a dataframe that annotates for each site 
+    Returns a dataframe that annotates for each site
     the index of the PCP it belongs to,
     the site position in the amino acid sequence,
     and whether a mutation is observed in the child sequence.
