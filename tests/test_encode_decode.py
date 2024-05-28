@@ -1,6 +1,6 @@
 import h5py
 from epam.utils import generate_file_checksum
-from epam.models import AbLang
+from epam.models import AbLang1
 
 infilename = "data/parent-child-example.csv"
 outfilename = "tests/matrices.hdf5"
@@ -8,7 +8,7 @@ outfilename = "tests/matrices.hdf5"
 
 def test_encode_decode():
     # encode
-    ablang_heavy = AbLang(chain="heavy")
+    ablang_heavy = AbLang1(chain="heavy")
     ablang_heavy.write_aaprobs(infilename, outfilename)
 
     # decode

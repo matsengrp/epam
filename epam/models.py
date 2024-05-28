@@ -38,7 +38,7 @@ with resources.path("epam", "__init__.py") as p:
 
 FULLY_SPECIFIED_MODELS = [
     ("AbLang1", "AbLang1", {"chain": "heavy"}),
-    ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "masking": False}),
+    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "masking": False}),
     ("AbLang2_mask", "AbLang2", {"version": "ablang2-paired", "masking": True}),
     (
         "SHMple_default",
@@ -334,9 +334,13 @@ class OptimizableSHMple(SHMple):
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         base_branch_length = sequences.nt_mutation_frequency(parent, child)
-        branch_length = self._find_optimal_branch_length(
+        branch_length, converge_status = self._find_optimal_branch_length(
             parent, child, base_branch_length
         )
+        if self.logging == True:
+            self.csv_file.write(
+                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
+            )
         if branch_length > 0.5:
             print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
@@ -488,8 +492,10 @@ class AbLang1(BaseModel):
         assert AA_STR_SORTED == "".join(
             np.array(list(self.aa_str))[self.aa_str_sorted_indices]
         )
-        self.optimize = optimize
-        self.max_optimization_steps = max_optimization_steps
+        if optimize == True:
+            self.max_optimization_steps = max_optimization_steps
+        else:
+            self.max_optimization_steps = 0
         self.optimization_tol = optimization_tol
         self.learning_rate = learning_rate
 
@@ -651,8 +657,6 @@ class AbLang1(BaseModel):
         child_aa = translate_sequence(child)
 
         unscaled_aaprob = self.probability_array_of_seq(parent_aa)
-        if self.optimize == False:
-            return unscaled_aaprob
 
         branch_length, converge_status = self._find_optimal_branch_length(
             parent_aa, child_aa, base_branch_length, unscaled_aaprob
@@ -705,8 +709,10 @@ class AbLang2(BaseModel):
                 if v == value
             ]
         )
-        self.optimize = optimize
-        self.max_optimization_steps = max_optimization_steps
+        if optimize == True:
+            self.max_optimization_steps = max_optimization_steps
+        else:
+            self.max_optimization_steps = 0
         self.optimization_tol = optimization_tol
         self.learning_rate = learning_rate
 
@@ -891,8 +897,6 @@ class AbLang2(BaseModel):
         child_aa = translate_sequence(child)
 
         unscaled_aaprob = self.probability_array_of_seq(parent_aa)
-        if self.optimize == False:
-            return unscaled_aaprob
 
         branch_length, converge_status = self._find_optimal_branch_length(
             parent_aa, child_aa, base_branch_length, unscaled_aaprob

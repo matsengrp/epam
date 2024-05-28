@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from epam.models import AbLang, SHMple
+from epam.models import AbLang1, SHMple
 from epam.evaluation import *
 
 example_pcp_path = "data/parent-child-example.csv"
@@ -10,7 +10,7 @@ example_model_eval_path = "tests/model-performance.csv"
 
 
 def test_evaluate():
-    ablang_heavy = AbLang(chain="heavy")
+    ablang_heavy = AbLang1(chain="heavy")
     ablang_heavy.write_aaprobs(example_pcp_path, example_aaprobs_path_ab)
 
     shmple = SHMple(
@@ -19,7 +19,7 @@ def test_evaluate():
     shmple.write_aaprobs(example_pcp_path, example_aaprobs_path_shm)
 
     # check model name
-    assert ablang_heavy.model_name == "AbLang"
+    assert ablang_heavy.model_name == "AbLang1"
     assert shmple.model_name == "my_shmoof"
 
     test_sets = [example_aaprobs_path_ab, example_aaprobs_path_shm]
