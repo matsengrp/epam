@@ -88,19 +88,19 @@ def selection_factor_ratios_to_sigmoid(ratio_sel_matrix, scale_const=1):
     return sigmoid_sel_matrix
 
 
-def selection_factor_ratios_to_sigmoid_np(ratio_sel_matrix, scale_const=1):
+def probability_ratios_to_sigmoid(ratio_pr_matrix, scale_const=1):
     """
-    Convert selection factors to sigmoid using numpy.
-    The log (base-e) of the selection factor is passed to the sigmoid function.
+    Convert probability ratios to sigmoid using numpy.
+    The log (base-e) of the probability ratio is passed to the sigmoid function.
 
     Parameters:
-    ratio_sel_matrix (np.ndarray): selection factors. Expected range of each element is [0, infty].
+    ratio_pr_matrix (np.ndarray): probability ratio (relative to parent AA). Expected range of each element is [0, infty].
     scale_const (float): exponent applied to each selection factor.
 
     Returns:
-    sigmoid_sel_matrix (np.ndarray): sigmoid of selection factors.
+    sigmoid_pr_matrix (np.ndarray): sigmoid of probability ratios.
 
     """
-    scaled_ratio = np.power(ratio_sel_matrix, scale_const)
-    sigmoid_sel_matrix = 1 / (1 + (1 / scaled_ratio))
-    return sigmoid_sel_matrix
+    scaled_ratio = np.power(ratio_pr_matrix, scale_const)
+    sigmoid_pr_matrix = 1 / (1 + (1 / scaled_ratio))
+    return sigmoid_pr_matrix

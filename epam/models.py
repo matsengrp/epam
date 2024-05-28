@@ -726,8 +726,8 @@ class AbLang2(BaseModel):
             parent_probs = arr_sorted[np.arange(len(seq)), parent_idx]
             arr_prob_ratio = arr_sorted / parent_probs[:, None]
 
-            # Sigmoid transformation for selection factors with some values greater than 1.
-            arr_ratio_sig = utils.selection_factor_ratios_to_sigmoid_np(arr_prob_ratio)
+            # Sigmoid transformation for probability ratios with some values greater than 1.
+            arr_ratio_sig = utils.probability_ratios_to_sigmoid(arr_prob_ratio)
 
             # Normalize the probabilities to sum to 1.
             row_sums = np.sum(arr_ratio_sig, axis=1, keepdims=True)
