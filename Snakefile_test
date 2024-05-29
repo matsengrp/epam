@@ -1,0 +1,115 @@
+import json
+import subprocess
+
+dms_data_file = "data/gcreplay/final_variant_scores.csv"
+shmple_weights_dir = "data/shmple_weights/greiff_size2"
+shm_hc_data_file = 'data/gcreplay/chigy_hc_mutation_rates_nt.csv'
+shm_lc_data_file = 'data/gcreplay/chigy_lc_mutation_rates_nt.csv'
+GCREPLAY_IGH_MODELS = [
+    (
+        "GCReplayDMS_igh",
+        "GCReplayDMS",
+        {
+            "dms_data_file": "data/gcreplay/final_variant_scores.csv",
+            "chain": "heavy",
+        },
+    ),
+    (
+        "GCReplayDMSSigmoid_igh",
+        "GCReplayDMS",
+        {
+            "dms_data_file": "data/gcreplay/final_variant_scores.csv",
+            "chain": "heavy",
+            "sf_rescale": "sigmoid",
+        },
+    ),
+    (
+        "GCReplaySHM_igh",
+        "GCReplaySHM",
+        {
+            "shm_data_file": "data/gcreplay/chigy_hc_mutation_rates_nt.csv",
+            "max_optimization_steps": 0,
+        },
+    ),
+    (
+        "GCReplaySHMDMSSigmoid_igh",
+        "GCReplaySHMDMS",
+        {
+            "shm_data_file": "data/gcreplay/chigy_hc_mutation_rates_nt.csv",
+            "dms_data_file": "data/gcreplay/final_variant_scores.csv",
+            "chain": "heavy",
+            "sf_rescale": "sigmoid",
+            "max_optimization_steps": 0,
+        },
+    ),
+    (
+        "GCReplaySHMpleDMSSigmoid_igh",
+        "GCReplaySHMpleDMS",
+        {
+            "weights_directory": "data/shmple_weights/greiff_size2",
+            "dms_data_file": "data/gcreplay/final_variant_scores.csv",
+            "chain": "heavy",
+            "sf_rescale": "sigmoid",
+            "max_optimization_steps": 0,
+        },
+    ),
+]
+
+igh_model_name_to_spec = {
+    model_name: [model_class, json.dumps({**model_params, "model_name": model_name})]
+    for model_name, model_class, model_params in GCREPLAY_IGH_MODELS
+}
+
+igh_pcp_inputs = glob_wildcards("pcp_test_inputs/igh/{name}.csv").name
+
+rule all:
+    input:
+        "output/igh/combined_performance.csv",
+
+
+rule run_igh_model:
+    input:
+        in_csv="pcp_test_inputs/igh/{pcp_input}.csv",
+    output:
+        aaprob="output/igh/{pcp_input}/{model_name}/aaprob.hdf5",
+        performance="output/igh/{pcp_input}/{model_name}/performance.csv",
+    params:
+        model_class=lambda wildcards: igh_model_name_to_spec[wildcards.model_name][0],
+        model_params=lambda wildcards: igh_model_name_to_spec[wildcards.model_name][1],
+    benchmark:
+        "output/igh/{pcp_input}/{model_name}/timing.tsv"
+    shell:
+        """
+        mkdir -p output/igh/{wildcards.pcp_input}/{wildcards.model_name}
+        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob}
+        epam evaluate {output.aaprob} {output.performance}
+        """
+        
+
+rule combine_igh_performance_files:
+    input:
+        expand(
+            "output/igh/{pcp_input}/{model_name}/performance.csv",
+            pcp_input=igh_pcp_inputs,
+            model_name=igh_model_name_to_spec.keys(),
+        ),
+    output:
+        "output/igh/combined_performance.csv",
+        "output/igh/combined_timing.csv",
+    run:
+        input_files = ",".join(input)
+        input_timing_files = ",".join(
+            f"output/igh/{pcp_input}/{model_name}/timing.tsv"
+            for pcp_input in igh_pcp_inputs
+            for model_name in igh_model_name_to_spec.keys()
+        )
+        output_file = output[0]
+        output_timing_file = output[1]
+        subprocess.run(
+            f"epam concatenate_csvs {input_files} {output_file}", shell=True, check=True
+        )
+        subprocess.run(
+            f"epam concatenate_csvs {input_timing_files} {output_timing_file} --is_tsv --record_path",
+            shell=True,
+            check=True,
+        )
