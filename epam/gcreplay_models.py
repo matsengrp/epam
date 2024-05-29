@@ -11,6 +11,9 @@ import epam.utils
 from epam.torch_common import optimize_branch_length
 from typing import Tuple
 
+from epam.esm_precompute import load_and_convert_to_dict
+
+
 with resources.path("epam", "__init__.py") as p:
     DATA_DIR = str(p.parent.parent) + "/data/"
 
@@ -27,10 +30,11 @@ GCREPLAY_MODELS = [
     ),
     (
         "GCReplayDMSSigmoid_igh",
-        "GCReplayDMSSigmoid",
+        "GCReplayDMS",
         {
             "dms_data_file": DATA_DIR + "gcreplay/final_variant_scores.csv",
             "chain": "heavy",
+            "sf_rescale": "sigmoid",
         },
     ),
     (
@@ -40,26 +44,28 @@ GCREPLAY_MODELS = [
     ),
     (
         "GCReplaySHMDMSSigmoid_igh",
-        "GCReplaySHMDMSSigmoid",
+        "GCReplaySHMDMS",
         {
             "shm_data_file": DATA_DIR + "gcreplay/chigy_hc_mutation_rates_nt.csv",
             "dms_data_file": DATA_DIR + "gcreplay/final_variant_scores.csv",
             "chain": "heavy",
+            "sf_rescale": "sigmoid",
         },
     ),
     (
-        "GCReplaySHMpleDMS_igh",
+        "GCReplaySHMpleDMSSigmoid_igh",
         "GCReplaySHMpleDMS",
         {
             "weights_directory": DATA_DIR + "shmple_weights/greiff_size2",
             "dms_data_file": DATA_DIR + "gcreplay/final_variant_scores.csv",
             "chain": "heavy",
+            "sf_rescale": "sigmoid",
         },
     ),
 ]
 
 class GCReplayDMS(models.BaseModel):
-    def __init__(self, dms_data_file: str, chain="heavy", model_name=None, scaling=1.0):
+    def __init__(self, dms_data_file: str, chain="heavy", model_name=None, sf_rescale=None, scaling=1.0):
         """
         Initialize a selection model from GCReplay DMS data.
 
@@ -67,9 +73,11 @@ class GCReplayDMS(models.BaseModel):
         dms_data_file (str): File path to the DMS measurements data.
         chain (str): Name of the chain, default is "heavy".
         model_name (str, optional): The name of the model. If not specified, the class name is used.
+        sf_rescale (str, optional): Selection factor rescaling approach.
         scaling (float): multiplicative factor on the parent-child binding difference.
         """
         super().__init__(model_name=model_name)
+        self.sf_rescale = sf_rescale
         self.scaling = scaling
         self.chain = chain[0].capitalize()
         dms_df = pd.read_csv(dms_data_file)
@@ -146,62 +154,17 @@ class GCReplayDMS(models.BaseModel):
         for i in range(len(parent_aa)):
             dms_ratios = self._get_dms_ratios(parent_aa, i)
             assert(True not in np.isnan(dms_ratios))
-            sel_factors = np.power(dms_ratios, self.scaling)
+            if self.sf_rescale == "sigmoid":
+                sel_factors = epam.utils.selection_factor_ratios_to_sigmoid(
+                    torch.tensor(dms_ratios), scale_const=self.scaling
+                ).numpy()
+            else:
+                sel_factors = np.power(dms_ratios, self.scaling)
 
             # DMS data lists amino acid mutants in alphabetical order (convenient!)
             # Note: sel_factors results is float64, but seems like einsum wants float32
             #       (see: build_codon_mutsel in molevol.py)
             matrix.append(sel_factors.astype(np.float32))
-
-        return np.array(matrix)
-
-
-class GCReplayDMSSigmoid(GCReplayDMS):
-    def __init__(self, dms_data_file: str, chain="heavy", model_name=None, scaling=1.0):
-        """
-        Initialize a selection model from GCReplay DMS data that feed into a sigmoid function
-
-        Parameters:
-        dms_data_file (str): File path to the DMS measurements data.
-        chain (str): Name of the chain, default is "heavy".
-        model_name (str, optional): The name of the model. If not specified, the class name is used.
-        scaling (float): multiplicative factor on the parent-child binding difference.
-        """
-        super().__init__(
-            dms_data_file=dms_data_file,
-            chain=chain,
-            model_name=model_name,
-            scaling=scaling,
-        )
-
-    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
-        """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to DMS measurements.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
-
-        Parameters:
-        parent (str): The parent nucleotide sequence for which we want the array of probabilities.
-        child (str): The child nucleotide sequence (ignored).
-
-        Returns:
-        numpy.ndarray: A 2D array containing the selection factors of the amino acids by site.
-
-        """
-        parent_aa = sequences.translate_sequence(parent)
-        matrix = []
-
-        for i in range(len(parent_aa)):
-            dms_ratios = self._get_dms_ratios(parent_aa, i)
-            assert(True not in np.isnan(dms_ratios))
-            sel_factors = epam.utils.selection_factor_ratios_to_sigmoid(
-                torch.tensor(dms_ratios), scale_const=self.scaling
-            )
-
-            # DMS data lists amino acid mutants in alphabetical order (convenient!)
-            # Note: sel_factors results is float64, but seems like einsum wants float32
-            #       (see: build_codon_mutsel in molevol.py)
-            matrix.append(sel_factors.numpy().astype(np.float32))
 
         return np.array(matrix)
 
@@ -275,19 +238,19 @@ class GCReplaySHM(models.MutModel):
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
-class GCReplaySHMDMSSigmoid(models.MutSelModel):
+class GCReplaySHMDMS(models.MutSelModel):
     def __init__(
         self,
         shm_data_file: str,
         dms_data_file: str,
         chain="heavy",
+        sf_rescale=None,
         scaling=1.0,
         *args,
         **kwargs,
     ):
         """
-        Initialize a mutation-selection model from GCReplay passenger mouse and DMS data with sigmoid function.
-        Branch optimization is performed.
+        Initialize a mutation-selection model from GCReplay passenger mouse and DMS data selection factors.
 
         Parameters:
         shm_data_file (str): File path to the mutation rates from passenger mouse data.
@@ -298,8 +261,8 @@ class GCReplaySHMDMSSigmoid(models.MutSelModel):
         """
         super().__init__(*args, **kwargs)
         self.mutation_model = GCReplaySHM(shm_data_file)
-        self.selection_model = GCReplayDMSSigmoid(
-            dms_data_file, chain, scaling
+        self.selection_model = GCReplayDMS(
+            dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling
         )
 
     def build_selection_matrix_from_parent(self, parent):
@@ -313,20 +276,59 @@ class GCReplaySHMDMSSigmoid(models.MutSelModel):
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
+class GCReplaySHMESM(models.MutSelModel):
+    def __init__(
+        self,
+        shm_data_file: str,
+        sf_rescale=None,
+        *args,
+        **kwargs,
+    ):
+        """
+        Initialize a mutation-selection model from GCReplay passenger mouse and ESM1v selection factors.
+        Branch optimization is performed.
+
+        Parameters:
+        shm_data_file (str): File path to the mutation rates from passenger mouse data.
+        """
+        super().__init__(*args, **kwargs)
+        self.mutation_model = GCReplaySHM(shm_data_file)
+        self.selection_model = models.CachedESM1v(sf_rescale=sf_rescale)
+    
+    def preload_esm_data(self, hdf5_path):
+        """
+        Preload ESM1v data from HDF5 file.
+
+        Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
+        """
+        self.selection_model.preload_esm_data(hdf5_path)
+
+    def build_selection_matrix_from_parent(self, parent):
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+    
+    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
+        base_branch_length = 1
+        branch_length = self._find_optimal_branch_length(
+            parent, child, base_branch_length
+        )
+        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
+    
+
 class GCReplaySHMpleDMS(models.MutSelModel):
     def __init__(
         self,
         weights_directory: str,
         dms_data_file: str,
         chain="heavy",
+        sf_rescale=None,
         scaling=1.0,
         *args,
         **kwargs,
     ):
         """
         Initialize a mutation-selection model for GC-Replay data using SHMple for the mutation part and
-        DMS measurements with sigmoid function for the selection part.
-        Branch optimization is performed.
+        DMS measurements for the selection part.
 
         Parameters:
         weights_directory (str): Directory path to trained SHMple model weights.
@@ -336,8 +338,8 @@ class GCReplaySHMpleDMS(models.MutSelModel):
         """
         super().__init__(*args, **kwargs)
         self.mutation_model = models.SHMple(weights_directory)
-        self.selection_model = GCReplayDMSSigmoid(
-            dms_data_file, chain, scaling
+        self.selection_model = GCReplayDMS(
+            dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling
         )
 
     def build_selection_matrix_from_parent(self, parent):
