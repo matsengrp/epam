@@ -70,37 +70,20 @@ def load_and_filter_pcp_df(pcp_path):
     return pcp_df
 
 
-def selection_factor_ratios_to_sigmoid(ratio_sel_matrix, scale_const=1):
+def ratios_to_sigmoid(ratio_sel_matrix, scale_const=1):
     """
-    Convert selection factors to sigmoid.
+    Convert selection factors or probability ratios to sigmoid.
     The log (base-e) of the selection factor is passed to the sigmoid function.
 
     Parameters:
-    selection_factors (torch.Tensor): selection factors. Expected range of each element is [0, infty].
+    ratio_sel_matrix (torch.Tensor): selection factors. Expected range of each element is [0, infty].
     scale_const (float): exponent applied to each selection factor.
 
     Returns:
-    sigmoid_sel_matrix (torch.Tensor): sigmoid of selection factors.
+    sigmoid_sel_matrix (torch.Tensor): sigmoid of selection factors or probability ratios.
 
     """
     scaled_ratio = torch.pow(ratio_sel_matrix, scale_const)
     sigmoid_sel_matrix = 1 / (1 + (1 / scaled_ratio))
     return sigmoid_sel_matrix
 
-
-def probability_ratios_to_sigmoid(ratio_pr_matrix, scale_const=1):
-    """
-    Convert probability ratios to sigmoid using numpy.
-    The log (base-e) of the probability ratio is passed to the sigmoid function.
-
-    Parameters:
-    ratio_pr_matrix (np.ndarray): probability ratio (relative to parent AA). Expected range of each element is [0, infty].
-    scale_const (float): exponent applied to each selection factor.
-
-    Returns:
-    sigmoid_pr_matrix (np.ndarray): sigmoid of probability ratios.
-
-    """
-    scaled_ratio = np.power(ratio_pr_matrix, scale_const)
-    sigmoid_pr_matrix = 1 / (1 + (1 / scaled_ratio))
-    return sigmoid_pr_matrix

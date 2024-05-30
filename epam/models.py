@@ -427,7 +427,7 @@ class MutSel(OptimizableSHMple):
         # 1. This occurs when using ratios under ESM mask-marginals.
         if self.sf_rescale == "sigmoid":
             ratio_sel_matrix = self.build_selection_matrix_from_parent(parent)
-            sel_matrix = utils.selection_factor_ratios_to_sigmoid(ratio_sel_matrix)
+            sel_matrix = utils.ratios_to_sigmoid(ratio_sel_matrix)
         else:
             sel_matrix = self.build_selection_matrix_from_parent(parent)
         mut_probs = 1.0 - torch.exp(-branch_length * rates)
@@ -757,7 +757,7 @@ class AbLang2(AbLangBase):
             arr_prob_ratio = arr_sorted / parent_probs[:, None]
 
             # Sigmoid transformation for probability ratios with some values greater than 1.
-            arr_ratio_sig = utils.probability_ratios_to_sigmoid(arr_prob_ratio)
+            arr_ratio_sig = utils.ratios_to_sigmoid(torch.tensor(arr_prob_ratio)).numpy()
 
             # Normalize the probabilities to sum to 1.
             row_sums = np.sum(arr_ratio_sig, axis=1, keepdims=True)
@@ -810,7 +810,7 @@ class CachedESM1v(BaseModel):
         if self.sf_rescale == "sigmoid":
             # Sigmoid transformation for selection factors with some values greater than 1.
             ratio_sel_matrix = torch.tensor(self.selection_matrices[parent])
-            sel_tensor = utils.selection_factor_ratios_to_sigmoid(ratio_sel_matrix)
+            sel_tensor = utils.ratios_to_sigmoid(ratio_sel_matrix)
 
             # Normalize the selection matrix.
             row_sums = sel_tensor.sum(dim=1, keepdim=True)
