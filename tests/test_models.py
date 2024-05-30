@@ -9,7 +9,8 @@ from epam.esm_precompute import precompute_and_save
 from epam.esm_precompute import load_and_convert_to_dict
 from epam.sequences import translate_sequence
 from epam.models import (
-    AbLang,
+    AbLang1,
+    AbLang2,
     SHMple,
     OptimizableSHMple,
     MutSel,
@@ -24,7 +25,7 @@ parent_seqs = [
 
 
 def test_ablang():
-    ablang_heavy = AbLang()
+    ablang_heavy = AbLang1()
     parent = parent_seqs[1]
     terrible_child = "A" * 50 + parent[50:]
     prob_arr = ablang_heavy.probability_array_of_seq(parent)
@@ -137,7 +138,7 @@ def test_wrapped_binary_mut_sel(wrapped_not_tyrosine):
     nt_seq = "GCTTAT"
     assert translate_sequence(nt_seq) == "AY"
     selection_matrix = wrapped_not_tyrosine.build_selection_matrix_from_parent(nt_seq)
-    assert torch.allclose(selection_matrix.sum(axis=1), torch.tensor([1., 20.]))
+    assert torch.allclose(selection_matrix.sum(axis=1), torch.tensor([1.0, 20.0]))
     assert selection_matrix[0, 0] == 1.0
     assert (selection_matrix <= 1.0).all()
 
@@ -176,7 +177,7 @@ def test_snapshot():
         # Because we're using a snapshot, we don't want to optimize:
         # optimization is fiddly and we want to be able to change it without
         # breaking the snapshot test.
-        if isinstance(model, (OptimizableSHMple, AbLang)):
+        if isinstance(model, (OptimizableSHMple, AbLang1, AbLang2)):
             model.max_optimization_steps = 0
         out_file = f"_ignore/{source}-{model_name}.hdf5"
         if model_name in ("ESM1v_wt", "SHMpleESM_wt"):

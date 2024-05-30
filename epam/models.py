@@ -14,6 +14,7 @@ import pandas as pd
 from scipy.special import softmax
 
 import ablang
+import ablang2
 
 import shmple
 import epam.molevol as molevol
@@ -21,8 +22,10 @@ import epam.sequences as sequences
 from epam.sequences import (
     AA_STR_SORTED,
     assert_pcp_lengths,
+    assert_full_sequences,
     translate_sequence,
     pcp_criteria_check,
+    aa_idx_array_of_str,
 )
 from epam.torch_common import pick_device, optimize_branch_length, SMALL_PROB
 import epam.utils as utils
@@ -34,7 +37,9 @@ with resources.path("epam", "__init__.py") as p:
 # pipeline.
 
 FULLY_SPECIFIED_MODELS = [
-    ("AbLang_heavy", "AbLang", {"chain": "heavy"}),
+    ("AbLang1", "AbLang1", {"chain": "heavy"}),
+    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "masking": False}),
+    ("AbLang2_mask", "AbLang2", {"version": "ablang2-paired", "masking": True}),
     (
         "SHMple_default",
         "SHMple",
@@ -64,7 +69,7 @@ FULLY_SPECIFIED_MODELS = [
 
 
 class BaseModel(ABC):
-    def __init__(self, model_name=None):
+    def __init__(self, model_name=None, logging=False):
         """
         Initializes a new instance of the BaseModel class.
 
@@ -74,6 +79,14 @@ class BaseModel(ABC):
         if model_name is None:
             model_name = self.__class__.__name__
         self.model_name = model_name
+        self.logging = logging
+        if self.logging == True:
+            self.csv_file = open(
+                f"{self.model_name}_branch_opt_fails_{int(time.time())}.csv", "w"
+            )
+            self.csv_file.write(
+                "pcp_index,parent,child,mut_freq,opt_branch_length,fail_to_converge\n"
+            )
 
     @abstractmethod
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
@@ -123,7 +136,11 @@ class BaseModel(ABC):
                 parent = row["parent"]
                 child = row["child"]
                 assert_pcp_lengths(parent, child)
+                assert_full_sequences(parent, child)
                 if pcp_criteria_check(parent, child):
+                    if self.logging == True:
+                        self.csv_file.write(f"{i},")
+
                     matrix = self.aaprobs_of_parent_child_pair(parent, child)
 
                     # create a group for each matrix
@@ -317,9 +334,13 @@ class OptimizableSHMple(SHMple):
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         base_branch_length = sequences.nt_mutation_frequency(parent, child)
-        branch_length = self._find_optimal_branch_length(
+        branch_length, converge_status = self._find_optimal_branch_length(
             parent, child, base_branch_length
         )
+        if self.logging == True:
+            self.csv_file.write(
+                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
+            )
         if branch_length > 0.5:
             print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
@@ -406,7 +427,7 @@ class MutSel(OptimizableSHMple):
         # 1. This occurs when using ratios under ESM mask-marginals.
         if self.sf_rescale == "sigmoid":
             ratio_sel_matrix = self.build_selection_matrix_from_parent(parent)
-            sel_matrix = utils.selection_factor_ratios_to_sigmoid(ratio_sel_matrix)
+            sel_matrix = utils.ratios_to_sigmoid(ratio_sel_matrix)
         else:
             sel_matrix = self.build_selection_matrix_from_parent(parent)
         mut_probs = 1.0 - torch.exp(-branch_length * rates)
@@ -440,20 +461,19 @@ class RandomMutSel(MutSel):
         return matrix
 
 
-class AbLang(BaseModel):
+class AbLangBase(BaseModel):
     def __init__(
         self,
-        chain="heavy",
         model_name=None,
+        optimize=True,
         max_optimization_steps=1000,
         optimization_tol=1e-4,
         learning_rate=0.1,
     ):
         """
-        Initialize AbLang model with specified chain and create amino acid string. This model rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
+        This is an abstract class with shared functionality for AbLang1 and AbLang2. All models rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
 
         Parameters:
-        chain (str): Name of the chain, default is "heavy".
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         max_optimization_steps (int, optional): Maximum number of gradient descent steps. Default is 1000.
         optimization_tol (float, optional): Tolerance for optimization of log(branch length). Default is 1e-4.
@@ -461,43 +481,16 @@ class AbLang(BaseModel):
 
         """
         super().__init__(model_name=model_name)
-        self.device = pick_device()
-        self.model = ablang.pretrained(chain, device=self.device)
-        self.model.freeze()
-        vocab_dict = self.model.tokenizer.vocab_to_aa
-        self.aa_str = "".join([vocab_dict[i + 1] for i in range(20)])
-        self.aa_str_sorted_indices = np.argsort(list(self.aa_str))
-        assert AA_STR_SORTED == "".join(
-            np.array(list(self.aa_str))[self.aa_str_sorted_indices]
-        )
-        self.max_optimization_steps = max_optimization_steps
+        if optimize == True:
+            self.max_optimization_steps = max_optimization_steps
+        else:
+            self.max_optimization_steps = 0
         self.optimization_tol = optimization_tol
         self.learning_rate = learning_rate
 
+    @abstractmethod
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
-        """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
-
-        Parameters:
-        seq (str): The sequence for which we want the array of probabilities.
-
-        Returns:
-        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
-
-        """
-        likelihoods = self.model([seq], mode="likelihood")
-
-        # Apply softmax to the second dimension, and skip the first and last
-        # elements (which are the probability of the start and end token).
-        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1])
-
-        # Sort the second dimension according to the sorted amino acid string.
-        arr_sorted = arr[:, self.aa_str_sorted_indices]
-        assert len(seq) == arr_sorted.shape[0]
-
-        return arr_sorted
+        pass
 
     def _build_log_pcp_probability(
         self, parent: str, child: str, child_aa_probs: Tensor
@@ -524,8 +517,10 @@ class AbLang(BaseModel):
             no_sub_sites = parent_idx == child_idx
 
             # Rescaling each site based on whether a substitution event occurred or not.
-            same_probs = 1.0 - p_no_event + sub_probs[no_sub_sites]
-            diff_probs = sub_probs[~no_sub_sites]
+            same_probs = (
+                p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
+            )
+            diff_probs = child_aa_probs[~no_sub_sites] - sub_probs[~no_sub_sites]
 
             # Clip probabilities to avoid numerical issues.
             same_probs = torch.clamp(same_probs, min=SMALL_PROB, max=(1 - SMALL_PROB))
@@ -593,10 +588,10 @@ class AbLang(BaseModel):
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
-        scaled_prob_arr[mask_parent] = (
-            1 - p_no_event + p_no_event * prob_arr[mask_parent]
+        scaled_prob_arr[mask_parent] = p_no_event + (
+            (1 - p_no_event) * prob_arr[mask_parent]
         )
-        scaled_prob_arr[~mask_parent] = p_no_event * prob_arr[~mask_parent]
+        scaled_prob_arr[~mask_parent] = (1 - p_no_event) * prob_arr[~mask_parent]
 
         # Clip probabilities to avoid numerical issues.
         scaled_prob_arr = np.clip(
@@ -630,11 +625,149 @@ class AbLang(BaseModel):
         child_aa = translate_sequence(child)
 
         unscaled_aaprob = self.probability_array_of_seq(parent_aa)
-        branch_length = self._find_optimal_branch_length(
+
+        branch_length, converge_status = self._find_optimal_branch_length(
             parent_aa, child_aa, base_branch_length, unscaled_aaprob
         )
+        if self.logging == True:
+            self.csv_file.write(
+                f"{parent_aa},{child_aa},{base_branch_length},{branch_length},{converge_status}\n"
+            )
 
         return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
+
+
+class AbLang1(AbLangBase):
+    def __init__(
+        self,
+        chain="heavy",
+        model_name=None,
+    ):
+        """
+        Initialize AbLang1 model with specified chain and create amino acid string. This model rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
+
+        Parameters:
+        chain (str): Name of the chain, default is "heavy".
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
+
+        """
+        super().__init__(model_name=model_name)
+        self.device = pick_device()
+        self.model = ablang.pretrained(chain, device=self.device)
+        self.model.freeze()
+        vocab_dict = self.model.tokenizer.vocab_to_aa
+        self.aa_str = "".join([vocab_dict[i + 1] for i in range(20)])
+        self.aa_str_sorted_indices = np.argsort(list(self.aa_str))
+        assert AA_STR_SORTED == "".join(
+            np.array(list(self.aa_str))[self.aa_str_sorted_indices]
+        )
+
+    def probability_array_of_seq(self, seq: str) -> np.ndarray:
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
+
+        Parameters:
+        seq (str): The sequence for which we want the array of probabilities.
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+
+        """
+        likelihoods = self.model([seq], mode="likelihood")
+
+        # Apply softmax to the second dimension, and skip the first and last
+        # elements (which are the probability of the start and end token).
+        arr = np.apply_along_axis(softmax, 1, likelihoods[0, 1:-1])
+
+        # Sort the second dimension according to the sorted amino acid string.
+        arr_sorted = arr[:, self.aa_str_sorted_indices]
+        assert len(seq) == arr_sorted.shape[0]
+
+        return arr_sorted
+
+
+class AbLang2(AbLangBase):
+    def __init__(
+        self,
+        version="ablang2-paired",
+        masking=False,
+        model_name=None,
+    ):
+        """
+        Initialize AbLang2 model with or without masking. This model rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
+
+        Parameters:
+        version (str, optional): Version of the AbLang model. Options currently limited to 'ablang2-paired' but could theoretically support 'ablang1-heavy' and 'ablang1-light'.
+        masking (bool, optional): Whether to use masking in the model. Default is False.
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
+
+        """
+        super().__init__(model_name=model_name)
+        self.version = version
+        self.device = pick_device()
+        self.model = ablang2.pretrained(model_to_use=self.version, device=self.device)
+        self.model.freeze()
+        self.masking = masking
+        vocab_dict = self.model.tokenizer.aa_to_token
+        self.aa_sorted_indices = [vocab_dict[aa] for aa in AA_STR_SORTED]
+        assert AA_STR_SORTED == "".join(
+            [
+                key
+                for value in self.aa_sorted_indices
+                for key, v in vocab_dict.items()
+                if v == value
+            ]
+        )
+
+    def probability_array_of_seq(self, seq: str) -> np.ndarray:
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
+
+        Parameters:
+        seq (str): The sequence for which we want the array of probabilities.
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+
+        """
+        assert self.masking in [True, False], "masking must be set to True or False"
+        likelihoods = self.model(
+            [seq, ""], mode="likelihood", stepwise_masking=self.masking
+        )
+        seq_likelihoods = likelihoods[0]
+
+        # Apply softmax to the second dimension. Skipping the first and last
+        # elements (which are the probability of the start, end, and heavy|light divider token),
+        # as well as all tokens not corresponding to the 20 AAs.
+        arr_sorted = np.apply_along_axis(
+            softmax, 1, seq_likelihoods[1:-2, self.aa_sorted_indices]
+        )
+
+        if self.masking == False:
+            assert len(seq) == arr_sorted.shape[0]
+            return arr_sorted
+        elif self.masking == True:
+            # Take the ratio of the probabilities relative to the parent AA.
+            parent_idx = aa_idx_array_of_str(seq)
+            parent_probs = arr_sorted[np.arange(len(seq)), parent_idx]
+            arr_prob_ratio = arr_sorted / parent_probs[:, None]
+
+            # Sigmoid transformation for probability ratios with some values greater than 1.
+            arr_ratio_sig = utils.ratios_to_sigmoid(torch.tensor(arr_prob_ratio)).numpy()
+
+            # Normalize the probabilities to sum to 1.
+            row_sums = np.sum(arr_ratio_sig, axis=1, keepdims=True)
+            arr_ratio_norm = arr_ratio_sig / row_sums
+
+            assert len(seq) == arr_ratio_norm.shape[0]
+
+            return arr_ratio_norm
+        else:
+            raise ValueError("masking must be set to True or False")
 
 
 class CachedESM1v(BaseModel):
@@ -677,7 +810,7 @@ class CachedESM1v(BaseModel):
         if self.sf_rescale == "sigmoid":
             # Sigmoid transformation for selection factors with some values greater than 1.
             ratio_sel_matrix = torch.tensor(self.selection_matrices[parent])
-            sel_tensor = utils.selection_factor_ratios_to_sigmoid(ratio_sel_matrix)
+            sel_tensor = utils.ratios_to_sigmoid(ratio_sel_matrix)
 
             # Normalize the selection matrix.
             row_sums = sel_tensor.sum(dim=1, keepdim=True)

@@ -65,7 +65,10 @@ def generic_subs_indicator_tensor_of(ambig_symb, parent, child):
     are substituted in the child sequence.
     """
     return torch.tensor(
-        [0 if (p == ambig_symb or c == ambig_symb) else p != c for p, c in zip(parent, child)],
+        [
+            0 if (p == ambig_symb or c == ambig_symb) else p != c
+            for p, c in zip(parent, child)
+        ],
         dtype=torch.float,
     )
 
@@ -114,7 +117,9 @@ def aa_index_of_codon(codon):
 def generic_mutation_frequency(ambig_symb, parent, child):
     """Return the fraction of sites that differ between the parent and child sequences."""
     return sum(
-        1 for p, c in zip(parent, child) if p != c and p != ambig_symb and c != ambig_symb
+        1
+        for p, c in zip(parent, child)
+        if p != c and p != ambig_symb and c != ambig_symb
     ) / len(parent)
 
 
@@ -170,3 +175,10 @@ def generate_codon_aa_indicator_matrix():
 CODON_AA_INDICATOR_MATRIX = torch.tensor(
     generate_codon_aa_indicator_matrix(), dtype=torch.float32
 )
+
+
+def assert_full_sequences(parent, child):
+    """Assert that the parent and child sequences full length, containing no ambiguous bases (N)."""
+
+    if "N" in parent or "N" in child:
+        raise ValueError("Found ambiguous bases in the parent or child sequence.")
