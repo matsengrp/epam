@@ -86,4 +86,3 @@ def ratios_to_sigmoid(ratio_sel_matrix, scale_const=1):
     scaled_ratio = torch.pow(ratio_sel_matrix, scale_const)
     sigmoid_sel_matrix = 1 / (1 + (1 / scaled_ratio))
     return sigmoid_sel_matrix
-

@@ -23,6 +23,7 @@ Getting SHMple weights:
     mkdir data/shmple_weights
     scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/my_shmoof data/shmple_weights/
     scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/prod_shmple data/shmple_weights/
+    scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/greiff_size2 data/shmple_weights/
 
 Getting GCReplay-DMS data:
 

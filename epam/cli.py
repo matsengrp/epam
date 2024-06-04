@@ -32,7 +32,7 @@ def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
         except AttributeError:
             print(f"{model_name} model does not exist")
     model = ModelClass(**model_args)
-    if model_name in ("CachedESM1v", "SHMpleESM"):
+    if model_name in ("CachedESM1v", "SHMpleESM", "GCReplaySHMESM"):
         if hdf5_path is None:
             raise ValueError(
                 f"Model {model_name} requires an HDF5 file containing precomputed ESM1v selection factors."
