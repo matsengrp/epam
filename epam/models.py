@@ -16,6 +16,8 @@ from scipy.special import softmax
 import ablang
 import ablang2
 
+import netam
+
 import shmple
 import epam.molevol as molevol
 import epam.sequences as sequences
@@ -335,8 +337,6 @@ class SHMple(MutModel):
         """
         Calculate the amino acid probabilities for a given parent and branch length.
 
-        This is the key function that needs to be overridden for implementing a new model.
-
         Parameters:
         parent (str): The parent nucleotide sequence.
         branch_length (float): The length of the branch.
@@ -353,8 +353,8 @@ class SHMple(MutModel):
 
 class MutSelModel(MutModel):
     """A mutation selection model.
-    
-    This class declares property attributes for mutation_model(MutModel) and 
+
+    This class declares property attributes for mutation_model(MutModel) and
     selection_model(BaseModel) that needs to be defined by the derived class.
 
     Note that stop codons are assumed to have zero selection probability.
@@ -844,7 +844,7 @@ class CachedESM1v(BaseModel):
                 # Normalize the selection matrix.
                 row_sums = sel_tensor.sum(dim=1, keepdim=True)
                 sel_tensor /= row_sums
-                
+
             sel_matrix = sel_tensor.numpy()
         else:
             sel_matrix = self.selection_matrices[parent]
@@ -897,3 +897,244 @@ class WrappedBinaryMutSel(MutSelModel):
         selection_matrix[torch.arange(len(parent_idxs)), parent_idxs] = 1.0
 
         return selection_matrix
+
+
+class NetAM(MutModel):
+    def __init__(self, model_path_prefix: str, *args, **kwargs):
+        """
+        Initialize a NetAM model with specified path prefix to trained model weights.
+
+        Parameters:
+        model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained NetAM model weights.
+        """
+        super().__init__(*args, **kwargs)
+        assert netam.framework.crepe_exists(model_path_prefix)
+        self.model = netam.framework.load_crepe(model_path_prefix, device=pick_device())
+
+    def predict_rates_and_normed_subs_probs(
+        self, parent: str
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Get the mutability rates and (normalized) substitution probabilities predicted
+        by the NetAM model, given a parent nucleotide sequence.
+
+        Parameters:
+        parent (str): The parent sequence.
+
+        Returns:
+        Tuple[torch.Tensor, torch.Tensor]: A tuple containing the rates and
+            substitution probabilities as Torch tensors.
+        """
+        [rates], [csp_logits] = self.model([parent])
+        sub_probs = torch.softmax(csp_logits, dim=1)
+        return rates.detach()[: len(parent)], sub_probs.detach()[: len(parent)]
+
+    def _aaprobs_of_parent_and_branch_length(
+        self, parent: str, branch_length: float
+    ) -> torch.Tensor:
+        """
+        Calculate the amino acid probabilities for a given parent and branch length.
+
+        This is the key function that needs to be overridden for implementing a new model.
+
+        Parameters:
+        parent (str): The parent nucleotide sequence.
+        branch_length (float): The length of the branch.
+
+        Returns:
+        np.ndarray: The aaprobs for every codon of the parent sequence.
+        """
+        rates, subs = self.predict_rates_and_normed_subs_probs(parent)
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
+        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
+            parent_idxs, rates * branch_length, subs
+        )
+
+
+class NetAMESM(MutSelModel):
+    def __init__(self, model_path_prefix: str, sf_rescale=None, *args, **kwargs):
+        """
+        Initialize a mutation-selection model using NetAM for the mutation part and ESM-1v_1 for the selection part.
+
+        Parameters:
+        model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained NetAM model weights.
+        sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy (see CachedESM1v).
+        """
+        super().__init__(*args, **kwargs)
+        assert netam.framework.crepe_exists(model_path_prefix)
+        self.mutation_model = netam.framework.load_crepe(
+            model_path_prefix, device=pick_device()
+        )
+        self.selection_model = CachedESM1v(sf_rescale=sf_rescale)
+
+    def preload_esm_data(self, hdf5_path):
+        """
+        Preload ESM1v data from HDF5 file.
+
+        Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
+        """
+        self.selection_model.preload_esm_data(hdf5_path)
+
+    def build_selection_matrix_from_parent(self, parent):
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+
+
+class S5F(MutModel):
+    def __init__(self, muts_file: str, subs_file: str, *args, **kwargs):
+        """
+        Initialize S5F model with specified file paths to trained model probabilities.
+
+        Parameters:
+        muts_file (str): file of mutabilities per 5-mer motif.
+        subs_file (str): file of substitution probabilities per 5-mer motif.
+        """
+        self.motif_mutability = {}
+        df = pd.read_csv(muts_file)
+        for i, row in df.iterrows():
+            self.motif_mutability[row.motifs] = row.muts
+
+        self.motif_substitution = {}
+        df = pd.read_csv(subs_file)
+        for i, row in df.iterrows():
+            self.motif_substitution[row.motif] = np.array(
+                [row.Asub, row.Csub, row.Gsub, row.Tsub]
+            )
+
+    def predict_rates_and_normed_subs_probs(
+        self, parent: str
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Get the mutability rates and (normalized) substitution probabilities predicted
+        by S5F model, given a parent nucleotide sequence.
+
+        Parameters:
+        parent (str): The parent sequence.
+
+        Returns:
+        Tuple[torch.Tensor, torch.Tensor]: A tuple containing the rates and
+            substitution probabilities as Torch tensors.
+        """
+        [motifs] = self._motif_list([parent])
+        mut_probs = np.array([self._motif_mutability(motif) for motif in motifs])
+
+        # S5F gives mutability probabilities; derive the Poisson rates (corresponding to branch length of 1).
+        rates = torch.tensor(-np.log(1 - mut_probs), dtype=torch.float)
+
+        sub_probs = torch.tensor(
+            np.stack([self._motif_substitution(motif) for motif in motifs]),
+            dtype=torch.float,
+        )
+
+        return rates, sub_probs
+
+    def _aaprobs_of_parent_and_branch_length(
+        self, parent: str, branch_length: float
+    ) -> torch.Tensor:
+        """
+        Calculate the amino acid probabilities for a given parent and branch length.
+
+        Parameters:
+        parent (str): The parent nucleotide sequence.
+        branch_length (float): The length of the branch.
+
+        Returns:
+        np.ndarray: The aaprobs for every codon of the parent sequence.
+        """
+        rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
+        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
+        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
+            parent_idxs, rates * branch_length, sub_probs
+        )
+
+    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
+        base_branch_length = 1
+        branch_length, converge_status = self._find_optimal_branch_length(
+            parent, child, base_branch_length
+        )
+        if self.logging == True:
+            self.csv_file.write(
+                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
+            )
+        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
+
+    def _motif_list(self, sequences: list[str]):
+        """Parse a list of sequence strings to get at the underlying motifs."""
+        lists = []
+        for seq in sequences:
+            motifs = []
+            padded = "NN" + seq + "NN"
+            for i in range(len(seq)):
+                motifs.append(padded[i : i + 5])
+            lists.append(motifs)
+        return lists
+
+    def _motif_substitution(self, motif: str):
+        """Computes the subtitution vector for a motif. Performs a lookup with
+        disambiguation, if necessary. Distributions are averaged near the boundaries."""
+        if "N" in motif:
+            motifs = self._disambiguate(motif)
+            return sum([self.motif_substitution[mot] for mot in motifs]) / len(motifs)
+        else:
+            return self.motif_substitution[motif]
+
+    def _motif_mutability(self, motif: str):
+        """
+        Computes the mutability of a motif. Mostly a lookup except
+        for near the sequence boundaries, where we will resolve the N bases
+        by averaging over the mutability of all matching motifs.
+        """
+        if "N" in motif:
+            motifs = self._disambiguate(motif)
+            return sum([self.motif_mutability[mot] for mot in motifs]) / len(motifs)
+        else:
+            return self.motif_mutability[motif]
+
+    def _disambiguate(self, motif: str):
+        """Expands ambiguous motif to a list of concrete motifs"""
+        idx = motif.find("N")
+        if idx < 0:
+            return [motif]
+        else:
+            motifs = []
+            for l in self._disambiguate(motif[:idx]):
+                for r in self._disambiguate(motif[idx + 1 :]):
+                    for ch in "ACGT":
+                        motifs.append(l + ch + r)
+            return motifs
+
+
+class S5FDMS(MutSelModel):
+    def __init__(
+        self,
+        muts_file: str,
+        subs_file: str,
+        sf_rescale=None,
+        *args,
+        **kwargs,
+    ):
+        """
+        Initialize a mutation-selection model from S5F and DMS data selection factors.
+
+        Parameters:
+        muts_file (str): file of mutabilities per 5-mer motif.
+        subs_file (str): file of substitution probabilities per 5-mer motif.
+        sf_rescale (str, optional): The selection factor rescaling approach.
+        """
+        super().__init__(*args, **kwargs)
+        self.mutation_model = S5F(muts_file=muts_file, subs_file=subs_file)
+        self.selection_model = CachedESM1v(sf_rescale=sf_rescale)
+
+    def build_selection_matrix_from_parent(self, parent):
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+
+    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
+        base_branch_length = 1
+        branch_length, converge_status = self._find_optimal_branch_length(
+            parent, child, base_branch_length
+        )
+        if self.logging == True:
+            self.csv_file.write(
+                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
+            )
+        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()

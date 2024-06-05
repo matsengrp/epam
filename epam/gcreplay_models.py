@@ -208,7 +208,7 @@ class GCReplaySHM(models.MutModel):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Get the mutability rates and (normalized) substitution probabilities predicted
-        by the SHM model that, given a parent nucleotide sequence.
+        by the SHM model, given a parent nucleotide sequence.
 
         Parameters:
         parent (str): The parent sequence.
@@ -228,8 +228,6 @@ class GCReplaySHM(models.MutModel):
     ) -> torch.Tensor:
         """
         Calculate the amino acid probabilities for a given parent and branch length.
-
-        This is the key function that needs to be overridden for implementing a new model.
 
         Parameters:
         parent (str): The parent nucleotide sequence.
