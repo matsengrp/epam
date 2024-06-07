@@ -40,7 +40,10 @@ GCREPLAY_MODELS = [
     (
         "GCReplaySHM_igh",
         "GCReplaySHM",
-        {"shm_data_file": DATA_DIR + "gcreplay/chigy_hc_mutation_rates_nt.csv"},
+        {
+            "shm_data_file": DATA_DIR + "gcreplay/chigy_hc_mutation_rates_nt.csv",
+            "init_branch_length": 1,
+        },
     ),
     (
         "GCReplaySHMDMSSigmoid_igh",
@@ -50,6 +53,7 @@ GCREPLAY_MODELS = [
             "dms_data_file": DATA_DIR + "gcreplay/final_variant_scores.csv",
             "chain": "heavy",
             "sf_rescale": "sigmoid",
+            "init_branch_length": 1,
         },
     ),
     (
@@ -242,17 +246,6 @@ class GCReplaySHM(models.MutModel):
             parent_idxs, rates * branch_length, sub_probs
         )
 
-    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
-        base_branch_length = 1
-        branch_length, converge_status = self._find_optimal_branch_length(
-            parent, child, base_branch_length
-        )
-        if self.logging == True:
-            self.csv_file.write(
-                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
-            )
-        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
-
 
 class GCReplaySHMDMS(models.MutSelModel):
     def __init__(
@@ -283,17 +276,6 @@ class GCReplaySHMDMS(models.MutSelModel):
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
-
-    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
-        base_branch_length = 1
-        branch_length, converge_status = self._find_optimal_branch_length(
-            parent, child, base_branch_length
-        )
-        if self.logging == True:
-            self.csv_file.write(
-                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
-            )
-        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
 class GCReplaySHMESM(models.MutSelModel):
@@ -327,17 +309,6 @@ class GCReplaySHMESM(models.MutSelModel):
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
-
-    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
-        base_branch_length = 1
-        branch_length, converge_status = self._find_optimal_branch_length(
-            parent, child, base_branch_length
-        )
-        if self.logging == True:
-            self.csv_file.write(
-                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
-            )
-        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
 class GCReplaySHMpleDMS(models.MutSelModel):

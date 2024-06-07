@@ -159,6 +159,7 @@ class MutModel(BaseModel):
         self,
         model_name=None,
         optimize=True,
+        init_branch_length=None,
         max_optimization_steps=1000,
         optimization_tol=1e-4,
         learning_rate=0.1,
@@ -171,6 +172,8 @@ class MutModel(BaseModel):
             Model name. Default is None, setting the model name to the class name.
         optimize : bool, optional
             Whether to perform branch length optimization. Default is True.
+        init_branch_length : float, optional
+            Initial branch length before optimization. If None, the mutation frequency of the PCP is the initial branch length.
         max_optimization_steps : int, optional
             Maximum number of gradient descent steps. Default is 1000. Ignored if optimize is False.
         optimization_tol : float, optional
@@ -179,10 +182,12 @@ class MutModel(BaseModel):
             Learning rate for torch's SGD. Default is 0.1.
         """
         super().__init__(model_name=model_name)
+        assert optimize in [True, False], "optimize must be set to True or False"
         if optimize == True:
             self.max_optimization_steps = max_optimization_steps
         else:
             self.max_optimization_steps = 0
+        self.init_branch_length = init_branch_length
         self.optimization_tol = optimization_tol
         self.learning_rate = learning_rate
 
@@ -277,7 +282,10 @@ class MutModel(BaseModel):
         )
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
-        base_branch_length = sequences.nt_mutation_frequency(parent, child)
+        if self.init_branch_length is None:
+            base_branch_length = sequences.nt_mutation_frequency(parent, child)
+        else:
+            base_branch_length = self.init_branch_length
         branch_length, converge_status = self._find_optimal_branch_length(
             parent, child, base_branch_length
         )
@@ -285,7 +293,7 @@ class MutModel(BaseModel):
             self.csv_file.write(
                 f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
             )
-        if branch_length > 0.5:
+        if self.init_branch_length is None and branch_length > 0.5:
             print(f"Warning: branch length of {branch_length} is surprisingly large.")
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
@@ -1047,17 +1055,6 @@ class S5F(MutModel):
             parent_idxs, rates * branch_length, sub_probs
         )
 
-    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
-        base_branch_length = 1
-        branch_length, converge_status = self._find_optimal_branch_length(
-            parent, child, base_branch_length
-        )
-        if self.logging == True:
-            self.csv_file.write(
-                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
-            )
-        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
-
     def _motif_list(self, sequences: list[str]):
         """Parse a list of sequence strings to get at the underlying motifs."""
         lists = []
@@ -1104,7 +1101,7 @@ class S5F(MutModel):
             return motifs
 
 
-class S5FDMS(MutSelModel):
+class S5FESM(MutSelModel):
     def __init__(
         self,
         muts_file: str,
@@ -1127,14 +1124,3 @@ class S5FDMS(MutSelModel):
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
-
-    def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
-        base_branch_length = 1
-        branch_length, converge_status = self._find_optimal_branch_length(
-            parent, child, base_branch_length
-        )
-        if self.logging == True:
-            self.csv_file.write(
-                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
-            )
-        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
