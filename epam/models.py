@@ -155,6 +155,10 @@ class BaseModel(ABC):
 
 
 class MutModel(BaseModel):
+    """
+    Abstract base class for models of neutral nucleotide mutations.
+    """
+
     def __init__(
         self,
         model_name=None,
@@ -165,7 +169,7 @@ class MutModel(BaseModel):
         learning_rate=0.1,
     ):
         """
-        Initialize a new instance of the MutModel for neutral nucelotide mutations.
+        Initialize a new instance of the MutModel for neutral nucleotide mutations.
 
         Parameters:
         model_name : str, optional
@@ -182,7 +186,6 @@ class MutModel(BaseModel):
             Learning rate for torch's SGD. Default is 0.1.
         """
         super().__init__(model_name=model_name)
-        assert optimize in [True, False], "optimize must be set to True or False"
         if optimize == True:
             self.max_optimization_steps = max_optimization_steps
         else:
@@ -214,8 +217,6 @@ class MutModel(BaseModel):
     ) -> torch.Tensor:
         """
         Calculate the amino acid probabilities for a given parent and branch length.
-
-        This is the key function that needs to be overridden for implementing a new model.
 
         Parameters:
         parent (str): The parent nucleotide sequence.
@@ -369,7 +370,6 @@ class MutSelModel(MutModel):
     """
 
     def __init__(self, *args, **kwargs):
-        """ """
         super().__init__(*args, **kwargs)
         # This is a diagnostic generating data for netam issue #7.
         # self.csv_file = open(
@@ -768,7 +768,6 @@ class AbLang2(AbLangBase):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        assert self.masking in [True, False], "masking must be set to True or False"
         likelihoods = self.model(
             [seq, ""], mode="likelihood", stepwise_masking=self.masking
         )
@@ -907,13 +906,13 @@ class WrappedBinaryMutSel(MutSelModel):
         return selection_matrix
 
 
-class NetAM(MutModel):
+class NetamSHM(MutModel):
     def __init__(self, model_path_prefix: str, *args, **kwargs):
         """
-        Initialize a NetAM model with specified path prefix to trained model weights.
+        Initialize a Netam SHM model with specified path prefix to trained model weights.
 
         Parameters:
-        model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained NetAM model weights.
+        model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained Netam SHM model weights.
         """
         super().__init__(*args, **kwargs)
         assert netam.framework.crepe_exists(model_path_prefix)
@@ -924,7 +923,7 @@ class NetAM(MutModel):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Get the mutability rates and (normalized) substitution probabilities predicted
-        by the NetAM model, given a parent nucleotide sequence.
+        by the Netam SHM model, given a parent nucleotide sequence.
 
         Parameters:
         parent (str): The parent sequence.
@@ -959,13 +958,13 @@ class NetAM(MutModel):
         )
 
 
-class NetAMESM(MutSelModel):
+class NetamSHMESM(MutSelModel):
     def __init__(self, model_path_prefix: str, sf_rescale=None, *args, **kwargs):
         """
-        Initialize a mutation-selection model using NetAM for the mutation part and ESM-1v_1 for the selection part.
+        Initialize a mutation-selection model using Netam SHM for the mutation part and ESM-1v_1 for the selection part.
 
         Parameters:
-        model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained NetAM model weights.
+        model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained Netam SHM model weights.
         sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy (see CachedESM1v).
         """
         super().__init__(*args, **kwargs)
