@@ -268,10 +268,13 @@ class GCReplaySHMDMS(models.MutSelModel):
         sf_rescale (str, optional): The selection factor rescaling approach.
         scaling (float): The multiplicative factor on the parent-child binding difference.
         """
-        super().__init__(*args, **kwargs)
-        self.mutation_model = GCReplaySHM(shm_data_file)
-        self.selection_model = GCReplayDMS(
-            dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling
+        super().__init__(
+            mutation_model=GCReplaySHM(shm_data_file),
+            selection_model=GCReplayDMS(
+                dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling
+            ),
+            *args,
+            **kwargs,
         )
 
     def build_selection_matrix_from_parent(self, parent):
@@ -294,9 +297,12 @@ class GCReplaySHMESM(models.MutSelModel):
         shm_data_file (str): File path to the mutation rates from passenger mouse data.
         sf_rescale (str, optional): The selection factor rescaling approach.
         """
-        super().__init__(*args, **kwargs)
-        self.mutation_model = GCReplaySHM(shm_data_file)
-        self.selection_model = models.CachedESM1v(sf_rescale=sf_rescale)
+        super().__init__(
+            mutation_model=GCReplaySHM(shm_data_file),
+            selection_model=models.CachedESM1v(sf_rescale=sf_rescale),
+            *args,
+            **kwargs,
+        )
 
     def preload_esm_data(self, hdf5_path):
         """
@@ -333,10 +339,13 @@ class GCReplaySHMpleDMS(models.MutSelModel):
         sf_rescale (str, optional): The selection factor rescaling approach.
         scaling (float): The multiplicative factor on the parent-child binding difference.
         """
-        super().__init__(*args, **kwargs)
-        self.mutation_model = models.SHMple(weights_directory)
-        self.selection_model = GCReplayDMS(
-            dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling
+        super().__init__(
+            mutation_model=models.SHMple(weights_directory),
+            selection_model=GCReplayDMS(
+                dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling
+            ),
+            *args,
+            **kwargs,
         )
 
     def build_selection_matrix_from_parent(self, parent):

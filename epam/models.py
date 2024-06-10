@@ -200,7 +200,7 @@ class MutModel(BaseModel):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Get the mutability rates and (normalized) substitution probabilities predicted
-        by the SHM model that, given a parent nucleotide sequence.
+        by the SHM model for a given parent nucleotide sequence.
 
         Parameters:
         parent (str): The parent nucleotide sequence.
@@ -363,35 +363,22 @@ class SHMple(MutModel):
 class MutSelModel(MutModel):
     """A mutation selection model.
 
-    This class declares property attributes for mutation_model(MutModel) and
-    selection_model(BaseModel) that needs to be defined by the derived class.
-
     Note that stop codons are assumed to have zero selection probability.
+
+    Parameters:
+    mutation_model (MutModel): A model for SHM.
+    selection_model (BaseModel): A model for computing selection factors.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, mutation_model, selection_model, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.mutation_model = mutation_model
+        self.selection_model = selection_model
         # This is a diagnostic generating data for netam issue #7.
         # self.csv_file = open(
         #     f"prob_sums_too_big_{int(time.time())}.csv", "w"
         # )
         # self.csv_file.write("parent,child,branch_length,sums_too_big\n")
-
-    @property
-    def mutation_model(self) -> MutModel:
-        return self._mutation_model
-
-    @mutation_model.setter
-    def mutation_model(self, model: MutModel):
-        self._mutation_model = model
-
-    @property
-    def selection_model(self) -> BaseModel:
-        return self._selection_model
-
-    @selection_model.setter
-    def selection_model(self, model: BaseModel):
-        self._selection_model = model
 
     @abstractmethod
     def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
@@ -485,8 +472,12 @@ class RandomMutSel(MutSelModel):
     """A mutation selection model with a random selection matrix."""
 
     def __init__(self, weights_directory, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mutation_model = SHMple(weights_directory=weights_directory)
+        super().__init__(
+            mutation_model=SHMple(weights_directory=weights_directory),
+            selection_model=None,
+            *args,
+            **kwargs,
+        )
 
     def build_selection_matrix_from_parent(self, parent: str) -> Tensor:
         matrix = torch.rand(len(parent) // 3, 20)
@@ -867,9 +858,12 @@ class SHMpleESM(MutSelModel):
         weights_directory (str): Directory path to trained SHMple model weights.
         sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy (see CachedESM1v).
         """
-        super().__init__(*args, **kwargs)
-        self.mutation_model = SHMple(weights_directory=weights_directory)
-        self.selection_model = CachedESM1v(sf_rescale=sf_rescale)
+        super().__init__(
+            mutation_model=SHMple(weights_directory=weights_directory),
+            selection_model=CachedESM1v(sf_rescale=sf_rescale),
+            *args,
+            **kwargs,
+        )
 
     def preload_esm_data(self, hdf5_path):
         """
@@ -888,9 +882,12 @@ class WrappedBinaryMutSel(MutSelModel):
     """A mutation selection model that is built from a model that has a `selection_factors_of_aa_str` method."""
 
     def __init__(self, selection_model, weights_directory, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mutation_model = SHMple(weights_directory=weights_directory)
-        self.selection_model = selection_model
+        super().__init__(
+            mutation_model=SHMple(weights_directory=weights_directory),
+            selection_model=selection_model,
+            *args,
+            **kwargs,
+        )
 
     def build_selection_matrix_from_parent(self, parent: str):
         parent = translate_sequence(parent)
@@ -967,12 +964,15 @@ class NetamSHMESM(MutSelModel):
         model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained Netam SHM model weights.
         sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy (see CachedESM1v).
         """
-        super().__init__(*args, **kwargs)
         assert netam.framework.crepe_exists(model_path_prefix)
-        self.mutation_model = netam.framework.load_crepe(
-            model_path_prefix, device=pick_device()
+        super().__init__(
+            mutation_model=netam.framework.load_crepe(
+                model_path_prefix, device=pick_device()
+            ),
+            selection_model=CachedESM1v(sf_rescale=sf_rescale),
+            *args,
+            **kwargs,
         )
-        self.selection_model = CachedESM1v(sf_rescale=sf_rescale)
 
     def preload_esm_data(self, hdf5_path):
         """
@@ -1117,9 +1117,12 @@ class S5FESM(MutSelModel):
         subs_file (str): file of substitution probabilities per 5-mer motif.
         sf_rescale (str, optional): The selection factor rescaling approach.
         """
-        super().__init__(*args, **kwargs)
-        self.mutation_model = S5F(muts_file=muts_file, subs_file=subs_file)
-        self.selection_model = CachedESM1v(sf_rescale=sf_rescale)
+        super().__init__(
+            mutation_model=S5F(muts_file=muts_file, subs_file=subs_file),
+            selection_model=CachedESM1v(sf_rescale=sf_rescale),
+            *args,
+            **kwargs,
+        )
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
