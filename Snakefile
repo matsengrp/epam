@@ -1,5 +1,4 @@
 import epam.models
-import json
 import subprocess
 
 dataset = config.get("dataset")
@@ -21,7 +20,7 @@ else:
     raise ValueError(f"Unknown or missing dataset: {dataset}")
 
 model_name_to_spec = {
-    model_name: [model_class, json.dumps({**model_params, "model_name": model_name})]
+    model_name: [model_class, str({**model_params, "model_name": model_name})]
     for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS 
 }
 
@@ -104,7 +103,7 @@ rule run_model_set1:
     shell:
         """
         mkdir -p output/{wildcards.pcp_input}/set1/{wildcards.model_name}/batch{params.part}
-        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
         touch {output.complete}
         """
 
@@ -128,7 +127,7 @@ rule run_model_set2:
     shell:
         """
         mkdir -p output/{wildcards.pcp_input}/set2/{wildcards.model_name}/batch{params.part}
-        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
         touch {output.complete}
         """
 
@@ -151,7 +150,7 @@ rule run_model_set3:
     shell:
         """
         mkdir -p output/{wildcards.pcp_input}/set3/{wildcards.model_name}/batch{params.part}
-        epam aaprob {params.model_class} '{params.model_params}' {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
         """
 
 

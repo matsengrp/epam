@@ -5,15 +5,16 @@ import pytest
 import os
 from importlib import resources
 import epam.models
+import epam.gcreplay_models
 from epam.esm_precompute import precompute_and_save
 from epam.esm_precompute import load_and_convert_to_dict
 from epam.sequences import translate_sequence
 from epam.models import (
     AbLang1,
     AbLang2,
+    MutModel,
     SHMple,
-    OptimizableSHMple,
-    MutSel,
+    MutSelModel,
     SHMpleESM,
     WrappedBinaryMutSel,
 )
@@ -39,14 +40,14 @@ weights_path = "data/shmple_weights/my_shmoof"
 
 
 def test_shmple():
-    shmple_shmoof = SHMple(weights_directory=weights_path)
+    shmple_shmoof = SHMple(weights_directory=weights_path, optimize=False)
     aaprobs = shmple_shmoof.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
     child_aa_seq = translate_sequence(child_nt_seq)
     prob_vec = shmple_shmoof.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 
     # When we optimize the branch length, we should have a higher probability overall.
-    optimizable_shmple = OptimizableSHMple(weights_directory=weights_path)
+    optimizable_shmple = SHMple(weights_directory=weights_path)
     opt_aaprobs = optimizable_shmple.aaprobs_of_parent_child_pair(
         parent_nt_seq, child_nt_seq
     )
@@ -56,7 +57,7 @@ def test_shmple():
     assert opt_prob_vec.prod() > prob_vec.prod()
 
 
-class MutSelThreonine(MutSel):
+class MutSelThreonine(MutSelModel):
     """A mutation selection model with a selection matrix that loves Threonine."""
 
     def __init__(self, weights_directory, modelname="SillyMutSel"):
@@ -169,21 +170,31 @@ with resources.path("epam", "__init__.py") as p:
 def test_snapshot():
     """Test that the current code produces the same results as a previously-built snapshot."""
     os.makedirs("_ignore", exist_ok=True)
-    for model_name, model_class_str, model_args in epam.models.FULLY_SPECIFIED_MODELS:
-        print(f"Snapshot testing {model_name}")
-        source = "10-random-from-10x"
-        ModelClass = getattr(epam.models, model_class_str)
-        model = ModelClass(**model_args)
-        # Because we're using a snapshot, we don't want to optimize:
-        # optimization is fiddly and we want to be able to change it without
-        # breaking the snapshot test.
-        if isinstance(model, (OptimizableSHMple, AbLang1, AbLang2)):
-            model.max_optimization_steps = 0
-        out_file = f"_ignore/{source}-{model_name}.hdf5"
-        if model_name in ("ESM1v_wt", "SHMpleESM_wt"):
-            model.preload_esm_data(pcp_hdf5_wt_path)
-        if model_name in ("ESM1v_mask", "SHMpleESM_mask"):
-            model.preload_esm_data(pcp_hdf5_mask_path)
-        model.write_aaprobs(f"data/{source}.csv", out_file)
-        compare_file = f"tests/test-data/{source}-{model_name}.hdf5"
-        assert hdf5_files_identical(out_file, compare_file)
+
+    for source in ["10-random-from-10x", "10-random-from-gcreplay"]:
+
+        if source == "10-random-from-10x":
+            models_list = epam.models.FULLY_SPECIFIED_MODELS
+        elif source == "10-random-from-gcreplay":
+            models_list = epam.gcreplay_models.GCREPLAY_MODELS
+
+        for model_name, model_class_str, model_args in models_list:
+            print(f"Snapshot testing {model_name}")
+            if source == "10-random-from-10x":
+                ModelClass = getattr(epam.models, model_class_str)
+            elif source == "10-random-from-gcreplay":
+                ModelClass = getattr(epam.gcreplay_models, model_class_str)
+            model = ModelClass(**model_args)
+            # Because we're using a snapshot, we don't want to optimize:
+            # optimization is fiddly and we want to be able to change it without
+            # breaking the snapshot test.
+            if isinstance(model, (MutModel, AbLang1, AbLang2)):
+                model.max_optimization_steps = 0
+            out_file = f"_ignore/{source}-{model_name}.hdf5"
+            if model_name in ("ESM1v_wt", "SHMpleESM_wt"):
+                model.preload_esm_data(pcp_hdf5_wt_path)
+            if model_name in ("ESM1v_mask", "SHMpleESM_mask"):
+                model.preload_esm_data(pcp_hdf5_mask_path)
+            model.write_aaprobs(f"data/{source}.csv", out_file)
+            compare_file = f"tests/test-data/{source}-{model_name}.hdf5"
+            assert hdf5_files_identical(out_file, compare_file)

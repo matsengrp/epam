@@ -23,12 +23,18 @@ Getting SHMple weights:
     mkdir data/shmple_weights
     scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/my_shmoof data/shmple_weights/
     scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/prod_shmple data/shmple_weights/
+    scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/greiff_size2 data/shmple_weights/
 
 Getting GCReplay-DMS data:
 
     mkdir data/gcreplay
     scp <username>@quokka:/fh/fast/matsen_e/ksung2/epam-gcreplay/final_variant_scores.csv data/gcreplay/
     scp <username>@quokka:/fh/fast/matsen_e/ksung2/epam-gcreplay/chigy_?c_mutation_rates_nt.csv data/gcreplay/
+
+Getting S5F data:
+
+    scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/shmple/model_weights/S5F data/
+
 
 ## Terminology
 
