@@ -391,8 +391,8 @@ def plot_observed_vs_expected(
 ):
     """
     Draws a figure with up to 3 panels showing:
-    counts of sites in bins of mutability probability,
-    observed vs expected number of mutations in bins of mutability probability,
+    counts of sites in bins of amino acid substitution probability,
+    observed vs expected number of mutations in bins of amino acid substitution probability,
     and per bin differences between observed and expected.
     The expected number of mutations is computed as the total probability
     of the sites that fall in that mutability bin.
@@ -457,10 +457,10 @@ def plot_observed_vs_expected(
     # count observed mutations
     if logprobs:
         obs_probs = np.log10(df[df["mutation"] > 0]["prob"].to_numpy())
-        xlabel = "$\log_{10}$(mutability probability)"
+        xlabel = "$\log_{10}$(amino acid substitution probability)"
     else:
         obs_probs = df[df["mutation"] > 0]["prob"].to_numpy()
-        xlabel = "mutability probability"
+        xlabel = "amino acid substitution probability"
     observed = np.histogram(obs_probs, binning)[0]
 
     # normalize total expected to equal total observed
@@ -492,6 +492,9 @@ def plot_observed_vs_expected(
         else:
             hist_data = model_probs
         counts_ax.hist(hist_data, bins=binning, color=counts_color)
+        if (oe_ax is None) and (diff_ax is None):
+            counts_ax.tick_params(axis="x", labelsize=16)
+            counts_ax.set_xlabel(xlabel, fontsize=20, labelpad=10)
         counts_ax.tick_params(axis="y", labelsize=16)
         counts_ax.set_ylabel("number of sites", fontsize=20, labelpad=10)
         counts_ax.grid()
@@ -529,6 +532,9 @@ def plot_observed_vs_expected(
             color="#000000",
             label="Observed",
         )
+        if diff_ax is None:
+            oe_ax.tick_params(axis="x", labelsize=16)
+            oe_ax.set_xlabel(xlabel, fontsize=20, labelpad=10)
         oe_ax.tick_params(axis="y", labelsize=16)
         oe_ax.set_ylabel("number of mutations", fontsize=20, labelpad=10)
 
