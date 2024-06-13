@@ -878,31 +878,6 @@ class SHMpleESM(MutSelModel):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
 
 
-class WrappedBinaryMutSel(MutSelModel):
-    """A mutation selection model that is built from a model that has a `selection_factors_of_aa_str` method."""
-
-    def __init__(self, selection_model, weights_directory, *args, **kwargs):
-        super().__init__(
-            mutation_model=SHMple(weights_directory=weights_directory),
-            selection_model=selection_model,
-            *args,
-            **kwargs,
-        )
-
-    def build_selection_matrix_from_parent(self, parent: str):
-        parent = translate_sequence(parent)
-        selection_factors = self.selection_model.selection_factors_of_aa_str(parent)
-        selection_matrix = torch.zeros((len(selection_factors), 20), dtype=torch.float)
-        # Every "off-diagonal" entry of the selection matrix is set to the selection
-        # factor, where "diagonal" means keeping the same amino acid.
-        selection_matrix[:, :] = selection_factors[:, None]
-        # Set "diagonal" elements to one.
-        parent_idxs = sequences.aa_idx_array_of_str(parent)
-        selection_matrix[torch.arange(len(parent_idxs)), parent_idxs] = 1.0
-
-        return selection_matrix
-
-
 class NetamSHM(MutModel):
     def __init__(self, model_path_prefix: str, *args, **kwargs):
         """
