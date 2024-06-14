@@ -12,7 +12,7 @@ length into account.
 import torch
 from torch import Tensor
 
-from epam.sequences import CODON_AA_INDICATOR_MATRIX
+from netam.sequences import CODON_AA_INDICATOR_MATRIX
 
 
 def normalize_sub_probs(parent_idxs: Tensor, sub_probs: Tensor) -> Tensor:

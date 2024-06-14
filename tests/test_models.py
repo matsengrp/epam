@@ -8,7 +8,7 @@ import epam.models
 import epam.gcreplay_models
 from epam.esm_precompute import precompute_and_save
 from epam.esm_precompute import load_and_convert_to_dict
-from epam.sequences import translate_sequence
+from netam.sequences import translate_sequence
 from epam.models import (
     AbLang1,
     AbLang2,

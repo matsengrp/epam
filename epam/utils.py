@@ -5,7 +5,7 @@ import h5py
 import torch
 import pandas as pd
 import numpy as np
-from epam.sequences import pcp_criteria_check
+from netam.sequences import pcp_criteria_check
 
 
 def generate_file_checksum(filename, buf_size=65536):

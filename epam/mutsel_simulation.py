@@ -1,5 +1,5 @@
 import numpy as np
-from epam.sequences import translate_sequence, NT_STR_SORTED, STOP_CODONS
+from netam.sequences import translate_sequence, NT_STR_SORTED, STOP_CODONS
 
 HYDROPHOBIC_AAS = set(list("AILMFWV"))
 

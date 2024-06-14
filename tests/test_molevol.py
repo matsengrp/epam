@@ -2,7 +2,7 @@ import torch
 import epam.molevol as molevol
 from epam.models import SHMple
 
-from epam.sequences import (
+from netam.sequences import (
     nt_idx_tensor_of_str,
     translate_sequence,
     AA_STR_SORTED,
