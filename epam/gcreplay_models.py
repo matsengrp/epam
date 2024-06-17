@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import torch
 import epam.models as models
-import epam.molevol as molevol
+import netam.molevol as molevol
 import netam.sequences as sequences
 import epam.utils
 
