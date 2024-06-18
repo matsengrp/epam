@@ -26,7 +26,6 @@ from netam.sequences import (
     assert_pcp_lengths,
     assert_full_sequences,
     translate_sequence,
-    pcp_criteria_check,
     aa_idx_array_of_str,
 )
 import epam.utils as utils
@@ -146,7 +145,7 @@ class BaseModel(ABC):
                 child = row["child"]
                 assert_pcp_lengths(parent, child)
                 assert_full_sequences(parent, child)
-                if pcp_criteria_check(parent, child):
+                if utils.pcp_criteria_check(parent, child):
                     if self.logging == True:
                         self.csv_file.write(f"{i},")
 
