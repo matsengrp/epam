@@ -9,14 +9,17 @@ import h5py
 
 from esm import pretrained
 
-from epam.sequences import (
+from netam.sequences import (
     AA_STR_SORTED,
     translate_sequences,
     assert_pcp_lengths,
     aa_idx_array_of_str,
 )
-from epam.torch_common import pick_device
+from netam.common import pick_device
 from epam.utils import load_and_filter_pcp_df, generate_file_checksum
+
+# explictly set number of threads to 1 to avoid slowdowns during branch length optimization
+torch.set_num_threads(1)
 
 model_location = "esm1v_t33_650M_UR90S_1"
 

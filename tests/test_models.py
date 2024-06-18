@@ -8,7 +8,7 @@ import epam.models
 import epam.gcreplay_models
 from epam.esm_precompute import precompute_and_save
 from epam.esm_precompute import load_and_convert_to_dict
-from epam.sequences import translate_sequence
+from netam.sequences import translate_sequence
 from epam.models import (
     AbLang1,
     AbLang2,
@@ -16,7 +16,6 @@ from epam.models import (
     SHMple,
     MutSelModel,
     SHMpleESM,
-    WrappedBinaryMutSel,
 )
 
 parent_seqs = [
@@ -127,21 +126,6 @@ class ConserveEverythingExceptTyrosine:
         return torch.tensor(
             [1.0 if aa_str[i] == "Y" else 0.0 for i in range(len(aa_str))]
         )
-
-
-@pytest.fixture
-def wrapped_not_tyrosine():
-    not_tyrosine = ConserveEverythingExceptTyrosine()
-    return WrappedBinaryMutSel(not_tyrosine, weights_directory=weights_path)
-
-
-def test_wrapped_binary_mut_sel(wrapped_not_tyrosine):
-    nt_seq = "GCTTAT"
-    assert translate_sequence(nt_seq) == "AY"
-    selection_matrix = wrapped_not_tyrosine.build_selection_matrix_from_parent(nt_seq)
-    assert torch.allclose(selection_matrix.sum(axis=1), torch.tensor([1.0, 20.0]))
-    assert selection_matrix[0, 0] == 1.0
-    assert (selection_matrix <= 1.0).all()
 
 
 def hdf5_files_identical(path_1, path_2, tol=1e-4):

@@ -19,18 +19,23 @@ import ablang2
 import netam
 
 import shmple
-import epam.molevol as molevol
-import epam.sequences as sequences
-from epam.sequences import (
+import netam.molevol as molevol
+import netam.sequences as sequences
+from netam.sequences import (
     AA_STR_SORTED,
     assert_pcp_lengths,
     assert_full_sequences,
     translate_sequence,
-    pcp_criteria_check,
     aa_idx_array_of_str,
 )
-from epam.torch_common import pick_device, optimize_branch_length, SMALL_PROB
 import epam.utils as utils
+from netam.common import pick_device
+from netam.molevol import optimize_branch_length, mutsel_log_pcp_probability_of
+
+SMALL_PROB = 1e-8
+
+# explictly set number of threads to 1 to avoid slowdowns during branch length optimization
+torch.set_num_threads(1)
 
 with resources.path("epam", "__init__.py") as p:
     DATA_DIR = str(p.parent.parent) + "/data/"
@@ -140,7 +145,7 @@ class BaseModel(ABC):
                 child = row["child"]
                 assert_pcp_lengths(parent, child)
                 assert_full_sequences(parent, child)
-                if pcp_criteria_check(parent, child):
+                if utils.pcp_criteria_check(parent, child):
                     if self.logging == True:
                         self.csv_file.write(f"{i},")
 
@@ -397,53 +402,10 @@ class MutSelModel(MutModel):
     def _build_log_pcp_probability(
         self, parent: str, child: str, rates: Tensor, sub_probs: Tensor
     ):
-        """
-        Constructs the log_pcp_probability function specific to given rates and sub_probs.
-
-        This function takes log_branch_length as input and returns the log
-        probability of the child sequence. It uses log of branch length to
-        ensure non-negativity.
-        """
-
-        assert len(parent) % 3 == 0
         sel_matrix = self.build_selection_matrix_from_parent(parent)
-        assert sel_matrix.shape == (len(parent) // 3, 20)
-
-        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        child_idxs = sequences.nt_idx_tensor_of_str(child)
-
-        def log_pcp_probability(log_branch_length: torch.Tensor):
-            branch_length = torch.exp(log_branch_length)
-            mut_probs = 1.0 - torch.exp(-branch_length * rates)
-
-            codon_mutsel, sums_too_big = molevol.build_codon_mutsel(
-                parent_idxs.reshape(-1, 3),
-                mut_probs.reshape(-1, 3),
-                sub_probs.reshape(-1, 3, 4),
-                sel_matrix,
-            )
-
-            # This is a diagnostic generating data for netam issue #7.
-            # if sums_too_big is not None:
-            #     self.csv_file.write(f"{parent},{child},{branch_length},{sums_too_big}\n")
-
-            reshaped_child_idxs = child_idxs.reshape(-1, 3)
-            child_prob_vector = codon_mutsel[
-                torch.arange(len(reshaped_child_idxs)),
-                reshaped_child_idxs[:, 0],
-                reshaped_child_idxs[:, 1],
-                reshaped_child_idxs[:, 2],
-            ]
-
-            child_prob_vector = torch.clamp(child_prob_vector, min=1e-10)
-
-            result = torch.sum(torch.log(child_prob_vector))
-
-            assert torch.isfinite(result)
-
-            return result
-
-        return log_pcp_probability
+        return mutsel_log_pcp_probability_of(
+            sel_matrix, parent, child, rates, sub_probs
+        )
 
     def _aaprobs_of_parent_and_branch_length(self, parent, branch_length) -> Tensor:
         rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
@@ -876,31 +838,6 @@ class SHMpleESM(MutSelModel):
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
-
-
-class WrappedBinaryMutSel(MutSelModel):
-    """A mutation selection model that is built from a model that has a `selection_factors_of_aa_str` method."""
-
-    def __init__(self, selection_model, weights_directory, *args, **kwargs):
-        super().__init__(
-            mutation_model=SHMple(weights_directory=weights_directory),
-            selection_model=selection_model,
-            *args,
-            **kwargs,
-        )
-
-    def build_selection_matrix_from_parent(self, parent: str):
-        parent = translate_sequence(parent)
-        selection_factors = self.selection_model.selection_factors_of_aa_str(parent)
-        selection_matrix = torch.zeros((len(selection_factors), 20), dtype=torch.float)
-        # Every "off-diagonal" entry of the selection matrix is set to the selection
-        # factor, where "diagonal" means keeping the same amino acid.
-        selection_matrix[:, :] = selection_factors[:, None]
-        # Set "diagonal" elements to one.
-        parent_idxs = sequences.aa_idx_array_of_str(parent)
-        selection_matrix[torch.arange(len(parent_idxs)), parent_idxs] = 1.0
-
-        return selection_matrix
 
 
 class NetamSHM(MutModel):

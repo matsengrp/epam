@@ -5,7 +5,7 @@ import h5py
 import torch
 import pandas as pd
 import numpy as np
-from epam.sequences import pcp_criteria_check
+from netam.sequences import nt_mutation_frequency
 
 
 def generate_file_checksum(filename, buf_size=65536):
@@ -68,6 +68,16 @@ def load_and_filter_pcp_df(pcp_path):
     ]
 
     return pcp_df
+
+
+def pcp_criteria_check(parent, child, max_mut_freq=0.3):
+    """Check that parent child pair undergoes mutation at a reasonable rate."""
+    if parent == child:
+        return False
+    elif nt_mutation_frequency(parent, child) > max_mut_freq:
+        return False
+    else:
+        return True
 
 
 def ratios_to_sigmoid(ratio_sel_matrix, scale_const=1):

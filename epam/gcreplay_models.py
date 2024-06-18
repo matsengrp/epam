@@ -4,11 +4,10 @@ import numpy as np
 import pandas as pd
 import torch
 import epam.models as models
-import epam.molevol as molevol
-import epam.sequences as sequences
+import netam.molevol as molevol
+import netam.sequences as sequences
 import epam.utils
 
-from epam.torch_common import optimize_branch_length
 from typing import Tuple
 
 from epam.esm_precompute import load_and_convert_to_dict
