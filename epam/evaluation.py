@@ -173,7 +173,7 @@ def calculate_site_substitution_probabilities(aaprobs, parent_aa):
 
     for i in range(len(parent_aa)):
         if parent_aa[i] == '-':
-            site_sub_probs.append(np.nan)  # or 0, depending on how you want to mask
+            site_sub_probs.append(0.0)  # or 0, depending on how you want to mask
         else:
             sub_prob = np.sum(
                 aaprobs[i, :][
@@ -323,11 +323,10 @@ def calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs):
                 for j in range(len(pcp_sub_locations[i]))
             ), "The location of a substitution is greater than the number of sites in the parent sequence."
         for idx, p_i in np.ndenumerate(site_sub_probs[i]):
-            if not np.isnan(p_i):
-                if idx in pcp_sub_locations[i]:
-                    log_probs_substitution.append(np.log(p_i))
-                else:
-                    log_probs_substitution.append(np.log(1 - p_i))
+            if idx in pcp_sub_locations[i]:
+                log_probs_substitution.append(np.log(p_i))
+            else:
+                log_probs_substitution.append(np.log(1 - p_i))
 
     cross_entropy_loss = (
         -1 / len(log_probs_substitution) * np.sum(log_probs_substitution)
