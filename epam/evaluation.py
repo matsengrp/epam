@@ -4,7 +4,7 @@ import h5py
 import pandas as pd
 import numpy as np
 import bisect
-from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
+from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df, SMALL_PROB
 from netam.sequences import AA_STR_SORTED, translate_sequences
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Rectangle
