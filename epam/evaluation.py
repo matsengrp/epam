@@ -5,7 +5,8 @@ import pandas as pd
 import numpy as np
 import bisect
 from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df, SMALL_PROB
-from netam.sequences import AA_STR_SORTED, translate_sequences
+from scripts.annotate_pcps import get_cdr_fwk_seqs
+from netam.sequences import AA_STR_SORTED, translate_sequences, translate_sequence
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Rectangle
 
@@ -103,6 +104,154 @@ def evaluate_dataset(aaprob_path):
         "sub_accuracy": sub_acc,
         "r_precision": r_prec,
         "cross_entropy": cross_ent,
+    }
+
+    return model_performance
+
+
+def evaluate_dataset_by_region(aaprob_path):
+    """
+    Evaluate model predictions against reality for a set of parent-child pairs (PCPs).
+    Function is model-agnositic and currently calculates substitution accuracy, r-precision, and cross entropy loss.
+    Returns evaluation metrics for a single aaprob matrix (generated from one model on one data set).
+
+    Parameters:
+    aaprob_path (str): Path to aaprob matrix for parent-child pairs.
+
+    Returns:
+    model_performance (dict): Dictionary of model performance metrics for a single aaprob matrix.
+
+    """
+    pcp_path = pcp_path_of_aaprob_path(aaprob_path)
+
+    pcp_df = load_and_filter_pcp_df(pcp_path)
+
+    pcp_df['parent_aa'] = pcp_df.apply(lambda row: translate_sequence(row['parent']), axis=1)
+    pcp_df['child_aa'] = pcp_df.apply(lambda row: translate_sequence(row['child']), axis=1)
+    pcp_df['parent_fwk_seq'], pcp_df['parent_cdr_seq'], pcp_df['child_fwk_seq'], pcp_df['child_cdr_seq'] = zip(*pcp_df.apply(get_cdr_fwk_seqs, axis=1))
+    parent_aa_seqs = tuple(pcp_df['parent_aa'])
+    child_aa_seqs = tuple(pcp_df['child_aa'])
+    parent_fwk_seqs = tuple(pcp_df['parent_fwk_seq'])
+    parent_cdr_seqs = tuple(pcp_df['parent_cdr_seq'])
+    child_fwk_seqs = tuple(pcp_df['child_fwk_seq'])
+    child_cdr_seqs = tuple(pcp_df['child_cdr_seq'])
+
+    pcp_sub_locations = [
+        locate_child_substitutions(parent, child)
+        for parent, child in zip(parent_aa_seqs, child_aa_seqs)
+    ]
+    fwk_sub_locations = [
+        locate_child_substitutions(parent, child)
+        for parent, child in zip(parent_fwk_seqs, child_fwk_seqs)
+    ]
+    cdr_sub_locations = [
+        locate_child_substitutions(parent, child)
+        for parent, child in zip(parent_cdr_seqs, child_cdr_seqs)
+    ]
+
+    pcp_sub_aa_ids = [
+        identify_child_substitutions(parent, child)
+        for parent, child in zip(parent_aa_seqs, child_aa_seqs)
+    ]
+    fwk_sub_aa_ids = [
+        identify_child_substitutions(parent, child)
+        for parent, child in zip(parent_fwk_seqs, child_fwk_seqs)
+    ]
+    cdr_sub_aa_ids = [
+        identify_child_substitutions(parent, child)
+        for parent, child in zip(parent_cdr_seqs, child_cdr_seqs)
+    ]
+
+    # k represents the number of substitutions observed in each PCP, top k substitutions will be evaluated for r-precision
+    k_subs = [len(pcp_sub_location) for pcp_sub_location in pcp_sub_locations]
+    k_fwk_subs = [len(fwk_sub_location) for fwk_sub_location in fwk_sub_locations]
+    k_cdr_subs = [len(cdr_sub_location) for cdr_sub_location in cdr_sub_locations]
+
+    site_sub_probs = []
+    fwk_site_sub_probs = []
+    cdr_site_sub_probs = []
+    model_sub_aa_ids = []
+    fwk_model_sub_aa_ids = []
+    cdr_model_sub_aa_ids = []
+
+    with h5py.File(aaprob_path, "r") as matfile:
+        model_name = matfile.attrs["model_name"]
+        for index in range(len(parent_aa_seqs)):
+            pcp_index = pcp_df.index[index]
+            grp = matfile[
+                "matrix" + str(pcp_index)
+            ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
+            matrix = grp["data"]
+
+            site_sub_probs.append(
+                calculate_site_substitution_probabilities(matrix, parent_aa_seqs[index])
+            )
+            fwk_site_sub_probs.append(
+                calculate_site_substitution_probabilities(matrix, parent_fwk_seqs[index])
+            )
+            cdr_site_sub_probs.append(
+                calculate_site_substitution_probabilities(matrix, parent_cdr_seqs[index])
+            )
+
+            pred_aa_sub = [
+                highest_ranked_substitution(matrix[j, :], parent_aa_seqs[index], j)
+                for j in range(len(parent_aa_seqs[index]))
+                if parent_aa_seqs[index][j] != child_aa_seqs[index][j]
+            ]
+            pred_fwk_sub = [
+                highest_ranked_substitution(matrix[j, :], parent_fwk_seqs[index], j)
+                for j in range(len(parent_fwk_seqs[index]))
+                if parent_fwk_seqs[index][j] != child_fwk_seqs[index][j]
+            ]
+            pred_cdr_sub = [
+                highest_ranked_substitution(matrix[j, :], parent_cdr_seqs[index], j)
+                for j in range(len(parent_cdr_seqs[index]))
+                if parent_cdr_seqs[index][j] != child_cdr_seqs[index][j]
+            ]
+
+            model_sub_aa_ids.append(pred_aa_sub)
+            fwk_model_sub_aa_ids.append(pred_fwk_sub)
+            cdr_model_sub_aa_ids.append(pred_cdr_sub)
+   
+    top_k_sub_locations = [
+        locate_top_k_substitutions(site_sub_prob, k_sub)
+        for site_sub_prob, k_sub in zip(site_sub_probs, k_subs)
+    ]
+    top_k_fwk_sub_locations = [
+        locate_top_k_substitutions(fwk_site_sub_prob, k_sub)
+        for fwk_site_sub_prob, k_sub in zip(fwk_site_sub_probs, k_fwk_subs)
+    ]
+    top_k_cdr_sub_locations = [
+        locate_top_k_substitutions(cdr_site_sub_prob, k_sub)
+        for cdr_site_sub_prob, k_sub in zip(cdr_site_sub_probs, k_cdr_subs)
+    ]
+
+    sub_acc = calculate_sub_accuracy(pcp_sub_aa_ids, model_sub_aa_ids, k_subs)
+    fwk_sub_acc = calculate_sub_accuracy(fwk_sub_aa_ids, fwk_model_sub_aa_ids, k_fwk_subs)
+    cdr_sub_acc = calculate_sub_accuracy(cdr_sub_aa_ids, cdr_model_sub_aa_ids, k_cdr_subs)
+    r_prec = calculate_r_precision(pcp_sub_locations, top_k_sub_locations, k_subs)
+    fwk_r_prec = calculate_r_precision(fwk_sub_locations, top_k_fwk_sub_locations, k_fwk_subs)
+    cdr_r_prec = calculate_r_precision(cdr_sub_locations, top_k_cdr_sub_locations, k_cdr_subs)
+    cross_ent = calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs)
+    fwk_cross_ent = calculate_cross_entropy_loss(fwk_sub_locations, fwk_site_sub_probs)
+    cdr_cross_ent = calculate_cross_entropy_loss(cdr_sub_locations, cdr_site_sub_probs)
+
+    model_performance = {
+        "data_set": pcp_path,
+        "pcp_count": len(pcp_df),
+        "model": model_name,
+        "sub_accuracy": sub_acc,
+        "r_precision": r_prec,
+        "cross_entropy": cross_ent,
+        "fwk_sub_accuracy": fwk_sub_acc,
+        "fwk_r_precision": fwk_r_prec,
+        "fwk_cross_entropy": fwk_cross_ent,
+        "cdr_sub_accuracy": cdr_sub_acc,
+        "cdr_r_precision": cdr_r_prec,
+        "cdr_cross_entropy": cdr_cross_ent,
+        "avg_k_subs": sum(k_subs) / len(k_subs),
+        "avg_k_fwk_subs": sum(k_fwk_subs) / len(k_fwk_subs),
+        "avg_k_cdr_subs": sum(k_cdr_subs) / len(k_cdr_subs),
     }
 
     return model_performance
