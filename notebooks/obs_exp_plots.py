@@ -6,8 +6,8 @@ import warnings
 import os
 from epam.evaluation import get_site_mutabilities_df, plot_observed_vs_expected
 from epam.utils import load_and_filter_pcp_df
-from epam.sequences import aa_mutation_frequency
-from epam.torch_common import SMALL_PROB
+from netam.sequences import aa_mutation_frequency
+from epam.utils import SMALL_PROB
 
 # Okabe-Ito colors
 oi_black         = '#000000'
