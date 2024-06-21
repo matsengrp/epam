@@ -5,7 +5,7 @@ import h5py
 import torch
 import pandas as pd
 import numpy as np
-from netam.sequences import nt_mutation_frequency
+from netam.sequences import nt_mutation_frequency, translate_sequence
 
 SMALL_PROB = 1e-8
 
@@ -73,10 +73,21 @@ def load_and_filter_pcp_df(pcp_path):
 
 
 def pcp_criteria_check(parent, child, max_mut_freq=0.3):
-    """Check that parent child pair undergoes mutation at a reasonable rate."""
+    """
+    Check that parent-child pair undergoes mutation at a reasonable rate.
+    NT mutation rate must be greater than 0% and less than {max_mut_freq}% (default: 30%).
+    Also remove pairs with no AA substitutions.
+
+    Parameters:
+    parent (str): NT parent sequence.
+    child (str): NT child sequence.
+    
+    """
     if parent == child:
         return False
     elif nt_mutation_frequency(parent, child) > max_mut_freq:
+        return False
+    elif translate_sequence(parent) == translate_sequence(child):
         return False
     else:
         return True
