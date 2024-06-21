@@ -283,20 +283,12 @@ def calculate_site_substitution_probabilities(aaprobs, parent_aa):
     site_sub_probs (np.array): 1D array containing probability of substitution at each site for a parent sequence.
 
     """
-    # site_sub_probs = [
-    #     np.sum(
-    #         aaprobs[i, :][
-    #             [AA_STR_SORTED.index(aa) for aa in AA_STR_SORTED if aa != parent_aa[i]]
-    #         ]
-    #     )
-    #     for i in range(len(parent_aa))
-    # ]
-
     site_sub_probs = []
 
     for i in range(len(parent_aa)):
+        # assign 0 probability of substitution to sites outside region of interest in CDR and FWK sequences
         if parent_aa[i] == "-":
-            site_sub_probs.append(0.0)  # or 0, depending on how you want to mask
+            site_sub_probs.append(0.0)
         else:
             sub_prob = np.sum(
                 aaprobs[i, :][
