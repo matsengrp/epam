@@ -466,6 +466,7 @@ def calculate_aa_substitution_frequencies_by_region(parent_aa, child_aa):
 
     Returns:
     aa_sub_frequency (float): Fraction of sites that differ between the parent and child FWK or CDR sequences.
+    
     """
     parent = parent_aa.replace("-", "")
     child = child_aa.replace("-", "")
