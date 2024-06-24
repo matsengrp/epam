@@ -220,12 +220,12 @@ def evaluate_dataset(aaprob_path):
         "avg_k_subs": np.mean(k_subs),
         "avg_aa_sub_freq": np.mean(full_aa_sub_freq),
         "aa_sub_freq_range": (np.min(full_aa_sub_freq), np.max(full_aa_sub_freq)),
-        "avg_k_fwk_subs": np.mean(k_fwk_subs),
-        "avg_fwk_aa_sub_freq": np.mean(fwk_aa_sub_freq),
-        "aa_fwk_sub_freq_range": (np.min(fwk_aa_sub_freq), np.max(fwk_aa_sub_freq)),
-        "avg_k_cdr_subs": np.mean(k_cdr_subs),
-        "avg_cdr_aa_sub_freq": np.mean(cdr_aa_sub_freq),
-        "aa_cdr_sub_freq_range": (np.min(cdr_aa_sub_freq), np.max(cdr_aa_sub_freq)),
+        "fwk_avg_k_subs": np.mean(k_fwk_subs),
+        "fwk_avg_aa_sub_freq": np.mean(fwk_aa_sub_freq),
+        "fwk_aa_sub_freq_range": (np.min(fwk_aa_sub_freq), np.max(fwk_aa_sub_freq)),
+        "cdr_avg_k_subs": np.mean(k_cdr_subs),
+        "cdr_avg_aa_sub_freq": np.mean(cdr_aa_sub_freq),
+        "cdr_aa_sub_freq_range": (np.min(cdr_aa_sub_freq), np.max(cdr_aa_sub_freq)),
     }
 
     return model_performance
