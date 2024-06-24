@@ -55,16 +55,6 @@ GCREPLAY_MODELS = [
             "init_branch_length": 1,
         },
     ),
-    (
-        "GCReplaySHMpleDMSSigmoid_igh",
-        "GCReplaySHMpleDMS",
-        {
-            "weights_directory": DATA_DIR + "shmple_weights/greiff_size2",
-            "dms_data_file": DATA_DIR + "gcreplay/final_variant_scores.csv",
-            "chain": "heavy",
-            "sf_rescale": "sigmoid",
-        },
-    ),
 ]
 
 
