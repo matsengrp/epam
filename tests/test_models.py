@@ -156,7 +156,6 @@ def test_snapshot():
     os.makedirs("_ignore", exist_ok=True)
 
     for source in ["10-random-from-10x", "10-random-from-gcreplay"]:
-
         if source == "10-random-from-10x":
             models_list = epam.models.FULLY_SPECIFIED_MODELS
         elif source == "10-random-from-gcreplay":

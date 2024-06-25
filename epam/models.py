@@ -29,10 +29,8 @@ from netam.sequences import (
     aa_idx_array_of_str,
 )
 import epam.utils as utils
-from netam.common import pick_device
+from netam.common import pick_device, SMALL_PROB
 from netam.molevol import optimize_branch_length, mutsel_log_pcp_probability_of
-
-SMALL_PROB = 1e-8
 
 # explictly set number of threads to 1 to avoid slowdowns during branch length optimization
 torch.set_num_threads(1)
