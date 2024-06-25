@@ -79,7 +79,7 @@ def pcp_criteria_check(parent, child, max_mut_freq=0.3):
     Parameters:
     parent (str): NT parent sequence.
     child (str): NT child sequence.
-    
+
     """
     if parent == child:
         return False

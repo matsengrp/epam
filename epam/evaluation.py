@@ -70,34 +70,40 @@ def evaluate_dataset(aaprob_path):
     region_sub_locations = {}
     region_sub_aa_ids = {}
     region_k_subs = {}
-    
-    for region in ['full', 'fwk', 'cdr']:
-        if region == 'full':
+
+    for region in ["full", "fwk", "cdr"]:
+        if region == "full":
             region_parent_aa_seqs[region] = pcp_df["parent_aa"].to_numpy()
             region_child_aa_seqs[region] = pcp_df["child_aa"].to_numpy()
         else:
             region_parent_aa_seqs[region] = pcp_df[f"parent_{region}_seq"].to_numpy()
             region_child_aa_seqs[region] = pcp_df[f"child_{region}_seq"].to_numpy()
-        
+
         region_sub_locations[region] = [
             locate_child_substitutions(parent, child)
-            for parent, child in zip(region_parent_aa_seqs[region], region_child_aa_seqs[region])
+            for parent, child in zip(
+                region_parent_aa_seqs[region], region_child_aa_seqs[region]
+            )
         ]
 
         region_sub_aa_ids[region] = [
             identify_child_substitutions(parent, child)
-            for parent, child in zip(region_parent_aa_seqs[region], region_child_aa_seqs[region])
+            for parent, child in zip(
+                region_parent_aa_seqs[region], region_child_aa_seqs[region]
+            )
         ]
 
         # k represents the number of substitutions observed in each PCP, top k substitutions will be evaluated for r-precision
-        region_k_subs[region] = [len(sub_location) for sub_location in region_sub_locations[region]]
- 
+        region_k_subs[region] = [
+            len(sub_location) for sub_location in region_sub_locations[region]
+        ]
+
     region_site_sub_probs = {}
     region_model_sub_aa_ids = {}
 
     with h5py.File(aaprob_path, "r") as matfile:
         model_name = matfile.attrs["model_name"]
-        for region in ['full', 'fwk', 'cdr']:
+        for region in ["full", "fwk", "cdr"]:
             region_site_sub_probs[region] = []
             region_model_sub_aa_ids[region] = []
 
@@ -109,7 +115,9 @@ def evaluate_dataset(aaprob_path):
                 matrix = grp["data"]
 
                 region_site_sub_probs[region].append(
-                    calculate_site_substitution_probabilities(matrix, region_parent_aa_seqs[region][index])
+                    calculate_site_substitution_probabilities(
+                        matrix, region_parent_aa_seqs[region][index]
+                    )
                 )
 
                 def find_highest_ranked_substitutions(matrix, parent, child):
@@ -121,7 +129,9 @@ def evaluate_dataset(aaprob_path):
 
                 region_model_sub_aa_ids[region].append(
                     find_highest_ranked_substitutions(
-                        matrix, region_parent_aa_seqs[region][index], region_child_aa_seqs[region][index]
+                        matrix,
+                        region_parent_aa_seqs[region][index],
+                        region_child_aa_seqs[region][index],
                     )
                 )
 
@@ -131,24 +141,42 @@ def evaluate_dataset(aaprob_path):
     region_cross_ent = {}
     region_aa_sub_freq = {}
 
-    for region in ['full', 'fwk', 'cdr']:
+    for region in ["full", "fwk", "cdr"]:
         region_top_k_sub_locations[region] = [
             locate_top_k_substitutions(region_site_sub_prob, k_sub)
-            for region_site_sub_prob, k_sub in zip(region_site_sub_probs[region], region_k_subs[region])
+            for region_site_sub_prob, k_sub in zip(
+                region_site_sub_probs[region], region_k_subs[region]
+            )
         ]
 
-        region_sub_acc[region] = calculate_sub_accuracy(region_sub_aa_ids[region], region_model_sub_aa_ids[region], region_k_subs[region])
-        region_r_prec[region] = calculate_r_precision(region_sub_locations[region], region_top_k_sub_locations[region], region_k_subs[region])
-        region_cross_ent[region] = calculate_cross_entropy_loss(region_sub_locations[region], region_site_sub_probs[region])
+        region_sub_acc[region] = calculate_sub_accuracy(
+            region_sub_aa_ids[region],
+            region_model_sub_aa_ids[region],
+            region_k_subs[region],
+        )
+        region_r_prec[region] = calculate_r_precision(
+            region_sub_locations[region],
+            region_top_k_sub_locations[region],
+            region_k_subs[region],
+        )
+        region_cross_ent[region] = calculate_cross_entropy_loss(
+            region_sub_locations[region], region_site_sub_probs[region]
+        )
 
-        if region == 'full':
+        if region == "full":
             region_aa_sub_freq[region] = [
                 generic_mutation_frequency("X", parent, child)
-                for parent, child in zip(region_parent_aa_seqs[region], region_child_aa_seqs[region])
+                for parent, child in zip(
+                    region_parent_aa_seqs[region], region_child_aa_seqs[region]
+                )
             ]
         else:
-            parent_only_aa_seqs = [seq.replace("-", "") for seq in region_parent_aa_seqs[region]]
-            child_only_aa_seqs = [seq.replace("-", "") for seq in region_child_aa_seqs[region]]
+            parent_only_aa_seqs = [
+                seq.replace("-", "") for seq in region_parent_aa_seqs[region]
+            ]
+            child_only_aa_seqs = [
+                seq.replace("-", "") for seq in region_child_aa_seqs[region]
+            ]
             region_aa_sub_freq[region] = [
                 calculate_aa_substitution_frequencies_by_region(parent, child)
                 for parent, child in zip(parent_only_aa_seqs, child_only_aa_seqs)
@@ -158,24 +186,33 @@ def evaluate_dataset(aaprob_path):
         "data_set": pcp_path,
         "pcp_count": len(pcp_df),
         "model": model_name,
-        "sub_accuracy": region_sub_acc['full'],
-        "r_precision": region_r_prec['full'],
-        "cross_entropy": region_cross_ent['full'],
-        "fwk_sub_accuracy": region_sub_acc['fwk'],
-        "fwk_r_precision": region_r_prec['fwk'],
-        "fwk_cross_entropy": region_cross_ent['fwk'],
-        "cdr_sub_accuracy": region_sub_acc['cdr'],
-        "cdr_r_precision": region_r_prec['cdr'],
-        "cdr_cross_entropy": region_cross_ent['cdr'],
-        "avg_k_subs": np.mean(region_k_subs['full']),
-        "avg_aa_sub_freq": np.mean(region_aa_sub_freq['full']),
-        "aa_sub_freq_range": (np.min(region_aa_sub_freq['full']), np.max(region_aa_sub_freq['full'])),
-        "fwk_avg_k_subs": np.mean(region_k_subs['fwk']),
-        "fwk_avg_aa_sub_freq": np.mean(region_aa_sub_freq['fwk']),
-        "fwk_aa_sub_freq_range": (np.min(region_aa_sub_freq['fwk']), np.max(region_aa_sub_freq['fwk'])),
-        "cdr_avg_k_subs": np.mean(region_k_subs['cdr']),
-        "cdr_avg_aa_sub_freq": np.mean(region_aa_sub_freq['cdr']),
-        "cdr_aa_sub_freq_range": (np.min(region_aa_sub_freq['cdr']), np.max(region_aa_sub_freq['cdr'])),
+        "sub_accuracy": region_sub_acc["full"],
+        "r_precision": region_r_prec["full"],
+        "cross_entropy": region_cross_ent["full"],
+        "fwk_sub_accuracy": region_sub_acc["fwk"],
+        "fwk_r_precision": region_r_prec["fwk"],
+        "fwk_cross_entropy": region_cross_ent["fwk"],
+        "cdr_sub_accuracy": region_sub_acc["cdr"],
+        "cdr_r_precision": region_r_prec["cdr"],
+        "cdr_cross_entropy": region_cross_ent["cdr"],
+        "avg_k_subs": np.mean(region_k_subs["full"]),
+        "avg_aa_sub_freq": np.mean(region_aa_sub_freq["full"]),
+        "aa_sub_freq_range": (
+            np.min(region_aa_sub_freq["full"]),
+            np.max(region_aa_sub_freq["full"]),
+        ),
+        "fwk_avg_k_subs": np.mean(region_k_subs["fwk"]),
+        "fwk_avg_aa_sub_freq": np.mean(region_aa_sub_freq["fwk"]),
+        "fwk_aa_sub_freq_range": (
+            np.min(region_aa_sub_freq["fwk"]),
+            np.max(region_aa_sub_freq["fwk"]),
+        ),
+        "cdr_avg_k_subs": np.mean(region_k_subs["cdr"]),
+        "cdr_avg_aa_sub_freq": np.mean(region_aa_sub_freq["cdr"]),
+        "cdr_aa_sub_freq_range": (
+            np.min(region_aa_sub_freq["cdr"]),
+            np.max(region_aa_sub_freq["cdr"]),
+        ),
     }
 
     return model_performance
@@ -416,7 +453,7 @@ def calculate_aa_substitution_frequencies_by_region(parent_aa, child_aa):
 
     Returns:
     aa_sub_frequency (float): Fraction of sites that differ between the parent and child FWK or CDR sequences.
-    
+
     """
     parent = parent_aa.replace("-", "")
     child = child_aa.replace("-", "")
