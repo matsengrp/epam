@@ -4,8 +4,9 @@ import h5py
 import pandas as pd
 import numpy as np
 import bisect
-from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df, SMALL_PROB
+from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
 from scripts.annotate_pcps import get_cdr_fwk_seqs
+from netam.common import SMALL_PROB
 from netam.sequences import (
     AA_STR_SORTED,
     translate_sequences,
@@ -63,169 +64,118 @@ def evaluate_dataset(aaprob_path):
         pcp_df["child_fwk_seq"],
         pcp_df["child_cdr_seq"],
     ) = zip(*pcp_df.apply(get_cdr_fwk_seqs, axis=1))
-    parent_aa_seqs = tuple(pcp_df["parent_aa"])
-    child_aa_seqs = tuple(pcp_df["child_aa"])
-    parent_fwk_seqs = tuple(pcp_df["parent_fwk_seq"])
-    parent_cdr_seqs = tuple(pcp_df["parent_cdr_seq"])
-    child_fwk_seqs = tuple(pcp_df["child_fwk_seq"])
-    child_cdr_seqs = tuple(pcp_df["child_cdr_seq"])
 
-    pcp_sub_locations = [
-        locate_child_substitutions(parent, child)
-        for parent, child in zip(parent_aa_seqs, child_aa_seqs)
-    ]
-    fwk_sub_locations = [
-        locate_child_substitutions(parent, child)
-        for parent, child in zip(parent_fwk_seqs, child_fwk_seqs)
-    ]
-    cdr_sub_locations = [
-        locate_child_substitutions(parent, child)
-        for parent, child in zip(parent_cdr_seqs, child_cdr_seqs)
-    ]
+    region_parent_aa_seqs = {}
+    region_child_aa_seqs = {}
+    region_sub_locations = {}
+    region_sub_aa_ids = {}
+    region_k_subs = {}
+    
+    for region in ['full', 'fwk', 'cdr']:
+        if region == 'full':
+            region_parent_aa_seqs[region] = pcp_df["parent_aa"].to_numpy()
+            region_child_aa_seqs[region] = pcp_df["child_aa"].to_numpy()
+        else:
+            region_parent_aa_seqs[region] = pcp_df[f"parent_{region}_seq"].to_numpy()
+            region_child_aa_seqs[region] = pcp_df[f"child_{region}_seq"].to_numpy()
+        
+        region_sub_locations[region] = [
+            locate_child_substitutions(parent, child)
+            for parent, child in zip(region_parent_aa_seqs[region], region_child_aa_seqs[region])
+        ]
 
-    pcp_sub_aa_ids = [
-        identify_child_substitutions(parent, child)
-        for parent, child in zip(parent_aa_seqs, child_aa_seqs)
-    ]
-    fwk_sub_aa_ids = [
-        identify_child_substitutions(parent, child)
-        for parent, child in zip(parent_fwk_seqs, child_fwk_seqs)
-    ]
-    cdr_sub_aa_ids = [
-        identify_child_substitutions(parent, child)
-        for parent, child in zip(parent_cdr_seqs, child_cdr_seqs)
-    ]
+        region_sub_aa_ids[region] = [
+            identify_child_substitutions(parent, child)
+            for parent, child in zip(region_parent_aa_seqs[region], region_child_aa_seqs[region])
+        ]
 
-    # k represents the number of substitutions observed in each PCP, top k substitutions will be evaluated for r-precision
-    k_subs = [len(pcp_sub_location) for pcp_sub_location in pcp_sub_locations]
-    k_fwk_subs = [len(fwk_sub_location) for fwk_sub_location in fwk_sub_locations]
-    k_cdr_subs = [len(cdr_sub_location) for cdr_sub_location in cdr_sub_locations]
-
-    site_sub_probs = []
-    fwk_site_sub_probs = []
-    cdr_site_sub_probs = []
-    model_sub_aa_ids = []
-    fwk_model_sub_aa_ids = []
-    cdr_model_sub_aa_ids = []
+        # k represents the number of substitutions observed in each PCP, top k substitutions will be evaluated for r-precision
+        region_k_subs[region] = [len(sub_location) for sub_location in region_sub_locations[region]]
+ 
+    region_site_sub_probs = {}
+    region_model_sub_aa_ids = {}
 
     with h5py.File(aaprob_path, "r") as matfile:
         model_name = matfile.attrs["model_name"]
-        for index in range(len(parent_aa_seqs)):
-            pcp_index = pcp_df.index[index]
-            grp = matfile[
-                "matrix" + str(pcp_index)
-            ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
-            matrix = grp["data"]
+        for region in ['full', 'fwk', 'cdr']:
+            region_site_sub_probs[region] = []
+            region_model_sub_aa_ids[region] = []
 
-            site_sub_probs.append(
-                calculate_site_substitution_probabilities(matrix, parent_aa_seqs[index])
-            )
-            fwk_site_sub_probs.append(
-                calculate_site_substitution_probabilities(
-                    matrix, parent_fwk_seqs[index]
+            for index in range(len(region_parent_aa_seqs[region])):
+                pcp_index = pcp_df.index[index]
+                grp = matfile[
+                    "matrix" + str(pcp_index)
+                ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
+                matrix = grp["data"]
+
+                region_site_sub_probs[region].append(
+                    calculate_site_substitution_probabilities(matrix, region_parent_aa_seqs[region][index])
                 )
-            )
-            cdr_site_sub_probs.append(
-                calculate_site_substitution_probabilities(
-                    matrix, parent_cdr_seqs[index]
+
+                def find_highest_ranked_substitutions(matrix, parent, child):
+                    return [
+                        highest_ranked_substitution(matrix[j, :], parent, j)
+                        for j in range(len(parent))
+                        if parent[j] != child[j]
+                    ]
+
+                region_model_sub_aa_ids[region].append(
+                    find_highest_ranked_substitutions(
+                        matrix, region_parent_aa_seqs[region][index], region_child_aa_seqs[region][index]
+                    )
                 )
-            )
 
-            pred_aa_sub = [
-                highest_ranked_substitution(matrix[j, :], parent_aa_seqs[index], j)
-                for j in range(len(parent_aa_seqs[index]))
-                if parent_aa_seqs[index][j] != child_aa_seqs[index][j]
+    region_top_k_sub_locations = {}
+    region_sub_acc = {}
+    region_r_prec = {}
+    region_cross_ent = {}
+    region_aa_sub_freq = {}
+
+    for region in ['full', 'fwk', 'cdr']:
+        region_top_k_sub_locations[region] = [
+            locate_top_k_substitutions(region_site_sub_prob, k_sub)
+            for region_site_sub_prob, k_sub in zip(region_site_sub_probs[region], region_k_subs[region])
+        ]
+
+        region_sub_acc[region] = calculate_sub_accuracy(region_sub_aa_ids[region], region_model_sub_aa_ids[region], region_k_subs[region])
+        region_r_prec[region] = calculate_r_precision(region_sub_locations[region], region_top_k_sub_locations[region], region_k_subs[region])
+        region_cross_ent[region] = calculate_cross_entropy_loss(region_sub_locations[region], region_site_sub_probs[region])
+
+        if region == 'full':
+            region_aa_sub_freq[region] = [
+                generic_mutation_frequency("X", parent, child)
+                for parent, child in zip(region_parent_aa_seqs[region], region_child_aa_seqs[region])
             ]
-            pred_fwk_sub = [
-                highest_ranked_substitution(matrix[j, :], parent_fwk_seqs[index], j)
-                for j in range(len(parent_fwk_seqs[index]))
-                if parent_fwk_seqs[index][j] != child_fwk_seqs[index][j]
+        else:
+            parent_only_aa_seqs = [seq.replace("-", "") for seq in region_parent_aa_seqs[region]]
+            child_only_aa_seqs = [seq.replace("-", "") for seq in region_child_aa_seqs[region]]
+            region_aa_sub_freq[region] = [
+                calculate_aa_substitution_frequencies_by_region(parent, child)
+                for parent, child in zip(parent_only_aa_seqs, child_only_aa_seqs)
             ]
-            pred_cdr_sub = [
-                highest_ranked_substitution(matrix[j, :], parent_cdr_seqs[index], j)
-                for j in range(len(parent_cdr_seqs[index]))
-                if parent_cdr_seqs[index][j] != child_cdr_seqs[index][j]
-            ]
-
-            model_sub_aa_ids.append(pred_aa_sub)
-            fwk_model_sub_aa_ids.append(pred_fwk_sub)
-            cdr_model_sub_aa_ids.append(pred_cdr_sub)
-
-    top_k_sub_locations = [
-        locate_top_k_substitutions(site_sub_prob, k_sub)
-        for site_sub_prob, k_sub in zip(site_sub_probs, k_subs)
-    ]
-    top_k_fwk_sub_locations = [
-        locate_top_k_substitutions(fwk_site_sub_prob, k_sub)
-        for fwk_site_sub_prob, k_sub in zip(fwk_site_sub_probs, k_fwk_subs)
-    ]
-    top_k_cdr_sub_locations = [
-        locate_top_k_substitutions(cdr_site_sub_prob, k_sub)
-        for cdr_site_sub_prob, k_sub in zip(cdr_site_sub_probs, k_cdr_subs)
-    ]
-
-    sub_acc = calculate_sub_accuracy(pcp_sub_aa_ids, model_sub_aa_ids, k_subs)
-    fwk_sub_acc = calculate_sub_accuracy(
-        fwk_sub_aa_ids, fwk_model_sub_aa_ids, k_fwk_subs
-    )
-    cdr_sub_acc = calculate_sub_accuracy(
-        cdr_sub_aa_ids, cdr_model_sub_aa_ids, k_cdr_subs
-    )
-    r_prec = calculate_r_precision(pcp_sub_locations, top_k_sub_locations, k_subs)
-    fwk_r_prec = calculate_r_precision(
-        fwk_sub_locations, top_k_fwk_sub_locations, k_fwk_subs
-    )
-    cdr_r_prec = calculate_r_precision(
-        cdr_sub_locations, top_k_cdr_sub_locations, k_cdr_subs
-    )
-    cross_ent = calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs)
-    fwk_cross_ent = calculate_cross_entropy_loss(fwk_sub_locations, fwk_site_sub_probs)
-    cdr_cross_ent = calculate_cross_entropy_loss(cdr_sub_locations, cdr_site_sub_probs)
-
-    parent_fwk_only_aa_seqs = [fwk_seq.replace("-", "") for fwk_seq in parent_fwk_seqs]
-    parent_cdr_only_aa_seqs = [cdr_seq.replace("-", "") for cdr_seq in parent_cdr_seqs]
-    child_fwk_only_aa_seqs = [fwk_seq.replace("-", "") for fwk_seq in child_fwk_seqs]
-    child_cdr_only_aa_seqs = [cdr_seq.replace("-", "") for cdr_seq in child_cdr_seqs]
-
-    full_aa_sub_freq = [
-        generic_mutation_frequency("X", parent_aa, child_aa)
-        for parent_aa, child_aa in zip(parent_aa_seqs, child_aa_seqs)
-    ]
-    fwk_aa_sub_freq = [
-        calculate_aa_substitution_frequencies_by_region(parent_fwk, child_fwk)
-        for parent_fwk, child_fwk in zip(
-            parent_fwk_only_aa_seqs, child_fwk_only_aa_seqs
-        )
-    ]
-    cdr_aa_sub_freq = [
-        calculate_aa_substitution_frequencies_by_region(parent_cdr, child_cdr)
-        for parent_cdr, child_cdr in zip(
-            parent_cdr_only_aa_seqs, child_cdr_only_aa_seqs
-        )
-    ]
 
     model_performance = {
         "data_set": pcp_path,
         "pcp_count": len(pcp_df),
         "model": model_name,
-        "sub_accuracy": sub_acc,
-        "r_precision": r_prec,
-        "cross_entropy": cross_ent,
-        "fwk_sub_accuracy": fwk_sub_acc,
-        "fwk_r_precision": fwk_r_prec,
-        "fwk_cross_entropy": fwk_cross_ent,
-        "cdr_sub_accuracy": cdr_sub_acc,
-        "cdr_r_precision": cdr_r_prec,
-        "cdr_cross_entropy": cdr_cross_ent,
-        "avg_k_subs": np.mean(k_subs),
-        "avg_aa_sub_freq": np.mean(full_aa_sub_freq),
-        "aa_sub_freq_range": (np.min(full_aa_sub_freq), np.max(full_aa_sub_freq)),
-        "fwk_avg_k_subs": np.mean(k_fwk_subs),
-        "fwk_avg_aa_sub_freq": np.mean(fwk_aa_sub_freq),
-        "fwk_aa_sub_freq_range": (np.min(fwk_aa_sub_freq), np.max(fwk_aa_sub_freq)),
-        "cdr_avg_k_subs": np.mean(k_cdr_subs),
-        "cdr_avg_aa_sub_freq": np.mean(cdr_aa_sub_freq),
-        "cdr_aa_sub_freq_range": (np.min(cdr_aa_sub_freq), np.max(cdr_aa_sub_freq)),
+        "sub_accuracy": region_sub_acc['full'],
+        "r_precision": region_r_prec['full'],
+        "cross_entropy": region_cross_ent['full'],
+        "fwk_sub_accuracy": region_sub_acc['fwk'],
+        "fwk_r_precision": region_r_prec['fwk'],
+        "fwk_cross_entropy": region_cross_ent['fwk'],
+        "cdr_sub_accuracy": region_sub_acc['cdr'],
+        "cdr_r_precision": region_r_prec['cdr'],
+        "cdr_cross_entropy": region_cross_ent['cdr'],
+        "avg_k_subs": np.mean(region_k_subs['full']),
+        "avg_aa_sub_freq": np.mean(region_aa_sub_freq['full']),
+        "aa_sub_freq_range": (np.min(region_aa_sub_freq['full']), np.max(region_aa_sub_freq['full'])),
+        "fwk_avg_k_subs": np.mean(region_k_subs['fwk']),
+        "fwk_avg_aa_sub_freq": np.mean(region_aa_sub_freq['fwk']),
+        "fwk_aa_sub_freq_range": (np.min(region_aa_sub_freq['fwk']), np.max(region_aa_sub_freq['fwk'])),
+        "cdr_avg_k_subs": np.mean(region_k_subs['cdr']),
+        "cdr_avg_aa_sub_freq": np.mean(region_aa_sub_freq['cdr']),
+        "cdr_aa_sub_freq_range": (np.min(region_aa_sub_freq['cdr']), np.max(region_aa_sub_freq['cdr'])),
     }
 
     return model_performance

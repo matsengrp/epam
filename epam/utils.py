@@ -7,8 +7,6 @@ import pandas as pd
 import numpy as np
 from netam.sequences import nt_mutation_frequency, translate_sequence
 
-SMALL_PROB = 1e-8
-
 
 def generate_file_checksum(filename, buf_size=65536):
     """
