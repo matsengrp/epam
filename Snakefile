@@ -185,7 +185,6 @@ rule combine_performance_files:
         input_files = ",".join(input)
         input_timing_files = ",".join(
             f"output/{pcp_input}/{set_model}/batch{part}/timing.tsv"
-            for pcp_input in pcp_input
             for set_model in model_combos
             for part in batch_number
         )
