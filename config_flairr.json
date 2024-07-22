@@ -1,0 +1,6 @@
+{
+    "dataset": "FLAIRR",
+    "number_of_batches": 2,
+    "pcp_per_batch": 1557,
+    "pcp_input": "ford-flairr-seq-prod_pcp_2024-04-01_MASKED_NI_noN_no-naive"
+  }

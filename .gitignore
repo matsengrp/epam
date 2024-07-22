@@ -27,6 +27,7 @@ share/python-wheels/
 MANIFEST
 data/shmple_weights/
 data/gcreplay/
+data/S5F/
 
 # PyInstaller
 #  Usually these files are written by a python script from a template

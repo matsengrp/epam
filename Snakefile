@@ -1,34 +1,22 @@
 import epam.models
 import subprocess
 
-dataset = config.get("dataset")
-
-# assign values based on dataset provided with `--config dataset=<dataset>`
-if dataset == "Wyatt":
-    number_of_batches = 12
-    pcp_per_batch = 5025
-elif dataset == "Tang":
-    number_of_batches = 100
-    pcp_per_batch = 5178
-elif dataset == "FLAIRR":
-    number_of_batches = 2
-    pcp_per_batch = 1557
-elif dataset == "RACE":
-    number_of_batches = 5
-    pcp_per_batch = 4305
-else:
-    raise ValueError(f"Unknown or missing dataset: {dataset}")
+# Read parameters from the config file
+dataset = config["dataset"]
+number_of_batches = config["number_of_batches"]
+pcp_per_batch = config["pcp_per_batch"]
+pcp_input = config["pcp_input"]
 
 model_name_to_spec = {
     model_name: [model_class, str({**model_params, "model_name": model_name})]
     for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS 
 }
 
-set1_models = ("AbLang1", "AbLang2_mask", "ESM1v_mask")
+set1_models = ("AbLang1", "AbLang2_mask", "ESM1v_mask", "S5F", "S5FESM_mask")
 set2_models = ("SHMple_default", "SHMple_productive")
 set3_models = ("SHMpleESM_mask")
 
-model_combos = ["set1/AbLang1", "set1/AbLang2_mask", "set1/ESM1v_mask", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMpleESM_mask"]
+model_combos = ["set1/AbLang1", "set1/AbLang2_mask", "set1/ESM1v_mask", "set1/S5F", "set1/S5FESM_mask", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMpleESM_mask"]
 
 set1_model_name_to_spec = {
     key: model_name_to_spec[key] for key in set1_models
@@ -42,7 +30,6 @@ set3_model_name_to_spec = {
     set3_models: model_name_to_spec[set3_models]
 }
 
-pcp_inputs = glob_wildcards("pcp_inputs/{name}.csv").name
 batch_number = range(1, number_of_batches+1)
 
 def get_model_class(model_name, set_model_name_to_spec):
@@ -186,7 +173,7 @@ rule combine_performance_files:
     input:
         expand(
             "output/{pcp_input}/{set_model}/performance.csv",
-            pcp_input=pcp_inputs,
+            pcp_input=pcp_input,
             set_model=model_combos,
         ),
     output:
@@ -196,7 +183,6 @@ rule combine_performance_files:
         input_files = ",".join(input)
         input_timing_files = ",".join(
             f"output/{pcp_input}/{set_model}/batch{part}/timing.tsv"
-            for pcp_input in pcp_inputs
             for set_model in model_combos
             for part in batch_number
         )

@@ -70,6 +70,25 @@ FULLY_SPECIFIED_MODELS = [
             "sf_rescale": "sigmoid",
         },
     ),
+    (
+        "S5F",
+        "S5F",
+        {
+            "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
+            "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
+            "init_branch_length": 1,
+        },
+    ),
+    (
+        "S5FESM_mask",
+        "S5FESM",
+        {
+            "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
+            "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
+            "sf_rescale": "sigmoid",
+            "init_branch_length": 1,
+        },
+    )
 ]
 
 
@@ -931,6 +950,7 @@ class S5F(MutModel):
         muts_file (str): file of mutabilities per 5-mer motif.
         subs_file (str): file of substitution probabilities per 5-mer motif.
         """
+        super().__init__(*args, **kwargs)
         self.motif_mutability = {}
         df = pd.read_csv(muts_file)
         for i, row in df.iterrows():
@@ -1058,6 +1078,15 @@ class S5FESM(MutSelModel):
             *args,
             **kwargs,
         )
+
+    def preload_esm_data(self, hdf5_path):
+        """
+        Preload ESM1v data from HDF5 file.
+
+        Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
+        """
+        self.selection_model.preload_esm_data(hdf5_path)
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
