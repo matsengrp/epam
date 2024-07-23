@@ -467,20 +467,26 @@ def calculate_aa_substitution_frequencies_by_region(parent_aa, child_aa):
     return aa_sub_frequency
 
 
-def get_site_mutabilities_df(aaprob_path):
+def get_site_mutabilities_df(aaprob_path, anarci_path=None, collapse=True):
     """
     Computes the amino acid site mutability probabilities
     for every site of every parent in a dataset.
     Returns a dataframe that annotates for each site
     the index of the PCP it belongs to,
     the site position in the amino acid sequence,
-    and whether a mutation is observed in the child sequence.
+    whether a mutation is observed in the child sequence,
+    and whether the site is in a CDR.
 
     Parameters:
     aaprob_path (str): path to aaprob matrix for parent-child pairs.
+    anarci_path (str): path to ANARCI output for sequence numbering.
+                       If None, the (0-based) index along the sequence string is used.
+    collapse (bool): whether sites with lettered suffix should be consolidated into one site
+                     (e.g. 111A, 111B, etc. will counted as site 111).
+                     Ignored if anarci_path is None.
 
     Returns:
-    output_df (pd.DataFrame): dataframe with columns pcp_index, site, prob, mutation.
+    output_df (pd.DataFrame): dataframe with columns pcp_index, site, prob, mutation, is_cdr.
     """
     pcp_path = pcp_path_of_aaprob_path(aaprob_path)
     pcp_df = load_and_filter_pcp_df(pcp_path)
@@ -488,10 +494,13 @@ def get_site_mutabilities_df(aaprob_path):
     aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
     parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
 
+    numbering_dict = get_numbering_dict(anarci_path, pcp_df, collapse)
+
     pcp_index_col = []
     sites_col = []
     site_sub_probs = []
     site_sub_flags = []
+    is_cdr_col = []
     with h5py.File(aaprob_path, "r") as matfile:
         for index in range(len(parent_aa_seqs)):
             pcp_index = pcp_df.index[index]
@@ -503,18 +512,55 @@ def get_site_mutabilities_df(aaprob_path):
             parent = parent_aa_seqs[index]
             child = child_aa_seqs[index]
 
+            if anarci_path is None:
+                sites_col.append(np.arange(len(parent)))
+            else:
+                nbkey = tuple(pcp_df.loc[pcp_index][["sample_id", "family"]])
+                if nbkey in numbering_dict:
+                    sites_col.append(numbering_dict[nbkey])
+                else:
+                    print(f"No numbering for {nbkey}")
+                    continue
+
             pcp_index_col.append([pcp_index] * len(parent))
-            sites_col.append(np.arange(len(parent)))
             site_sub_probs.append(
                 calculate_site_substitution_probabilities(matrix, parent)
             )
             site_sub_flags.append([p != c for p, c in zip(parent, child)])
 
-    output_df = pd.DataFrame(columns=["pcp_index", "site", "prob", "mutation"])
+            cdr1 = (
+                pcp_df.loc[pcp_index]["cdr1_codon_start"] // 3,
+                pcp_df.loc[pcp_index]["cdr1_codon_end"] // 3,
+            )
+            cdr2 = (
+                pcp_df.loc[pcp_index]["cdr2_codon_start"] // 3,
+                pcp_df.loc[pcp_index]["cdr2_codon_end"] // 3,
+            )
+            cdr3 = (
+                pcp_df.loc[pcp_index]["cdr3_codon_start"] // 3,
+                pcp_df.loc[pcp_index]["cdr3_codon_end"] // 3,
+            )
+            is_cdr_col.append(
+                [
+                    (
+                        True
+                        if (i >= cdr1[0] and i <= cdr1[1])
+                        or (i >= cdr2[0] and i <= cdr2[1])
+                        or (i >= cdr3[0] and i <= cdr3[1])
+                        else False
+                    )
+                    for i in range(len(parent))
+                ]
+            )
+
+    output_df = pd.DataFrame(
+        columns=["pcp_index", "site", "prob", "mutation", "is_cdr"]
+    )
     output_df["pcp_index"] = np.concatenate(pcp_index_col)
     output_df["site"] = np.concatenate(sites_col)
     output_df["prob"] = np.concatenate(site_sub_probs)
     output_df["mutation"] = np.concatenate(site_sub_flags)
+    output_df["is_cdr"] = np.concatenate(is_cdr_col)
 
     return output_df
 
@@ -542,7 +588,7 @@ def plot_observed_vs_expected(
     of the sites that fall in that mutability bin.
     The input dataframe requires two columns: 'prob'
     (site mutability -- may be at level of nucleotide, or codon, or amino acid, etc.)
-    and 'mutation' (1 or 0 if the site has an observed mutation or not).
+    and 'mutation' (True/False whether the site has an observed mutation or not).
     Each dataframe row corresponds to a site in a specific sequence.
     Thus, the total number of rows is the total number of sites from
     all sequences in the dataset.
@@ -739,3 +785,414 @@ def plot_observed_vs_expected(
         "residual": residual,
         "counts_twinx_ax": counts_twinx_ax,
     }
+
+
+def plot_sites_observed_vs_expected(
+    df,
+    ax,
+    fwk_color="#0072B2",
+    cdr_color="#E69F00",
+    logy=False,
+):
+    """
+    Draws a figure of observed amino acid substitutions and the top-k predictions across PCPs in a dataset.
+    The input dataframe requires three columns:
+    'site' (site position -- may be at the level of nucleotide, or codon, or amino acid, etc.)
+    'prob' (site mutability)
+    'mutation' (True/False whether the site has an observed mutation or not)
+    'is_cdr' (True/False whether the site is in a CDR)
+    Each dataframe row corresponds to a site in a specific sequence.
+    Only sites that are True in either 'obs' or 'pred' columns are involved in the plotting and calculation.
+    Hence, sites in a PCP that neither have an observed substitution nor are predicted in the top-k
+    can be excluded from the dataframe.
+
+    Parameters:
+    df (pd.DataFrame): dataframe of observed and predicted sites of substitution.
+    ax (fig.ax): figure axis for plotting site counts. If None, plot is not drawn.
+    fwk_color (str): color for the FWK sites.
+    cdr_color (str): color for the CDR sites.
+    logy (bool): whether to show y-axis in log-scale.
+
+    Returns:
+    A dictionary with results labeled:
+    overlap (float): area of overlap between observed and expected, divided by the average of the two areas.
+    residual (float): square root of the sum of squared bin-by-bin differences between observed and expected, divided by total expected.
+
+    """
+    if df.dtypes["site"] == "object":
+        nblist = df["site"].drop_duplicates().to_list()
+        xvals = sorted(
+            nblist,
+            key=lambda x: (
+                int(x) if x.isnumeric() else int(x[:-1]),
+                "" if x.isnumeric() else x[-1],
+            ),
+        )
+        ixvals = np.arange(len(xvals))
+    else:
+        xvals = np.arange(np.min(df["site"]), np.max(df["site"]) + 1)
+        ixvals = xvals
+
+    expected = []
+    exp_err = []
+    observed = []
+    fwk_expected = []
+    for site in xvals:
+        site_df = df[df["site"] == site]
+        site_probs = site_df["prob"].to_numpy()
+        expected.append(np.sum(site_probs))
+        exp_err.append(np.sqrt(np.sum(site_probs * (1 - site_probs))))
+        observed.append(df[(df["mutation"] == 1) & (df["site"] == site)].shape[0])
+        site_fwk_probs = site_df[site_df["is_cdr"] == False]["prob"].to_numpy()
+        fwk_expected.append(np.sum(site_fwk_probs))
+
+    expected = np.array(expected)
+    exp_err = np.array(exp_err)
+    observed = np.array(observed)
+
+    # compute overlap metric
+    intersect = np.sum(np.minimum(observed, expected))
+    denom = 0.5 * (np.sum(observed) + np.sum(expected))
+    overlap = intersect / denom
+
+    # compute residual metric
+    diff = observed - expected
+    residual = np.sqrt(np.sum(diff * diff)) / np.sum(expected)
+
+    if ax is not None:
+        ax.bar(
+            xvals,
+            expected,
+            width=1,
+            facecolor="white",
+            edgecolor=cdr_color,
+            label="Expected (CDR)",
+        )
+
+        ax.bar(
+            xvals,
+            fwk_expected,
+            width=1,
+            facecolor="white",
+            edgecolor=fwk_color,
+            label="Expected (FWK)",
+        )
+
+        ax.plot(
+            xvals,
+            observed,
+            marker="o",
+            markersize=4,
+            linewidth=0,
+            color="#000000",
+            label="Observed",
+        )
+
+        if df.dtypes["site"] == "object":
+            ax.tick_params(axis="x", labelsize=7, labelrotation=90)
+        else:
+            ax.tick_params(axis="x", labelsize=16)
+        ax.set_xlabel("amino acid sequence position", fontsize=20, labelpad=10)
+        ax.tick_params(axis="y", labelsize=16)
+        ax.set_ylabel("number of substitutions", fontsize=20, labelpad=10)
+
+        if logy:
+            ax.set_yscale("log")
+
+        ax.legend(fontsize=15)
+
+        boxes0 = [
+            Rectangle(
+                (ixvals[i] - 0.5, expected[i] - exp_err[i]),
+                1,
+                2 * exp_err[i],
+            )
+            for i in range(len(expected))
+        ]
+        pc0 = PatchCollection(
+            boxes0, facecolor="none", edgecolor="grey", linewidth=0, hatch="//////"
+        )
+        ax.add_collection(pc0)
+
+    return {
+        "overlap": overlap,
+        "residual": residual,
+    }
+
+
+def get_site_substitutions_df(aaprob_path, anarci_path=None, collapse=True):
+    """
+    Determines the sites of observed and predicted substitutions of every PCP in a dataset.
+    Predicted substitutions are the sites in the top-k of mutability,
+    where k is the number of observed substition in the PCP.
+    Returns a dataframe that annotates for each site of observed and/or predicted substitution:
+    the index of the PCP it belongs to,
+    the site position in the amino acid sequence,
+    whether the site has an observed substutition,
+    and whether the site is predicted to have a substitution.
+
+    Parameters:
+    aaprob_path (str): path to aaprob matrix for parent-child pairs.
+    anarci_path (str): path to ANARCI output for sequence numbering.
+                       If None, the (0-based) index along the sequence string is used.
+    collapse (bool): whether sites with lettered suffix should be consolidated into one site
+                     (e.g. 111A, 111B, etc. will counted as site 111).
+                     Ignored if anarci_path is None.
+
+    Returns:
+    output_df (pd.DataFrame): dataframe with columns pcp_index, site, obs, pred.
+    """
+    pcp_path = pcp_path_of_aaprob_path(aaprob_path)
+    pcp_df = load_and_filter_pcp_df(pcp_path)
+    nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
+    aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
+    parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
+
+    pcp_sub_locations = [
+        locate_child_substitutions(parent, child)
+        for parent, child in zip(parent_aa_seqs, child_aa_seqs)
+    ]
+
+    # k represents the number of substitutions observed in each PCP, top k substitutions will be evaluated for r-precision
+    k_subs = [len(pcp_sub_location) for pcp_sub_location in pcp_sub_locations]
+
+    pcp_indices = []
+    site_sub_probs = []
+    pcp_sample_family_dict = {}
+    with h5py.File(aaprob_path, "r") as matfile:
+        for index in range(len(parent_aa_seqs)):
+            pcp_index = pcp_df.index[index]
+            grp = matfile[
+                "matrix" + str(pcp_index)
+            ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
+            matrix = grp["data"]
+
+            pcp_indices.append(pcp_index)
+
+            site_sub_probs.append(
+                calculate_site_substitution_probabilities(matrix, parent_aa_seqs[index])
+            )
+
+            pcp_sample_family_dict[pcp_index] = tuple(
+                pcp_df.loc[pcp_index][["sample_id", "family"]]
+            )
+
+    top_k_sub_locations = [
+        locate_top_k_substitutions(site_sub_prob, k_sub)
+        for site_sub_prob, k_sub in zip(site_sub_probs, k_subs)
+    ]
+
+    numbering_dict = get_numbering_dict(anarci_path, pcp_df, collapse)
+
+    pcp_index_col = []
+    site_col = []
+    obs_col = []
+    pred_col = []
+    for i in range(len(pcp_indices)):
+        obs_pred_sites = np.union1d(top_k_sub_locations[i], pcp_sub_locations[i])
+
+        nbkey = pcp_sample_family_dict[pcp_indices[i]]
+        if (anarci_path is not None) and (nbkey not in numbering_dict):
+            print(f"No numbering for {nbkey}")
+            continue
+
+        for site in obs_pred_sites:
+            pcp_index_col.append(pcp_indices[i])
+            if anarci_path is None:
+                site_col.append(site)
+            else:
+                site_col.append(numbering_dict[nbkey][site])
+            obs_col.append(site in pcp_sub_locations[i])
+            pred_col.append(site in top_k_sub_locations[i])
+
+    output_df = pd.DataFrame(columns=["pcp_index", "site", "obs", "pred"])
+    output_df["pcp_index"] = pcp_index_col
+    output_df["site"] = site_col
+    output_df["obs"] = obs_col
+    output_df["pred"] = pred_col
+
+    return output_df
+
+
+def plot_sites_observed_vs_top_k_predictions(
+    df,
+    ax,
+    correct_color="#009E73",
+    correct_label="Correct",
+    incorrect_color="#D95F02",
+    incorrect_label="Incorrect",
+    logy=False,
+):
+    """
+    Draws a figure of observed amino acid substitutions and the top-k predictions across PCPs in a dataset.
+    The input dataframe requires three columns:
+    'site' (site position -- may be at the level of nucleotide, or codon, or amino acid, etc.)
+    'obs' (True/False whether the site has an observed substitution)
+    'pred' (True/False whether the site is in the top-k predicted substitutions)
+    Each dataframe row corresponds to a site in a specific sequence.
+    Only sites that are True in either 'obs' or 'pred' columns are involved in the plotting and calculation.
+    Hence, sites in a PCP that neither have an observed substitution nor are predicted in the top-k
+    can be excluded from the dataframe.
+
+    Parameters:
+    df (pd.DataFrame): dataframe of observed and predicted sites of substitution.
+    ax (fig.ax): figure axis for plotting site counts. If None, plot is not drawn.
+    correct_color (str): color for the plot of correct predictions.
+    correct_label (str): legend label for the plot of correct predictions.
+    incorrect_color (str): color for the plot of incorrect predictions.
+    incorrect_label (str): legend label for the plot of incorrect predictions.
+    logy (bool): whether to show y-axis in log-scale.
+
+    Returns:
+    A dictionary with results labeled:
+    overlap (float): area of overlap between observed and expected, divided by the average of the two areas.
+    residual (float): square root of the sum of squared bin-by-bin differences between observed and expected, divided by total expected.
+    r-precision (fig.ax): R-precision of the dataset.
+
+    """
+    if df.dtypes["site"] == "object":
+        nblist = df["site"].drop_duplicates().to_list()
+        xvals = sorted(
+            nblist,
+            key=lambda x: (
+                int(x) if x.isnumeric() else int(x[:-1]),
+                "" if x.isnumeric() else x[-1],
+            ),
+        )
+    else:
+        xvals = np.arange(np.min(df["site"]), np.max(df["site"]) + 1)
+
+    predicted = []
+    observed = []
+    correct = []
+    for site in xvals:
+        site_df = df[df["site"] == site]
+        npred = site_df[site_df["pred"] == True].shape[0]
+        predicted.append(npred)
+        nobs = site_df[site_df["obs"] == True].shape[0]
+        observed.append(nobs)
+        ncorr = site_df[(site_df["pred"] == True) & (site_df["obs"] == True)].shape[0]
+        correct.append(ncorr)
+    predicted = np.array(predicted)
+    observed = np.array(observed)
+    correct = np.array(correct)
+
+    # compute overlap metric
+    intersect = np.sum(np.minimum(observed, predicted))
+    denom = 0.5 * (np.sum(observed) + np.sum(predicted))
+    overlap = intersect / denom
+
+    # compute residual metric
+    diff = observed - predicted
+    residual = np.sqrt(np.sum(diff * diff)) / np.sum(predicted)
+
+    # compute R-precision
+    tmpdf = (
+        df[df["obs"] == True][["pcp_index", "obs", "pred"]].groupby("pcp_index").sum()
+    )
+    pcp_rprec = tmpdf["pred"].to_numpy() / tmpdf["obs"].to_numpy()
+    rprec = sum(pcp_rprec) / len(pcp_rprec)
+
+    if ax is not None:
+        ax.bar(
+            xvals,
+            predicted,
+            width=1,
+            facecolor="white",
+            edgecolor=incorrect_color,
+            label=incorrect_label,
+        )
+
+        ax.bar(
+            xvals,
+            correct,
+            width=1,
+            color=correct_color,
+            edgecolor=correct_color,
+            label=correct_label,
+        )
+
+        ax.plot(
+            xvals,
+            observed,
+            marker="o",
+            markersize=4,
+            linewidth=0,
+            color="#000000",
+            label="Observed",
+        )
+
+        if df.dtypes["site"] == "object":
+            ax.tick_params(axis="x", labelsize=7, labelrotation=90)
+        else:
+            ax.tick_params(axis="x", labelsize=16)
+        ax.set_xlabel("amino acid sequence position", fontsize=20, labelpad=10)
+        ax.tick_params(axis="y", labelsize=16)
+        ax.set_ylabel("number of substitutions", fontsize=20, labelpad=10)
+
+        if logy:
+            ax.set_yscale("log")
+
+        ax.legend(fontsize=15)
+
+    return {
+        "overlap": overlap,
+        "residual": residual,
+        "r-precision": rprec,
+    }
+
+
+def get_numbering_dict(anarci_path, pcp_df=None, collapse=True):
+    """
+    Process the ANARCI output to make site numbering lists for each clonal family.
+
+    Parameters:
+    anarci_path (str): path to ANARCI output for sequence numbering.
+    pcp_df (pd.Dataframe): PCP file to filter for relevant clonal families and check ANARCI sequence lengths.
+    collapse (bool): whether sites with lettered suffix should be consolidated into one site
+                     (e.g. 111A, 111B, etc. will counted as site 111).
+                     Ignored if anarci_path is None.
+
+    Returns:
+    A dictionary with keys as 2-tuples of (sample_id, family), and with values as lists of numberings for each site in the clonal family.
+    If collapse is True, the numberings are lists of integers, otherwise the numberings are lists of strings.
+    """
+    numbering_dict = {}
+
+    if anarci_path is not None:
+        anarci_df = pd.read_csv(anarci_path)
+
+        # assumes numbering starts at column 13 in ANARCI output
+        numbering_cols = anarci_df.columns[13:]
+
+        for i, row in anarci_df.iterrows():
+            # assumes clonal family ID has format "{sample_id}|{family}|{seq_name}"
+            [sample_id, family, seq_name] = row["Id"].split("|")
+            seqlist = [row[col] for col in numbering_cols]
+            numbering = [nn for nn, aa in zip(numbering_cols, seqlist) if aa != "-"]
+
+            if pcp_df is not None:
+                # Check if clonal family is in PCP file, and that ANARCI preserved sequence length.
+                # If not, exclude clonal family from output.
+                test_df = pcp_df[
+                    (pcp_df["sample_id"] == sample_id)
+                    & (pcp_df["family"] == int(family))
+                ]
+                if test_df.shape[0] == 0:
+                    continue
+                else:
+                    test_seq = translate_sequence(test_df.head(1)["parent"].item())
+                    if len(test_seq) != len(numbering):
+                        continue
+
+            if collapse:
+                for j in range(len(numbering)):
+                    nn = numbering[j]
+                    if nn[-1] not in "0123456789":
+                        numbering[j] = int(nn[:-1])
+                    else:
+                        numbering[j] = int(nn)
+
+            numbering_dict[(sample_id, int(family))] = numbering
+
+    return numbering_dict
