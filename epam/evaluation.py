@@ -467,7 +467,12 @@ def calculate_aa_substitution_frequencies_by_region(parent_aa, child_aa):
     return aa_sub_frequency
 
 
-def get_site_mutabilities_df(aaprob_path, anarci_path=None, collapse=True):
+def get_site_mutabilities_df(
+    aaprob_path,
+    anarci_path=None,
+    collapse=True,
+    verbose=False,
+):
     """
     Computes the amino acid site mutability probabilities
     for every site of every parent in a dataset.
@@ -484,6 +489,8 @@ def get_site_mutabilities_df(aaprob_path, anarci_path=None, collapse=True):
     collapse (bool): whether sites with lettered suffix should be consolidated into one site
                      (e.g. 111A, 111B, etc. will counted as site 111).
                      Ignored if anarci_path is None.
+    verbose (bool): whether to print (sample ID, family ID) info when ANARCI output has sequence length mismatch.
+                    Ignored if anarci_path is None.
 
     Returns:
     output_df (pd.DataFrame): dataframe with columns pcp_index, site, prob, mutation, is_cdr.
@@ -494,7 +501,7 @@ def get_site_mutabilities_df(aaprob_path, anarci_path=None, collapse=True):
     aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
     parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
 
-    numbering_dict = get_numbering_dict(anarci_path, pcp_df, collapse)
+    numbering_dict = get_numbering_dict(anarci_path, pcp_df, collapse, verbose)
 
     pcp_index_col = []
     sites_col = []
@@ -519,7 +526,6 @@ def get_site_mutabilities_df(aaprob_path, anarci_path=None, collapse=True):
                 if nbkey in numbering_dict:
                     sites_col.append(numbering_dict[nbkey])
                 else:
-                    print(f"No numbering for {nbkey}")
                     continue
 
             pcp_index_col.append([pcp_index] * len(parent))
@@ -920,7 +926,12 @@ def plot_sites_observed_vs_expected(
     }
 
 
-def get_site_substitutions_df(aaprob_path, anarci_path=None, collapse=True):
+def get_site_substitutions_df(
+    aaprob_path,
+    anarci_path=None,
+    collapse=True,
+    verbose=False,
+):
     """
     Determines the sites of observed and predicted substitutions of every PCP in a dataset.
     Predicted substitutions are the sites in the top-k of mutability,
@@ -938,6 +949,8 @@ def get_site_substitutions_df(aaprob_path, anarci_path=None, collapse=True):
     collapse (bool): whether sites with lettered suffix should be consolidated into one site
                      (e.g. 111A, 111B, etc. will counted as site 111).
                      Ignored if anarci_path is None.
+    verbose (bool): whether to print (sample ID, family ID) info when ANARCI output has sequence length mismatch.
+                    Ignored if anarci_path is None.
 
     Returns:
     output_df (pd.DataFrame): dataframe with columns pcp_index, site, obs, pred.
@@ -982,7 +995,7 @@ def get_site_substitutions_df(aaprob_path, anarci_path=None, collapse=True):
         for site_sub_prob, k_sub in zip(site_sub_probs, k_subs)
     ]
 
-    numbering_dict = get_numbering_dict(anarci_path, pcp_df, collapse)
+    numbering_dict = get_numbering_dict(anarci_path, pcp_df, collapse, verbose)
 
     pcp_index_col = []
     site_col = []
@@ -993,7 +1006,6 @@ def get_site_substitutions_df(aaprob_path, anarci_path=None, collapse=True):
 
         nbkey = pcp_sample_family_dict[pcp_indices[i]]
         if (anarci_path is not None) and (nbkey not in numbering_dict):
-            print(f"No numbering for {nbkey}")
             continue
 
         for site in obs_pred_sites:
@@ -1142,7 +1154,7 @@ def plot_sites_observed_vs_top_k_predictions(
     }
 
 
-def get_numbering_dict(anarci_path, pcp_df=None, collapse=True):
+def get_numbering_dict(anarci_path, pcp_df=None, collapse=True, verbose=False):
     """
     Process the ANARCI output to make site numbering lists for each clonal family.
 
@@ -1152,6 +1164,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, collapse=True):
     collapse (bool): whether sites with lettered suffix should be consolidated into one site
                      (e.g. 111A, 111B, etc. will counted as site 111).
                      Ignored if anarci_path is None.
+    verbose (bool): whether to print (sample ID, family ID) info when ANARCI output has sequence length mismatch.
 
     Returns:
     A dictionary with keys as 2-tuples of (sample_id, family), and with values as lists of numberings for each site in the clonal family.
@@ -1183,6 +1196,8 @@ def get_numbering_dict(anarci_path, pcp_df=None, collapse=True):
                 else:
                     test_seq = translate_sequence(test_df.head(1)["parent"].item())
                     if len(test_seq) != len(numbering):
+                        if verbose == True:
+                            print("ANARCI seq length mismatch!", sample_id, family)
                         continue
 
             if collapse:
