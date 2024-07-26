@@ -487,51 +487,55 @@ def annotate_sites_df(
                               Note that if numbering_dict is provided and there are clonal families with missing
                               ANARCI numberings, the associated sites (rows) will be excluded.
     """
-    site_col = []
+    sites_col = []
     is_cdr_col = []
 
-    pcp_index_old = -1
-    isite = 0
-    for i, row in df.iterrows():
-        pcp_index = row["pcp_index"]
+    pcp_groups = df.groupby("pcp_index")
+    for pcp_index in df["pcp_index"].drop_duplicates():
+        pcp_row = pcp_df.loc[pcp_index]
 
-        # Encountered a new PCP, reset site index and update CDR boundaries
-        if pcp_index_old != pcp_index:
-            pcp_index_old = pcp_index
-            isite = 0
-            pcp_row = pcp_df.loc[pcp_index]
-            cdr1 = (
-                pcp_row["cdr1_codon_start"] // 3,
-                pcp_row["cdr1_codon_end"] // 3,
-            )
-            cdr2 = (
-                pcp_row["cdr2_codon_start"] // 3,
-                pcp_row["cdr2_codon_end"] // 3,
-            )
-            cdr3 = (
-                pcp_row["cdr3_codon_start"] // 3,
-                pcp_row["cdr3_codon_end"] // 3,
-            )
-            nbkey = tuple(pcp_row[["sample_id", "family"]])
+        group_df = pcp_groups.get_group(pcp_index)
+        nsites = group_df.shape[0]
+        assert (
+            nsites == len(pcp_row["parent"]) // 3
+        ), f"number of sites ({nsites}) does not match sequence length ({len(pcp_row['parent']) // 3})"
 
         if numbering_dict is None:
-            site_col.append(isite)
+            sites_col.append(np.arange(nsites))
         else:
+            nbkey = tuple(pcp_row[["sample_id", "family"]])
             if nbkey in numbering_dict:
-                site_col.append(numbering_dict[nbkey][isite])
+                sites_col.append(numbering_dict[nbkey])
             else:
-                site_col.append("None")
+                sites_col.append(["None"] * nsites)
 
+        cdr1 = (
+            pcp_row["cdr1_codon_start"] // 3,
+            pcp_row["cdr1_codon_end"] // 3,
+        )
+        cdr2 = (
+            pcp_row["cdr2_codon_start"] // 3,
+            pcp_row["cdr2_codon_end"] // 3,
+        )
+        cdr3 = (
+            pcp_row["cdr3_codon_start"] // 3,
+            pcp_row["cdr3_codon_end"] // 3,
+        )
         is_cdr_col.append(
-            (isite >= cdr1[0] and isite <= cdr1[1])
-            or (isite >= cdr2[0] and isite <= cdr2[1])
-            or (isite >= cdr3[0] and isite <= cdr3[1])
+            [
+                (
+                    True
+                    if (i >= cdr1[0] and i <= cdr1[1])
+                    or (i >= cdr2[0] and i <= cdr2[1])
+                    or (i >= cdr3[0] and i <= cdr3[1])
+                    else False
+                )
+                for i in range(nsites)
+            ]
         )
 
-        isite += 1
-
-    df["site"] = site_col
-    df["is_cdr"] = is_cdr_col
+    df["site"] = np.concatenate(sites_col)
+    df["is_cdr"] = np.concatenate(is_cdr_col)
     if numbering_dict is None:
         return df
     else:
@@ -581,7 +585,6 @@ def get_site_mutabilities_df(
             parent = parent_aa_seqs[index]
             child = child_aa_seqs[index]
 
-            # if anarci_path is None:
             if numbering_dict is None:
                 sites_col.append(np.arange(len(parent)))
             else:
