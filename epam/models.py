@@ -32,6 +32,8 @@ import epam.utils as utils
 from netam.common import pick_device, SMALL_PROB
 from netam.molevol import optimize_branch_length, mutsel_log_pcp_probability_of
 
+import Bio.Align.substitution_matrices
+
 # explictly set number of threads to 1 to avoid slowdowns during branch length optimization
 torch.set_num_threads(1)
 
@@ -88,7 +90,17 @@ FULLY_SPECIFIED_MODELS = [
             "sf_rescale": "sigmoid",
             "init_branch_length": 1,
         },
-    )
+    ),
+    (
+        "S5FBLOSUM",
+        "S5FBLOSUM",
+        {
+            "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
+            "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
+            "sf_rescale": "sigmoid",
+            "init_branch_length": 1,
+        },
+    ),
 ]
 
 
@@ -1087,6 +1099,131 @@ class S5FESM(MutSelModel):
         hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
         """
         self.selection_model.preload_esm_data(hdf5_path)
+
+    def build_selection_matrix_from_parent(self, parent):
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+
+
+class BLOSUM(BaseModel):
+    def __init__(
+        self,
+        matrix_name="BLOSUM62",
+        model_name=None,
+        sf_rescale=None,
+        scaling=1.0,
+    ):
+        """
+        Initialize a selection model from GCReplay DMS data.
+
+        Parameters:
+        matrix_name (str): Name of BLOSUM matrix (e.g. "BLOSUM45", "BLOSUM62", "BLOSUM80", "BLOSUM90")
+        model_name (str, optional): The name of the model. If not specified, the class name is used.
+        sf_rescale (str, optional): The selection factor rescaling approach.
+        scaling (float): Exponent on the log odds ratio.
+        """
+        super().__init__(model_name=model_name)
+        self.substitution_matrix = Bio.Align.substitution_matrices.load(matrix_name)
+        self.sf_rescale = sf_rescale
+        self.scaling = scaling
+
+    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+        """
+        Generate a numpy array of the normalized probability of the various amino acids by site according to DMS measurements.
+
+        The rows of the array correspond to the amino acids sorted alphabetically.
+
+        Parameters:
+        parent (str): The parent nucleotide sequence for which we want the array of probabilities.
+        child (str): The child nucleotide sequence (ignored).
+
+        Returns:
+        numpy.ndarray: A 2D array containing the selection factors of the amino acids by site.
+
+        """
+        parent_aa = sequences.translate_sequence(parent)
+        matrix = []
+
+        # Note: amino acid order of the BLOSUM matrix is not in alphabetical order
+        aa_sorted_indices = [
+            self.substitution_matrix.alphabet.index(aa) for aa in AA_STR_SORTED
+        ]
+
+        for aa in parent_aa:
+            blosum_entries = np.array(
+                [self.substitution_matrix[aa, :][i] for i in aa_sorted_indices]
+            )
+            ratios = np.power(2, blosum_entries / 2)
+            assert True not in np.isnan(ratios)
+            if self.sf_rescale == "sigmoid":
+                sel_factors = utils.ratios_to_sigmoid(
+                    torch.tensor(ratios), scale_const=self.scaling
+                ).numpy()
+            else:
+                sel_factors = np.power(ratios, self.scaling)
+
+            # Note: sel_factors results is float64, but seems like einsum wants float32
+            #       (see: build_codon_mutsel in molevol.py)
+            matrix.append(sel_factors.astype(np.float32))
+
+        return np.array(matrix)
+
+
+class NetamSHMBLOSUM(MutSelModel):
+    def __init__(
+        self,
+        model_path_prefix: str,
+        matrix_name="BLOSUM62",
+        sf_rescale=None,
+        *args,
+        **kwargs,
+    ):
+        """
+        Initialize a mutation-selection model using Netam SHM for the mutation part and a BLOSUM matrix for the selection part.
+
+        Parameters:
+        model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained Netam SHM model weights.
+        matrix_name (str): Name of BLOSUM matrix (e.g. "BLOSUM45", "BLOSUM62", "BLOSUM80", "BLOSUM90")
+        sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy (see CachedESM1v).
+        """
+        assert netam.framework.crepe_exists(model_path_prefix)
+        super().__init__(
+            mutation_model=netam.framework.load_crepe(
+                model_path_prefix, device=pick_device()
+            ),
+            selection_model=BLOSUM(matrix_name=matrix_name, sf_rescale=sf_rescale),
+            *args,
+            **kwargs,
+        )
+
+    def build_selection_matrix_from_parent(self, parent):
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+
+
+class S5FBLOSUM(MutSelModel):
+    def __init__(
+        self,
+        muts_file: str,
+        subs_file: str,
+        matrix_name="BLOSUM62",
+        sf_rescale=None,
+        *args,
+        **kwargs,
+    ):
+        """
+        Initialize a mutation-selection model from S5F and a BLOSUM matrix.
+
+        Parameters:
+        muts_file (str): file of mutabilities per 5-mer motif.
+        subs_file (str): file of substitution probabilities per 5-mer motif.
+        matrix_name (str): Name of BLOSUM matrix (e.g. "BLOSUM45", "BLOSUM62", "BLOSUM80", "BLOSUM90")
+        sf_rescale (str, optional): The selection factor rescaling approach.
+        """
+        super().__init__(
+            mutation_model=S5F(muts_file=muts_file, subs_file=subs_file),
+            selection_model=BLOSUM(matrix_name=matrix_name, sf_rescale=sf_rescale),
+            *args,
+            **kwargs,
+        )
 
     def build_selection_matrix_from_parent(self, parent):
         return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))

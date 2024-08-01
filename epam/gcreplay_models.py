@@ -55,6 +55,15 @@ GCREPLAY_MODELS = [
             "init_branch_length": 1,
         },
     ),
+    (
+        "GCReplaySHMBLOSUMSigmoid_igh",
+        "GCReplaySHMBLOSUM",
+        {
+            "shm_data_file": DATA_DIR + "gcreplay/chigy_hc_mutation_rates_nt.csv",
+            "sf_rescale": "sigmoid",
+            "init_branch_length": 1,
+        },
+    ),
 ]
 
 
@@ -332,6 +341,37 @@ class GCReplaySHMpleDMS(models.MutSelModel):
             mutation_model=models.SHMple(weights_directory),
             selection_model=GCReplayDMS(
                 dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling
+            ),
+            *args,
+            **kwargs,
+        )
+
+    def build_selection_matrix_from_parent(self, parent):
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+
+
+class GCReplaySHMBLOSUM(models.MutSelModel):
+    def __init__(
+        self,
+        shm_data_file: str,
+        matrix_name="BLOSUM62",
+        sf_rescale=None,
+        scaling=1.0,
+        *args,
+        **kwargs,
+    ):
+        """
+        Initialize a mutation-selection model from GCReplay passenger mouse and DMS data selection factors.
+
+        Parameters:
+        shm_data_file (str): File path to the mutation rates from passenger mouse data.
+        matrix_name (str): Name of BLOSUM matrix (e.g. "BLOSUM45", "BLOSUM62", "BLOSUM80", "BLOSUM90")
+        sf_rescale (str, optional): The selection factor rescaling approach.
+        """
+        super().__init__(
+            mutation_model=GCReplaySHM(shm_data_file),
+            selection_model=models.BLOSUM(
+                matrix_name, sf_rescale=sf_rescale, scaling=scaling
             ),
             *args,
             **kwargs,
