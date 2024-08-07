@@ -23,6 +23,7 @@ def annotate_sites_df(
     df,
     pcp_df,
     numbering_dict=None,
+    numbering_checks="imgt",
 ):
     """
     Add annotations to a per-site DataFrame to indicate position of each site and whether each site is in a CDR.
@@ -33,6 +34,8 @@ def annotate_sites_df(
     df (pd.DataFrame): site mutabilities DataFrame.
     pcp_df (pd.DataFrame): PCP file of the dataset.
     numbering_dict (dict): mapping (sample_id, family) to numbering list.
+    numbering_checks (str): perform checks and updates for a specified numbering scheme.
+                            Currently, 'imgt' is the only input that has an effect.
 
     Returns:
     output_df (pd.DataFrame): dataframe with additional columns 'site' and 'is_cdr'.
@@ -59,6 +62,8 @@ def annotate_sites_df(
             if nbkey in numbering_dict:
                 sites_col.append(numbering_dict[nbkey])
             else:
+                # No valid numbering for this clonal family, so mark sites with position "None".
+                # These rows will be excluded from the output DataFrame.
                 sites_col.append(["None"] * nsites)
 
         cdr1 = (
@@ -91,12 +96,24 @@ def annotate_sites_df(
     if numbering_dict is None:
         return df
     else:
+        if numbering_checks == "imgt":
+            # make sure CDR annotation is consistent with numbering_dict under IMGT scheme
+            imgt_cdr_col = []
+            for site in df["site"]:
+                if site == "None":
+                    imgt_cdr_col.append(False)
+                else:
+                    imgt_cdr_col.append(is_imgt_cdr(site))
+
+            df["is_cdr"] = imgt_cdr_col
+
         return df[df["site"] != "None"]
 
 
 def get_site_mutabilities_df(
     aaprob_path,
     numbering_dict=None,
+    numbering_checks="imgt",
 ):
     """
     Computes the amino acid site mutability probabilities
@@ -110,6 +127,8 @@ def get_site_mutabilities_df(
     Parameters:
     aaprob_path (str): path to aaprob matrix for parent-child pairs.
     numbering_dict (dict): mapping (sample_id, family) to numbering list.
+    numbering_checks (str): perform checks and updates for a specified numbering scheme.
+                            Currently, 'imgt' is the only input that has an effect.
 
     Returns:
     output_df (pd.DataFrame): dataframe with columns pcp_index, site, prob, mutation, is_cdr.
@@ -144,6 +163,7 @@ def get_site_mutabilities_df(
                 if nbkey in numbering_dict:
                     sites_col.append(numbering_dict[nbkey])
                 else:
+                    # No valid numbering for this clonal family; skip this PCP.
                     continue
 
             pcp_index_col.append([pcp_index] * len(parent))
@@ -152,30 +172,36 @@ def get_site_mutabilities_df(
             )
             site_sub_flags.append([p != c for p, c in zip(parent, child)])
 
-            cdr1 = (
-                pcp_row["cdr1_codon_start"] // 3,
-                pcp_row["cdr1_codon_end"] // 3,
-            )
-            cdr2 = (
-                pcp_row["cdr2_codon_start"] // 3,
-                pcp_row["cdr2_codon_end"] // 3,
-            )
-            cdr3 = (
-                pcp_row["cdr3_codon_start"] // 3,
-                pcp_row["cdr3_codon_end"] // 3,
-            )
-            is_cdr_col.append(
-                [
-                    (
-                        True
-                        if (i >= cdr1[0] and i <= cdr1[1])
-                        or (i >= cdr2[0] and i <= cdr2[1])
-                        or (i >= cdr3[0] and i <= cdr3[1])
-                        else False
-                    )
-                    for i in range(len(parent))
-                ]
-            )
+            if (numbering_dict is not None) and (numbering_checks == "imgt"):
+                # make sure CDR annotation is consistent with numbering_dict under IMGT scheme
+                is_cdr_col.append([is_imgt_cdr(site) for site in sites_col[-1]])
+
+            else:
+                cdr1 = (
+                    pcp_row["cdr1_codon_start"] // 3,
+                    pcp_row["cdr1_codon_end"] // 3,
+                )
+                cdr2 = (
+                    pcp_row["cdr2_codon_start"] // 3,
+                    pcp_row["cdr2_codon_end"] // 3,
+                )
+                cdr3 = (
+                    pcp_row["cdr3_codon_start"] // 3,
+                    pcp_row["cdr3_codon_end"] // 3,
+                )
+
+                is_cdr_col.append(
+                    [
+                        (
+                            True
+                            if (i >= cdr1[0] and i <= cdr1[1])
+                            or (i >= cdr2[0] and i <= cdr2[1])
+                            or (i >= cdr3[0] and i <= cdr3[1])
+                            else False
+                        )
+                        for i in range(len(parent))
+                    ]
+                )
 
     output_df = pd.DataFrame(
         columns=["pcp_index", "site", "prob", "mutation", "is_cdr"]
@@ -873,3 +899,30 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False):
     ]
 
     return numbering_dict
+
+
+def is_imgt_cdr(site):
+    """
+    Determines whether an amino acid site is in a CDR according to IMGT numbering.
+
+    Parameters:
+    site (str): IMGT number of an amino acid site.
+
+    Returns:
+    True or False whether the site is in a CDR.
+    """
+    IMGT_CDR1 = (27, 38)
+    IMGT_CDR2 = (56, 65)
+    IMGT_CDR3 = (105, 117)
+
+    # Note: IMGT uses decimals for insertions (e.g. '111.3')
+    if "." in site:
+        sitei = int(site.split(".")[0])
+    else:
+        sitei = int(site)
+
+    return (
+        (sitei >= IMGT_CDR1[0] and sitei <= IMGT_CDR1[1])
+        or (sitei >= IMGT_CDR2[0] and sitei <= IMGT_CDR2[1])
+        or (sitei >= IMGT_CDR3[0] and sitei <= IMGT_CDR3[1])
+    )
