@@ -23,7 +23,6 @@ def annotate_sites_df(
     df,
     pcp_df,
     numbering_dict=None,
-    numbering_checks="imgt",
 ):
     """
     Add annotations to a per-site DataFrame to indicate position of each site and whether each site is in a CDR.
@@ -34,8 +33,6 @@ def annotate_sites_df(
     df (pd.DataFrame): site mutabilities DataFrame.
     pcp_df (pd.DataFrame): PCP file of the dataset.
     numbering_dict (dict): mapping (sample_id, family) to numbering list.
-    numbering_checks (str): perform checks and updates for a specified numbering scheme.
-                            Currently, 'imgt' is the only input that has an effect.
 
     Returns:
     output_df (pd.DataFrame): dataframe with additional columns 'site' and 'is_cdr'.
@@ -62,8 +59,7 @@ def annotate_sites_df(
             if nbkey in numbering_dict:
                 sites_col.append(numbering_dict[nbkey])
             else:
-                # No valid numbering for this clonal family, so mark sites with position "None".
-                # These rows will be excluded from the output DataFrame.
+                # Assign sites as "None", marking them for exclusion from output.
                 sites_col.append(["None"] * nsites)
 
         cdr1 = (
@@ -96,24 +92,12 @@ def annotate_sites_df(
     if numbering_dict is None:
         return df
     else:
-        if numbering_checks == "imgt":
-            # make sure CDR annotation is consistent with numbering_dict under IMGT scheme
-            imgt_cdr_col = []
-            for site in df["site"]:
-                if site == "None":
-                    imgt_cdr_col.append(False)
-                else:
-                    imgt_cdr_col.append(is_imgt_cdr(site))
-
-            df["is_cdr"] = imgt_cdr_col
-
         return df[df["site"] != "None"]
 
 
 def get_site_mutabilities_df(
     aaprob_path,
     numbering_dict=None,
-    numbering_checks="imgt",
 ):
     """
     Computes the amino acid site mutability probabilities
@@ -127,8 +111,6 @@ def get_site_mutabilities_df(
     Parameters:
     aaprob_path (str): path to aaprob matrix for parent-child pairs.
     numbering_dict (dict): mapping (sample_id, family) to numbering list.
-    numbering_checks (str): perform checks and updates for a specified numbering scheme.
-                            Currently, 'imgt' is the only input that has an effect.
 
     Returns:
     output_df (pd.DataFrame): dataframe with columns pcp_index, site, prob, mutation, is_cdr.
@@ -163,7 +145,6 @@ def get_site_mutabilities_df(
                 if nbkey in numbering_dict:
                     sites_col.append(numbering_dict[nbkey])
                 else:
-                    # No valid numbering for this clonal family; skip this PCP.
                     continue
 
             pcp_index_col.append([pcp_index] * len(parent))
@@ -172,36 +153,30 @@ def get_site_mutabilities_df(
             )
             site_sub_flags.append([p != c for p, c in zip(parent, child)])
 
-            if (numbering_dict is not None) and (numbering_checks == "imgt"):
-                # make sure CDR annotation is consistent with numbering_dict under IMGT scheme
-                is_cdr_col.append([is_imgt_cdr(site) for site in sites_col[-1]])
-
-            else:
-                cdr1 = (
-                    pcp_row["cdr1_codon_start"] // 3,
-                    pcp_row["cdr1_codon_end"] // 3,
-                )
-                cdr2 = (
-                    pcp_row["cdr2_codon_start"] // 3,
-                    pcp_row["cdr2_codon_end"] // 3,
-                )
-                cdr3 = (
-                    pcp_row["cdr3_codon_start"] // 3,
-                    pcp_row["cdr3_codon_end"] // 3,
-                )
-
-                is_cdr_col.append(
-                    [
-                        (
-                            True
-                            if (i >= cdr1[0] and i <= cdr1[1])
-                            or (i >= cdr2[0] and i <= cdr2[1])
-                            or (i >= cdr3[0] and i <= cdr3[1])
-                            else False
-                        )
-                        for i in range(len(parent))
-                    ]
-                )
+            cdr1 = (
+                pcp_row["cdr1_codon_start"] // 3,
+                pcp_row["cdr1_codon_end"] // 3,
+            )
+            cdr2 = (
+                pcp_row["cdr2_codon_start"] // 3,
+                pcp_row["cdr2_codon_end"] // 3,
+            )
+            cdr3 = (
+                pcp_row["cdr3_codon_start"] // 3,
+                pcp_row["cdr3_codon_end"] // 3,
+            )
+            is_cdr_col.append(
+                [
+                    (
+                        True
+                        if (i >= cdr1[0] and i <= cdr1[1])
+                        or (i >= cdr2[0] and i <= cdr2[1])
+                        or (i >= cdr3[0] and i <= cdr3[1])
+                        else False
+                    )
+                    for i in range(len(parent))
+                ]
+            )
 
     output_df = pd.DataFrame(
         columns=["pcp_index", "site", "prob", "mutation", "is_cdr"]
@@ -840,7 +815,7 @@ def plot_sites_observed_vs_top_k_predictions(
     }
 
 
-def get_numbering_dict(anarci_path, pcp_df=None, verbose=False):
+def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
     """
     Process ANARCI output to make site numbering lists for each clonal family.
 
@@ -848,6 +823,8 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False):
     anarci_path (str): path to ANARCI output for sequence numbering.
     pcp_df (pd.Dataframe): PCP file to filter for relevant clonal families and check ANARCI sequence lengths.
     verbose (bool): whether to print (sample ID, family ID) info when ANARCI output has sequence length mismatch.
+    checks (str): perform checks and updates for a specified numbering scheme.
+                  Currently, 'imgt' is the only input that has an effect.
 
     Returns:
     A dictionary with keys as 2-tuples of (sample_id, family), and with values as lists of numberings for each site in the clonal family.
@@ -872,6 +849,18 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False):
         seqlist = [row[col] for col in numbering_cols]
         numbering = [nn for nn, aa in zip(numbering_cols, seqlist) if aa != "-"]
 
+        if checks == "imgt":
+            # For IMGT, numbered insertions can only be 111.* or 112.*.
+            # Other numbered insertions come from ANARCI and the clonal family will be excluded
+            exclude = False
+            for nn in numbering:
+                if "." in nn and nn[:3] != "111" and nn[:3] != "112":
+                    print("Invalid IMGT insertion", sample_id, family, nn)
+                    exclude = True
+                    break
+            if exclude == True:
+                continue
+
         if pcp_df is not None:
             # Check if clonal family is in PCP file, and that ANARCI preserved sequence length.
             # If not, exclude clonal family from output.
@@ -881,11 +870,50 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False):
             if test_df.shape[0] == 0:
                 continue
             else:
-                test_seq = translate_sequence(test_df.head(1)["parent"].item())
+                pcp_row = test_df.head(1)
+                test_seq = translate_sequence(pcp_row["parent"].item())
                 if len(test_seq) != len(numbering):
                     if verbose == True:
                         print("ANARCI seq length mismatch!", sample_id, family)
                     continue
+
+                if checks == "imgt":
+                    # Check CDR annotation in PCP file is consistent with IMGT numbering.
+                    # If not, exclude the clonal family.
+                    cdr1 = (
+                        pcp_row["cdr1_codon_start"].item() // 3,
+                        pcp_row["cdr1_codon_end"].item() // 3,
+                    )
+                    cdr2 = (
+                        pcp_row["cdr2_codon_start"].item() // 3,
+                        pcp_row["cdr2_codon_end"].item() // 3,
+                    )
+                    cdr3 = (
+                        pcp_row["cdr3_codon_start"].item() // 3,
+                        pcp_row["cdr3_codon_end"].item() // 3,
+                    )
+
+                    cdr_anno = [
+                        (
+                            True
+                            if (i >= cdr1[0] and i <= cdr1[1])
+                            or (i >= cdr2[0] and i <= cdr2[1])
+                            or (i >= cdr3[0] and i <= cdr3[1])
+                            else False
+                        )
+                        for i in range(len(test_seq))
+                    ]
+
+                    exclude = False
+                    for nn, is_cdr in zip(numbering, cdr_anno):
+                        if is_imgt_cdr(nn) != is_cdr:
+                            print(
+                                "IMGT mismatch with CDR annotation!", sample_id, family
+                            )
+                            exclude = True
+                            break
+                    if exclude == True:
+                        continue
 
         numbering_dict[(sample_id, int(family))] = numbering
 
