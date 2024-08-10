@@ -809,20 +809,24 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
     Parameters:
     anarci_path (str): path to ANARCI output for sequence numbering.
     pcp_df (pd.Dataframe): PCP file to filter for relevant clonal families and check ANARCI sequence lengths.
-    verbose (bool): whether to print (sample ID, family ID) info when ANARCI output has sequence length mismatch.
+    verbose (bool): whether to print (sample ID, family ID) info when clonal family is excluded.
     checks (str): perform checks and updates for a specified numbering scheme.
                   Currently, 'imgt' is the only input that has an effect.
 
     Returns:
-    A dictionary with keys as 2-tuples of (sample_id, family), and with values as lists of numberings for each site in the clonal family.
+    Two dictionaries where the keys are 2-tuples of (sample_id, family).
+    The first dictionary have values that are lists of numberings for each site in the clonal family.
     Note that the numberings are lists of strings.
     The dictionary also has an entry with key ('reference', 0) and value the list of all site numberings,
     to be used for setting x-axis tick labels when plotting.
+    The second dictionary consists of clonal families that excluded from the first due to issues with the ANARCI output.
+    The values describe the reasons for exclusion.
     """
     if anarci_path is None:
         return None
 
     numbering_dict = {}
+    exclusion_dict = {}
 
     anarci_df = pd.read_csv(anarci_path)
 
@@ -842,7 +846,11 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
             exclude = False
             for nn in numbering:
                 if "." in nn and nn[:3] != "111" and nn[:3] != "112":
-                    print("Invalid IMGT insertion", sample_id, family, nn)
+                    exclusion_dict[(sample_id, int(family))] = (
+                        f"Invalid IMGT insertion: {nn}"
+                    )
+                    if verbose == True:
+                        print(f"Invalid IMGT insertion: {nn}", sample_id, family)
                     exclude = True
                     break
             if exclude == True:
@@ -860,6 +868,9 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                 pcp_row = test_df.iloc[0]
                 test_seq = translate_sequence(pcp_row["parent"])
                 if len(test_seq) != len(numbering):
+                    exclusion_dict[(sample_id, int(family))] = (
+                        "ANARCI seq length mismatch!"
+                    )
                     if verbose == True:
                         print("ANARCI seq length mismatch!", sample_id, family)
                     continue
@@ -872,9 +883,15 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                     exclude = False
                     for nn, is_cdr in zip(numbering, cdr_anno):
                         if is_imgt_cdr(nn) != is_cdr:
-                            print(
-                                "IMGT mismatch with CDR annotation!", sample_id, family
+                            exclusion_dict[(sample_id, int(family))] = (
+                                "IMGT mismatch with CDR annotation!"
                             )
+                            if verbose == True:
+                                print(
+                                    "IMGT mismatch with CDR annotation!",
+                                    sample_id,
+                                    family,
+                                )
                             exclude = True
                             break
                     if exclude == True:
@@ -891,7 +908,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
         nn for nn, used in zip(numbering_cols, numbering_used) if used == True
     ]
 
-    return numbering_dict
+    return (numbering_dict, exclusion_dict)
 
 
 def is_imgt_cdr(site):
