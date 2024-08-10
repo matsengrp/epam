@@ -62,30 +62,7 @@ def annotate_sites_df(
                 # Assign sites as "None", marking them for exclusion from output.
                 sites_col.append(["None"] * nsites)
 
-        cdr1 = (
-            pcp_row["cdr1_codon_start"] // 3,
-            pcp_row["cdr1_codon_end"] // 3,
-        )
-        cdr2 = (
-            pcp_row["cdr2_codon_start"] // 3,
-            pcp_row["cdr2_codon_end"] // 3,
-        )
-        cdr3 = (
-            pcp_row["cdr3_codon_start"] // 3,
-            pcp_row["cdr3_codon_end"] // 3,
-        )
-        is_cdr_col.append(
-            [
-                (
-                    True
-                    if (i >= cdr1[0] and i <= cdr1[1])
-                    or (i >= cdr2[0] and i <= cdr2[1])
-                    or (i >= cdr3[0] and i <= cdr3[1])
-                    else False
-                )
-                for i in range(nsites)
-            ]
-        )
+        is_cdr_col.append(pcp_sites_cdr_annotation(pcp_row))
 
     df["site"] = np.concatenate(sites_col)
     df["is_cdr"] = np.concatenate(is_cdr_col)
@@ -152,31 +129,7 @@ def get_site_mutabilities_df(
                 calculate_site_substitution_probabilities(matrix, parent)
             )
             site_sub_flags.append([p != c for p, c in zip(parent, child)])
-
-            cdr1 = (
-                pcp_row["cdr1_codon_start"] // 3,
-                pcp_row["cdr1_codon_end"] // 3,
-            )
-            cdr2 = (
-                pcp_row["cdr2_codon_start"] // 3,
-                pcp_row["cdr2_codon_end"] // 3,
-            )
-            cdr3 = (
-                pcp_row["cdr3_codon_start"] // 3,
-                pcp_row["cdr3_codon_end"] // 3,
-            )
-            is_cdr_col.append(
-                [
-                    (
-                        True
-                        if (i >= cdr1[0] and i <= cdr1[1])
-                        or (i >= cdr2[0] and i <= cdr2[1])
-                        or (i >= cdr3[0] and i <= cdr3[1])
-                        else False
-                    )
-                    for i in range(len(parent))
-                ]
-            )
+            is_cdr_col.append(pcp_sites_cdr_annotation(pcp_row))
 
     output_df = pd.DataFrame(
         columns=["pcp_index", "site", "prob", "mutation", "is_cdr"]
@@ -815,6 +768,40 @@ def plot_sites_observed_vs_top_k_predictions(
     }
 
 
+def pcp_sites_cdr_annotation(pcp_row):
+    """
+
+    Parameters:
+    pcp_row (pd.Series):
+
+    Returns:
+
+    """
+    cdr1 = (
+        pcp_row["cdr1_codon_start"] // 3,
+        pcp_row["cdr1_codon_end"] // 3,
+    )
+    cdr2 = (
+        pcp_row["cdr2_codon_start"] // 3,
+        pcp_row["cdr2_codon_end"] // 3,
+    )
+    cdr3 = (
+        pcp_row["cdr3_codon_start"] // 3,
+        pcp_row["cdr3_codon_end"] // 3,
+    )
+
+    return [
+        (
+            True
+            if (i >= cdr1[0] and i <= cdr1[1])
+            or (i >= cdr2[0] and i <= cdr2[1])
+            or (i >= cdr3[0] and i <= cdr3[1])
+            else False
+        )
+        for i in range(len(pcp_row["parent"]) // 3)
+    ]
+
+
 def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
     """
     Process ANARCI output to make site numbering lists for each clonal family.
@@ -870,8 +857,8 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
             if test_df.shape[0] == 0:
                 continue
             else:
-                pcp_row = test_df.head(1)
-                test_seq = translate_sequence(pcp_row["parent"].item())
+                pcp_row = test_df.iloc[0]
+                test_seq = translate_sequence(pcp_row["parent"])
                 if len(test_seq) != len(numbering):
                     if verbose == True:
                         print("ANARCI seq length mismatch!", sample_id, family)
@@ -880,29 +867,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                 if checks == "imgt":
                     # Check CDR annotation in PCP file is consistent with IMGT numbering.
                     # If not, exclude the clonal family.
-                    cdr1 = (
-                        pcp_row["cdr1_codon_start"].item() // 3,
-                        pcp_row["cdr1_codon_end"].item() // 3,
-                    )
-                    cdr2 = (
-                        pcp_row["cdr2_codon_start"].item() // 3,
-                        pcp_row["cdr2_codon_end"].item() // 3,
-                    )
-                    cdr3 = (
-                        pcp_row["cdr3_codon_start"].item() // 3,
-                        pcp_row["cdr3_codon_end"].item() // 3,
-                    )
-
-                    cdr_anno = [
-                        (
-                            True
-                            if (i >= cdr1[0] and i <= cdr1[1])
-                            or (i >= cdr2[0] and i <= cdr2[1])
-                            or (i >= cdr3[0] and i <= cdr3[1])
-                            else False
-                        )
-                        for i in range(len(test_seq))
-                    ]
+                    cdr_anno = pcp_sites_cdr_annotation(pcp_row)
 
                     exclude = False
                     for nn, is_cdr in zip(numbering, cdr_anno):
