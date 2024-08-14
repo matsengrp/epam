@@ -930,11 +930,8 @@ class NetamSHMESM(MutSelModel):
         model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained Netam SHM model weights.
         sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy (see CachedESM1v).
         """
-        assert netam.framework.crepe_exists(model_path_prefix)
         super().__init__(
-            mutation_model=netam.framework.load_crepe(
-                model_path_prefix, device=pick_device()
-            ),
+            mutation_model=NetamSHM(model_path_prefix=model_path_prefix),
             selection_model=CachedESM1v(sf_rescale=sf_rescale),
             *args,
             **kwargs,
@@ -1185,11 +1182,8 @@ class NetamSHMBLOSUM(MutSelModel):
         matrix_name (str): Name of BLOSUM matrix (e.g. "BLOSUM45", "BLOSUM62", "BLOSUM80", "BLOSUM90")
         sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy (see CachedESM1v).
         """
-        assert netam.framework.crepe_exists(model_path_prefix)
         super().__init__(
-            mutation_model=netam.framework.load_crepe(
-                model_path_prefix, device=pick_device()
-            ),
+            mutation_model=NetamSHM(model_path_prefix=model_path_prefix),
             selection_model=BLOSUM(matrix_name=matrix_name, sf_rescale=sf_rescale),
             *args,
             **kwargs,
