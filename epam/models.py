@@ -16,7 +16,7 @@ from scipy.special import softmax
 import ablang
 import ablang2
 
-import netam
+import netam.framework
 
 import shmple
 import netam.molevol as molevol
