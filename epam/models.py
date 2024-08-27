@@ -57,7 +57,7 @@ FULLY_SPECIFIED_MODELS = [
         "SHMple",
         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
     ),
-    ("ESM1v_wt", "CachedESM1v", {}),
+    # ("ESM1v_wt", "CachedESM1v", {}),
     ("ESM1v_mask", "CachedESM1v", {"sf_rescale": "sigmoid-normalize"}),
     (
         "SHMpleESM_wt",
@@ -99,6 +99,36 @@ FULLY_SPECIFIED_MODELS = [
             "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
             "sf_rescale": "sigmoid",
             "init_branch_length": 1,
+        },
+    ),
+    (
+        "NetamSHM",
+        "NetamSHM",
+        {
+            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+        },
+    ),
+    (
+        "NetamSHM_productive",
+        "NetamSHM",
+        {
+            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_lrg-v1wyatt-full-0",
+        },
+    ),
+    (
+        "NetamESM_mask",
+        "NetamSHMESM",
+        {
+            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+            "sf_rescale": "sigmoid",
+        },
+    ),
+    (
+        "NetamBLOSUM",
+        "NetamSHMBLOSUM",
+        {
+            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+            "sf_rescale": "sigmoid",
         },
     ),
 ]
