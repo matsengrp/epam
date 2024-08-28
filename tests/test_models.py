@@ -176,7 +176,12 @@ def test_snapshot():
             out_file = f"_ignore/{source}-{model_name}.hdf5"
             if model_name in ("ESM1v_wt", "SHMpleESM_wt"):
                 model.preload_esm_data(pcp_hdf5_wt_path)
-            if model_name in ("ESM1v_mask", "SHMpleESM_mask", "S5FESM_mask", "NetamESM_mask"):
+            if model_name in (
+                "ESM1v_mask",
+                "SHMpleESM_mask",
+                "S5FESM_mask",
+                "NetamESM_mask",
+            ):
                 model.preload_esm_data(pcp_hdf5_mask_path)
             model.write_aaprobs(f"data/{source}.csv", out_file)
             compare_file = f"tests/test-data/{source}-{model_name}.hdf5"
