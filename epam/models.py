@@ -45,8 +45,8 @@ with resources.path("epam", "__init__.py") as p:
 
 FULLY_SPECIFIED_MODELS = [
     ("AbLang1", "AbLang1", {"chain": "heavy"}),
-    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "masking": False}),
-    ("AbLang2_mask", "AbLang2", {"version": "ablang2-paired", "masking": True}),
+    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
+    ("AbLang2_mask", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": True}),
     (
         "SHMple_default",
         "SHMple",
@@ -738,6 +738,7 @@ class AbLang2(AbLangBase):
     def __init__(
         self,
         version="ablang2-paired",
+        chain="heavy",
         masking=False,
         model_name=None,
     ):
@@ -745,13 +746,15 @@ class AbLang2(AbLangBase):
         Initialize AbLang2 model with or without masking. This model rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
 
         Parameters:
-        version (str, optional): Version of the AbLang model. Options currently limited to 'ablang2-paired' but could theoretically support 'ablang1-heavy' and 'ablang1-light'.
+        version (str, optional): Version of the AbLang model. Currently limited to 'ablang2-paired' but could theoretically support 'ablang1-heavy' and 'ablang1-light'.
+        chain (str, optional): Name of the chain, default is "heavy".
         masking (bool, optional): Whether to use masking in the model. Default is False.
         model_name (str, optional): The name of the model. If not specified, the class name is used.
 
         """
         super().__init__(model_name=model_name)
         self.version = version
+        self.chain = chain
         self.device = pick_device()
         self.model = ablang2.pretrained(model_to_use=self.version, device=self.device)
         self.model.freeze()
@@ -780,18 +783,35 @@ class AbLang2(AbLangBase):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        likelihoods = self.model(
-            [seq, ""], mode="likelihood", stepwise_masking=self.masking
-        )
-        seq_likelihoods = likelihoods[0]
+        # Get log likelihoods for the sequence and softmax to get probabilities
+        if self.chain == "heavy":
+            likelihoods = self.model(
+                [seq, ""], mode="likelihood", stepwise_masking=self.masking
+            )
+            seq_likelihoods = likelihoods[0]
+            
+            # Apply softmax to the second dimension. Skipping the first and last
+            # elements (which are the probability of the start, end, and heavy|light divider token),
+            # as well as all tokens not corresponding to the 20 AAs.
+            arr_sorted = np.apply_along_axis(
+                softmax, 1, seq_likelihoods[1:-2, self.aa_sorted_indices]
+            )
+        elif self.chain == "light":
+            likelihoods = self.model(
+                ["", seq], mode="likelihood", stepwise_masking=self.masking
+            )
+            seq_likelihoods = likelihoods[0]
 
-        # Apply softmax to the second dimension. Skipping the first and last
-        # elements (which are the probability of the start, end, and heavy|light divider token),
-        # as well as all tokens not corresponding to the 20 AAs.
-        arr_sorted = np.apply_along_axis(
-            softmax, 1, seq_likelihoods[1:-2, self.aa_sorted_indices]
-        )
+            # Apply softmax to the second dimension. Skipping the first and last
+            # elements (which are the probability of the heavy|light divider, start, and stop token),
+            # as well as all tokens not corresponding to the 20 AAs.
+            arr_sorted = np.apply_along_axis(
+                softmax, 1, seq_likelihoods[2:-1, self.aa_sorted_indices]
+            )
+        else:
+            raise ValueError("chain must be set to 'heavy' or 'light'")
 
+        # Return probabilies based on scoring strategy (masked-marginals probabilities are not parent-dependent)
         if self.masking == False:
             assert len(seq) == arr_sorted.shape[0]
             return arr_sorted
