@@ -740,7 +740,6 @@ class AbLang2(AbLangBase):
         version="ablang2-paired",
         masking=False,
         model_name=None,
-        skip_sigmoid=False,
     ):
         """
         Initialize AbLang2 model with or without masking. This model rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
@@ -767,7 +766,6 @@ class AbLang2(AbLangBase):
                 if v == value
             ]
         )
-        self.skip_sigmoid = skip_sigmoid
 
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
         """
@@ -803,19 +801,9 @@ class AbLang2(AbLangBase):
             parent_probs = arr_sorted[np.arange(len(seq)), parent_idx]
             arr_prob_ratio = arr_sorted / parent_probs[:, None]
 
-            # Sigmoid transformation for probability ratios with some values greater than 1.
-            if self.skip_sigmoid == True:
-                print("Skipping sigmoid transformation, using ratios directly.")
-                arr_ratio_sig = arr_prob_ratio
-            else:
-                print("Applying sigmoid transformation to ratios.")
-                arr_ratio_sig = utils.ratios_to_sigmoid(
-                    torch.tensor(arr_prob_ratio)
-                ).numpy()
-
             # Normalize the probabilities to sum to 1.
-            row_sums = np.sum(arr_ratio_sig, axis=1, keepdims=True)
-            arr_ratio_norm = arr_ratio_sig / row_sums
+            row_sums = np.sum(arr_prob_ratio, axis=1, keepdims=True)
+            arr_ratio_norm = arr_prob_ratio / row_sums
 
             assert len(seq) == arr_ratio_norm.shape[0]
 
@@ -872,11 +860,6 @@ class CachedESM1v(BaseModel):
                 sel_tensor /= row_sums
 
             sel_matrix = sel_tensor.numpy()
-        elif self.sf_rescale == "ratio-normalize":
-            # Normalize the selection matrix.
-            sel_matrix = torch.tensor(self.selection_matrices[parent])
-            row_sums = sel_matrix.sum(dim=1, keepdim=True)
-            sel_matrix /= row_sums
         else:
             sel_matrix = self.selection_matrices[parent]
         return sel_matrix
