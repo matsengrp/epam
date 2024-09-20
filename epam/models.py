@@ -550,14 +550,22 @@ class AbLangBase(BaseModel):
         numpy.ndarray: A 1D array containing the sitewise probability of the child sequence.
 
         """
-        # UPDATE
         assert (
             len(child_seq) == prob_arr.shape[0]
         ), "The child sequence length does not match the probability array length."
 
-        return np.array(
+        child_prob_arr = np.array(
             [prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
         )
+
+        non_child_prob_arr = np.sum(prob_arr, axis=1) - child_prob_arr
+
+        child_prob_arr = np.clip(child_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB))
+        non_child_prob_arr = np.clip(non_child_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB))
+
+        conditional_child_prob_arr = child_prob_arr / non_child_prob_arr
+
+        return conditional_child_prob_arr
 
     def _build_log_pcp_probability(
         self, parent: str, child: str, child_aa_probs: Tensor
@@ -584,7 +592,8 @@ class AbLangBase(BaseModel):
             no_sub_sites = parent_idx == child_idx
 
             # Rescaling each site based on whether a substitution event occurred or not.
-            same_probs = p_no_event
+            num_no_sub_sites = no_sub_sites.sum().item()
+            same_probs = torch.ones(num_no_sub_sites) * p_no_event
         
             diff_probs = child_aa_probs[~no_sub_sites] - sub_probs[~no_sub_sites]
 
