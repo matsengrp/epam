@@ -663,8 +663,12 @@ class AbLangBase(BaseModel):
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
+        prob_arr[mask_parent] = 0
+        row_sums = prob_arr.sum(axis=1)
+        conditional_prob_arr = prob_arr / row_sums[:, np.newaxis]
+
         scaled_prob_arr[mask_parent] = p_no_event 
-        scaled_prob_arr[~mask_parent] = (1 - p_no_event) * prob_arr[~mask_parent]
+        scaled_prob_arr[~mask_parent] = (1 - p_no_event) * conditional_prob_arr[~mask_parent]
 
         # Clip probabilities to avoid numerical issues.
         scaled_prob_arr = np.clip(
@@ -674,7 +678,7 @@ class AbLangBase(BaseModel):
         # Assert that each row/probability distribution sums to 1.
         if not np.allclose(np.sum(scaled_prob_arr, axis=1), 1.0, atol=1e-5):
             print(
-                f"Warning: rowsums of scaled_prob_arr do not sum to 1 with optimized branch length {branch_length}."
+                f"Warning: rowsums of scaled_prob_arr do not sum to 1 with optimized branch length {branch_length}: {np.sum(scaled_prob_arr, axis=1)}."
             )
 
         return scaled_prob_arr
