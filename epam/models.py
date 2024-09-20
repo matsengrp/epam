@@ -583,11 +583,9 @@ class AbLangBase(BaseModel):
 
             no_sub_sites = parent_idx == child_idx
 
-            # UPDATE
             # Rescaling each site based on whether a substitution event occurred or not.
-            same_probs = (
-                p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
-            )
+            same_probs = p_no_event
+        
             diff_probs = child_aa_probs[~no_sub_sites] - sub_probs[~no_sub_sites]
 
             # Clip probabilities to avoid numerical issues.
@@ -656,10 +654,7 @@ class AbLangBase(BaseModel):
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
-        # UPDATE
-        scaled_prob_arr[mask_parent] = p_no_event + (
-            (1 - p_no_event) * prob_arr[mask_parent]
-        )
+        scaled_prob_arr[mask_parent] = p_no_event 
         scaled_prob_arr[~mask_parent] = (1 - p_no_event) * prob_arr[~mask_parent]
 
         # Clip probabilities to avoid numerical issues.
