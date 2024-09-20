@@ -538,6 +538,27 @@ class AbLangBase(BaseModel):
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
         pass
 
+    def conditional_probability_vector_of_child_seq(self, prob_arr: np.ndarray, child_seq: str):
+        """
+        Calculate the sitewise conditional probability of a child sequence given a probability array.
+
+        Parameters:
+        prob_arr (numpy.ndarray): A 2D array containing the normalized probabilities of the amino acids by site.
+        child_seq (str): The child sequence for which we want the probability vector.
+
+        Returns:
+        numpy.ndarray: A 1D array containing the sitewise probability of the child sequence.
+
+        """
+        # UPDATE
+        assert (
+            len(child_seq) == prob_arr.shape[0]
+        ), "The child sequence length does not match the probability array length."
+
+        return np.array(
+            [prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
+        )
+
     def _build_log_pcp_probability(
         self, parent: str, child: str, child_aa_probs: Tensor
     ):
@@ -562,6 +583,7 @@ class AbLangBase(BaseModel):
 
             no_sub_sites = parent_idx == child_idx
 
+            # UPDATE
             # Rescaling each site based on whether a substitution event occurred or not.
             same_probs = (
                 p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
@@ -592,7 +614,7 @@ class AbLangBase(BaseModel):
         prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by AbLang.
 
         """
-        child_prob = self.probability_vector_of_child_seq(prob_arr, child)
+        child_prob = self.conditional_probability_vector_of_child_seq(prob_arr, child)
         prob_tensor = torch.tensor(child_prob, dtype=torch.float)
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, prob_tensor
@@ -634,6 +656,7 @@ class AbLangBase(BaseModel):
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
+        # UPDATE
         scaled_prob_arr[mask_parent] = p_no_event + (
             (1 - p_no_event) * prob_arr[mask_parent]
         )
