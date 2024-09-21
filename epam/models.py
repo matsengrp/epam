@@ -538,7 +538,7 @@ class AbLangBase(BaseModel):
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
         pass
 
-    def conditional_probability_vector_of_child_seq(self, prob_arr: np.ndarray, child_seq: str):
+    def conditional_probability_vector_of_child_seq(self, prob_arr: np.ndarray, parent_seq: str, child_seq: str):
         """
         Calculate the sitewise conditional probability of a child sequence given a probability array.
 
@@ -554,16 +554,26 @@ class AbLangBase(BaseModel):
             len(child_seq) == prob_arr.shape[0]
         ), "The child sequence length does not match the probability array length."
 
-        child_prob_arr = np.array(
-            [prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
+        # child_prob_arr = np.array(
+        #     [prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
+        # )
+
+        # non_child_prob_arr = np.sum(prob_arr, axis=1) - child_prob_arr
+
+        # child_prob_arr = np.clip(child_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB))
+        # non_child_prob_arr = np.clip(non_child_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB))
+
+        # conditional_child_prob_arr = child_prob_arr / non_child_prob_arr
+
+        parent_idx = sequences.aa_idx_array_of_str(parent_seq)
+        mask_parent = np.eye(20, dtype=bool)[parent_idx]
+        prob_arr[mask_parent] = 0
+        row_sums = prob_arr.sum(axis=1)
+        conditional_prob_arr = prob_arr / row_sums[:, np.newaxis]
+
+        conditional_child_prob_arr = np.array(
+            [conditional_prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
         )
-
-        non_child_prob_arr = np.sum(prob_arr, axis=1) - child_prob_arr
-
-        child_prob_arr = np.clip(child_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB))
-        non_child_prob_arr = np.clip(non_child_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB))
-
-        conditional_child_prob_arr = child_prob_arr / non_child_prob_arr
 
         return conditional_child_prob_arr
 
@@ -621,7 +631,7 @@ class AbLangBase(BaseModel):
         prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by AbLang.
 
         """
-        child_prob = self.conditional_probability_vector_of_child_seq(prob_arr, child)
+        child_prob = self.conditional_probability_vector_of_child_seq(prob_arr, parent, child)
         prob_tensor = torch.tensor(child_prob, dtype=torch.float)
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, prob_tensor
