@@ -551,8 +551,10 @@ class AbLangBase(BaseModel):
         This function takes log_branch_length as input and returns the log
         probability of the child sequence. It uses log of branch length to
         ensure non-negativity. The probability of the child sequence is scaled
-        here by the probability of no substitution event (p_no_event), which is
-        equivalent to e^{-t} and bounded between 0 and 1.
+        here by e^{-tau} (scaling_factor), which is bounded between 0 and 1. We assume 
+        that AbLang probabilities correspond to a branch length much larger than those 
+        observed in our PCPs, and interpolate between no evolutionary time and the larger
+        time scales in AbLang training data.
 
         """
 
@@ -561,14 +563,14 @@ class AbLangBase(BaseModel):
 
         def log_pcp_probability(log_branch_length):
             branch_length = torch.exp(log_branch_length)
-            p_no_event = torch.exp(-branch_length)
-            sub_probs = p_no_event * child_aa_probs
+            scaling_factor = torch.exp(-branch_length)
+            sub_probs = scaling_factor * child_aa_probs
 
             no_sub_sites = parent_idx == child_idx
 
             # Rescaling each site based on whether a substitution event occurred or not.
             same_probs = (
-                p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
+                scaling_factor + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
             )
 
             diff_probs = child_aa_probs[~no_sub_sites] - sub_probs[~no_sub_sites]
@@ -618,10 +620,10 @@ class AbLangBase(BaseModel):
 
         For fair comparison with CTMC models, we apply a linear rescaling of the amino acid probabilities. By itself,
         AbLang does not any notion of branch length and will make the same predicition regardless of evolutionary
-        time between the parent and child sequence. We rescale each prob_arr with p_no_event, where the probability of
-        no subsititution is (1 - p_no_event) + p_no_event * prob_arr and the probability of subsitution is p_no_event * prob_arr.
-        For each PCP, the value of p_no_event is optimized to maximize the likelihood of the child sequence. This is
-        more or less equivalent to scaling the branch length in SHMple mut-sel models.
+        time between the parent and child sequence. We rescale each prob_arr with scaling_factor, where the probability of
+        no subsititution is (1 - scaling_factor) + scaling_factor * prob_arr and the probability of subsitution is 
+        scaling_factor * prob_arr. For each PCP, the value of scaling_factor is optimized to maximize the likelihood of 
+        the child sequence. This is more or less equivalent to scaling the branch length in SHMple mut-sel models.
 
 
         Parameters:
@@ -633,16 +635,16 @@ class AbLangBase(BaseModel):
         numpy.ndarray: A 2D array containing the scaled probabilities of the amino acids by site.
 
         """
-        p_no_event = np.exp(-branch_length)
+        scaling_factor = np.exp(-branch_length)
         scaled_prob_arr = np.zeros(prob_arr.shape)
 
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
-        scaled_prob_arr[mask_parent] = p_no_event + (
-            (1 - p_no_event) * prob_arr[mask_parent]
+        scaled_prob_arr[mask_parent] = scaling_factor + (
+            (1 - scaling_factor) * prob_arr[mask_parent]
         )
-        scaled_prob_arr[~mask_parent] = (1 - p_no_event) * prob_arr[~mask_parent]
+        scaled_prob_arr[~mask_parent] = (1 - scaling_factor) * prob_arr[~mask_parent]
 
         # Clip probabilities to avoid numerical issues.
         scaled_prob_arr = np.clip(
