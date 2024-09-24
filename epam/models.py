@@ -46,7 +46,11 @@ with resources.path("epam", "__init__.py") as p:
 FULLY_SPECIFIED_MODELS = [
     ("AbLang1", "AbLang1", {"chain": "heavy"}),
     # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
-    ("AbLang2_mask", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": True}),
+    (
+        "AbLang2_mask",
+        "AbLang2",
+        {"version": "ablang2-paired", "chain": "heavy", "masking": True},
+    ),
     (
         "SHMple_default",
         "SHMple",
@@ -566,7 +570,7 @@ class AbLangBase(BaseModel):
             same_probs = (
                 p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
             )
-        
+
             diff_probs = child_aa_probs[~no_sub_sites] - sub_probs[~no_sub_sites]
 
             # Clip probabilities to avoid numerical issues.
@@ -593,7 +597,7 @@ class AbLangBase(BaseModel):
         prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by AbLang.
 
         """
-        child_prob = self.probability_vector_of_child_seq(prob_arr, parent, child)
+        child_prob = self.probability_vector_of_child_seq(prob_arr, child)
         prob_tensor = torch.tensor(child_prob, dtype=torch.float)
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, prob_tensor
@@ -790,7 +794,7 @@ class AbLang2(AbLangBase):
                 [seq, ""], mode="likelihood", stepwise_masking=self.masking
             )
             seq_likelihoods = likelihoods[0]
-            
+
             # Apply softmax to the second dimension. Skipping the first and last
             # elements (which are the probability of the start, end, and heavy|light divider token),
             # as well as all tokens not corresponding to the 20 AAs.
