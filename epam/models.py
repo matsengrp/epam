@@ -538,45 +538,6 @@ class AbLangBase(BaseModel):
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
         pass
 
-    def conditional_probability_vector_of_child_seq(self, prob_arr: np.ndarray, parent_seq: str, child_seq: str):
-        """
-        Calculate the sitewise conditional probability of a child sequence given a probability array.
-
-        Parameters:
-        prob_arr (numpy.ndarray): A 2D array containing the normalized probabilities of the amino acids by site.
-        child_seq (str): The child sequence for which we want the probability vector.
-
-        Returns:
-        numpy.ndarray: A 1D array containing the sitewise probability of the child sequence.
-
-        """
-        assert (
-            len(child_seq) == prob_arr.shape[0]
-        ), "The child sequence length does not match the probability array length."
-
-        # child_prob_arr = np.array(
-        #     [prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
-        # )
-
-        # non_child_prob_arr = np.sum(prob_arr, axis=1) - child_prob_arr
-
-        # child_prob_arr = np.clip(child_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB))
-        # non_child_prob_arr = np.clip(non_child_prob_arr, a_min=SMALL_PROB, a_max=(1 - SMALL_PROB))
-
-        # conditional_child_prob_arr = child_prob_arr / non_child_prob_arr
-
-        parent_idx = sequences.aa_idx_array_of_str(parent_seq)
-        mask_parent = np.eye(20, dtype=bool)[parent_idx]
-        prob_arr[mask_parent] = 0
-        row_sums = prob_arr.sum(axis=1)
-        conditional_prob_arr = prob_arr / row_sums[:, np.newaxis]
-
-        conditional_child_prob_arr = np.array(
-            [conditional_prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
-        )
-
-        return conditional_child_prob_arr
-
     def _build_log_pcp_probability(
         self, parent: str, child: str, child_aa_probs: Tensor
     ):
@@ -602,8 +563,9 @@ class AbLangBase(BaseModel):
             no_sub_sites = parent_idx == child_idx
 
             # Rescaling each site based on whether a substitution event occurred or not.
-            num_no_sub_sites = no_sub_sites.sum().item()
-            same_probs = torch.ones(num_no_sub_sites) * p_no_event
+            same_probs = (
+                p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
+            )
         
             diff_probs = child_aa_probs[~no_sub_sites] - sub_probs[~no_sub_sites]
 
@@ -631,7 +593,7 @@ class AbLangBase(BaseModel):
         prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by AbLang.
 
         """
-        child_prob = self.conditional_probability_vector_of_child_seq(prob_arr, parent, child)
+        child_prob = self.probability_vector_of_child_seq(prob_arr, parent, child)
         prob_tensor = torch.tensor(child_prob, dtype=torch.float)
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, prob_tensor
@@ -673,12 +635,10 @@ class AbLangBase(BaseModel):
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
-        prob_arr[mask_parent] = 0
-        row_sums = prob_arr.sum(axis=1)
-        conditional_prob_arr = prob_arr / row_sums[:, np.newaxis]
-
-        scaled_prob_arr[mask_parent] = p_no_event 
-        scaled_prob_arr[~mask_parent] = (1 - p_no_event) * conditional_prob_arr[~mask_parent]
+        scaled_prob_arr[mask_parent] = p_no_event + (
+            (1 - p_no_event) * prob_arr[mask_parent]
+        )
+        scaled_prob_arr[~mask_parent] = (1 - p_no_event) * prob_arr[~mask_parent]
 
         # Clip probabilities to avoid numerical issues.
         scaled_prob_arr = np.clip(
@@ -688,7 +648,7 @@ class AbLangBase(BaseModel):
         # Assert that each row/probability distribution sums to 1.
         if not np.allclose(np.sum(scaled_prob_arr, axis=1), 1.0, atol=1e-5):
             print(
-                f"Warning: rowsums of scaled_prob_arr do not sum to 1 with optimized branch length {branch_length}: {np.sum(scaled_prob_arr, axis=1)}."
+                f"Warning: rowsums of scaled_prob_arr do not sum to 1 with optimized branch length {branch_length}."
             )
 
         return scaled_prob_arr
