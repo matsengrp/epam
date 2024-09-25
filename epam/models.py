@@ -45,8 +45,12 @@ with resources.path("epam", "__init__.py") as p:
 
 FULLY_SPECIFIED_MODELS = [
     ("AbLang1", "AbLang1", {"chain": "heavy"}),
-    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "masking": False}),
-    ("AbLang2_mask", "AbLang2", {"version": "ablang2-paired", "masking": True}),
+    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
+    (
+        "AbLang2_mask",
+        "AbLang2",
+        {"version": "ablang2-paired", "chain": "heavy", "masking": True},
+    ),
     (
         "SHMple_default",
         "SHMple",
@@ -547,8 +551,10 @@ class AbLangBase(BaseModel):
         This function takes log_branch_length as input and returns the log
         probability of the child sequence. It uses log of branch length to
         ensure non-negativity. The probability of the child sequence is scaled
-        here by the probability of no substitution event (p_no_event), which is
-        equivalent to e^{-t} and bounded between 0 and 1.
+        here by e^{-tau} (scaling_factor), which is bounded between 0 and 1. We assume 
+        that AbLang probabilities correspond to a branch length much larger than those 
+        observed in our PCPs, and interpolate between no evolutionary time and the larger
+        time scales in AbLang training data.
 
         """
 
@@ -557,15 +563,16 @@ class AbLangBase(BaseModel):
 
         def log_pcp_probability(log_branch_length):
             branch_length = torch.exp(log_branch_length)
-            p_no_event = torch.exp(-branch_length)
-            sub_probs = p_no_event * child_aa_probs
+            scaling_factor = torch.exp(-branch_length)
+            sub_probs = scaling_factor * child_aa_probs
 
             no_sub_sites = parent_idx == child_idx
 
             # Rescaling each site based on whether a substitution event occurred or not.
             same_probs = (
-                p_no_event + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
+                scaling_factor + child_aa_probs[no_sub_sites] - sub_probs[no_sub_sites]
             )
+
             diff_probs = child_aa_probs[~no_sub_sites] - sub_probs[~no_sub_sites]
 
             # Clip probabilities to avoid numerical issues.
@@ -613,10 +620,10 @@ class AbLangBase(BaseModel):
 
         For fair comparison with CTMC models, we apply a linear rescaling of the amino acid probabilities. By itself,
         AbLang does not any notion of branch length and will make the same predicition regardless of evolutionary
-        time between the parent and child sequence. We rescale each prob_arr with p_no_event, where the probability of
-        no subsititution is (1 - p_no_event) + p_no_event * prob_arr and the probability of subsitution is p_no_event * prob_arr.
-        For each PCP, the value of p_no_event is optimized to maximize the likelihood of the child sequence. This is
-        more or less equivalent to scaling the branch length in SHMple mut-sel models.
+        time between the parent and child sequence. We rescale each prob_arr with scaling_factor, where the probability of
+        no subsititution is (1 - scaling_factor) + scaling_factor * prob_arr and the probability of subsitution is 
+        scaling_factor * prob_arr. For each PCP, the value of scaling_factor is optimized to maximize the likelihood of 
+        the child sequence. This is more or less equivalent to scaling the branch length in SHMple mut-sel models.
 
 
         Parameters:
@@ -628,16 +635,16 @@ class AbLangBase(BaseModel):
         numpy.ndarray: A 2D array containing the scaled probabilities of the amino acids by site.
 
         """
-        p_no_event = np.exp(-branch_length)
+        scaling_factor = np.exp(-branch_length)
         scaled_prob_arr = np.zeros(prob_arr.shape)
 
         parent_idx = sequences.aa_idx_array_of_str(parent)
         mask_parent = np.eye(20, dtype=bool)[parent_idx]
 
-        scaled_prob_arr[mask_parent] = p_no_event + (
-            (1 - p_no_event) * prob_arr[mask_parent]
+        scaled_prob_arr[mask_parent] = scaling_factor + (
+            (1 - scaling_factor) * prob_arr[mask_parent]
         )
-        scaled_prob_arr[~mask_parent] = (1 - p_no_event) * prob_arr[~mask_parent]
+        scaled_prob_arr[~mask_parent] = (1 - scaling_factor) * prob_arr[~mask_parent]
 
         # Clip probabilities to avoid numerical issues.
         scaled_prob_arr = np.clip(
@@ -738,6 +745,7 @@ class AbLang2(AbLangBase):
     def __init__(
         self,
         version="ablang2-paired",
+        chain="heavy",
         masking=False,
         model_name=None,
     ):
@@ -745,13 +753,15 @@ class AbLang2(AbLangBase):
         Initialize AbLang2 model with or without masking. This model rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
 
         Parameters:
-        version (str, optional): Version of the AbLang model. Options currently limited to 'ablang2-paired' but could theoretically support 'ablang1-heavy' and 'ablang1-light'.
+        version (str, optional): Version of the AbLang model. Currently limited to 'ablang2-paired' but could theoretically support 'ablang1-heavy' and 'ablang1-light'.
+        chain (str, optional): Name of the chain, default is "heavy".
         masking (bool, optional): Whether to use masking in the model. Default is False.
         model_name (str, optional): The name of the model. If not specified, the class name is used.
 
         """
         super().__init__(model_name=model_name)
         self.version = version
+        self.chain = chain
         self.device = pick_device()
         self.model = ablang2.pretrained(model_to_use=self.version, device=self.device)
         self.model.freeze()
@@ -780,18 +790,35 @@ class AbLang2(AbLangBase):
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
 
         """
-        likelihoods = self.model(
-            [seq, ""], mode="likelihood", stepwise_masking=self.masking
-        )
-        seq_likelihoods = likelihoods[0]
+        # Get log likelihoods for the sequence and softmax to get probabilities
+        if self.chain == "heavy":
+            likelihoods = self.model(
+                [seq, ""], mode="likelihood", stepwise_masking=self.masking
+            )
+            seq_likelihoods = likelihoods[0]
 
-        # Apply softmax to the second dimension. Skipping the first and last
-        # elements (which are the probability of the start, end, and heavy|light divider token),
-        # as well as all tokens not corresponding to the 20 AAs.
-        arr_sorted = np.apply_along_axis(
-            softmax, 1, seq_likelihoods[1:-2, self.aa_sorted_indices]
-        )
+            # Apply softmax to the second dimension. Skipping the first and last
+            # elements (which are the probability of the start, end, and heavy|light divider token),
+            # as well as all tokens not corresponding to the 20 AAs.
+            arr_sorted = np.apply_along_axis(
+                softmax, 1, seq_likelihoods[1:-2, self.aa_sorted_indices]
+            )
+        elif self.chain == "light":
+            likelihoods = self.model(
+                ["", seq], mode="likelihood", stepwise_masking=self.masking
+            )
+            seq_likelihoods = likelihoods[0]
 
+            # Apply softmax to the second dimension. Skipping the first and last
+            # elements (which are the probability of the heavy|light divider, start, and stop token),
+            # as well as all tokens not corresponding to the 20 AAs.
+            arr_sorted = np.apply_along_axis(
+                softmax, 1, seq_likelihoods[2:-1, self.aa_sorted_indices]
+            )
+        else:
+            raise ValueError("chain must be set to 'heavy' or 'light'")
+
+        # Return probabilies based on scoring strategy (masked-marginals probabilities are not parent-dependent)
         if self.masking == False:
             assert len(seq) == arr_sorted.shape[0]
             return arr_sorted
@@ -801,14 +828,9 @@ class AbLang2(AbLangBase):
             parent_probs = arr_sorted[np.arange(len(seq)), parent_idx]
             arr_prob_ratio = arr_sorted / parent_probs[:, None]
 
-            # Sigmoid transformation for probability ratios with some values greater than 1.
-            arr_ratio_sig = utils.ratios_to_sigmoid(
-                torch.tensor(arr_prob_ratio)
-            ).numpy()
-
             # Normalize the probabilities to sum to 1.
-            row_sums = np.sum(arr_ratio_sig, axis=1, keepdims=True)
-            arr_ratio_norm = arr_ratio_sig / row_sums
+            row_sums = np.sum(arr_prob_ratio, axis=1, keepdims=True)
+            arr_ratio_norm = arr_prob_ratio / row_sums
 
             assert len(seq) == arr_ratio_norm.shape[0]
 
