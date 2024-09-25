@@ -510,7 +510,7 @@ class RandomMutSel(MutSelModel):
         return matrix
 
 
-class AbLangBase(BaseModel):
+class MLMBase(BaseModel):
     def __init__(
         self,
         model_name=None,
@@ -520,7 +520,7 @@ class AbLangBase(BaseModel):
         learning_rate=0.1,
     ):
         """
-        This is an abstract class with shared functionality for AbLang1 and AbLang2. All models rescales amino acid probabilities from AbLang with an optimized branch length for each parent-child pair for comparison with CTMC models.
+        This is an abstract class with shared functionality for Masked Language Models (MLMs; i.e., AbLang1, AbLang2, ESM). All models rescales amino acid probabilities from MLMs with an optimized branch length for each parent-child pair for comparison with CTMC models.
 
         Parameters:
         model_name (str, optional): The name of the model. If not specified, the class name is used.
@@ -546,15 +546,15 @@ class AbLangBase(BaseModel):
         self, parent: str, child: str, child_aa_probs: Tensor
     ):
         """
-        Constructs the log_pcp_probability function specific to given aa_probs for the child sequence from AbLang.
+        Constructs the log_pcp_probability function specific to given aa_probs for the child sequence from a MLM.
 
         This function takes log_branch_length as input and returns the log
         probability of the child sequence. It uses log of branch length to
         ensure non-negativity. The probability of the child sequence is scaled
         here by e^{-tau} (scaling_factor), which is bounded between 0 and 1. We assume 
-        that AbLang probabilities correspond to a branch length much larger than those 
+        that MLM probabilities correspond to a branch length much larger than those 
         observed in our PCPs, and interpolate between no evolutionary time and the larger
-        time scales in AbLang training data.
+        time scales in MLM training data.
 
         """
 
@@ -596,7 +596,7 @@ class AbLangBase(BaseModel):
         parent (str): The parent AA sequence.
         child (str): The child AA sequence.
         starting_branch_length (float): The branch length used to initialize the optimization.
-        prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by AbLang.
+        prob_arr (numpy.ndarray): A 2D array containing the unscaled probabilities of the amino acids by site computed by a MLM.
 
         """
         child_prob = self.probability_vector_of_child_seq(prob_arr, child)
@@ -616,10 +616,10 @@ class AbLangBase(BaseModel):
         self, prob_arr: np.ndarray, parent: str, branch_length: float
     ) -> np.ndarray:
         """
-        Rescale the amino acid probability matrix from AbLang with the optimized "branch length".
+        Rescale the amino acid probability matrix from a MLM with the optimized "branch length".
 
         For fair comparison with CTMC models, we apply a linear rescaling of the amino acid probabilities. By itself,
-        AbLang does not any notion of branch length and will make the same predicition regardless of evolutionary
+        MLMs do not have any notion of branch length and will make the same predicition regardless of evolutionary
         time between the parent and child sequence. We rescale each prob_arr with scaling_factor, where the probability of
         no subsititution is (1 - scaling_factor) + scaling_factor * prob_arr and the probability of subsitution is 
         scaling_factor * prob_arr. For each PCP, the value of scaling_factor is optimized to maximize the likelihood of 
@@ -661,13 +661,13 @@ class AbLangBase(BaseModel):
 
     def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
         """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to the AbLang model with a branch length optimization.
+        Generate a numpy array of the normalized probability of the various amino acids by site according to the MLM model with a branch length optimization.
 
         The rows of the array correspond to the amino acids sorted alphabetically.
 
         Parameters:
         parent (str): The parent nucleotide sequence for which we want the array of probabilities.
-        child (str): The child nucleotide sequence (ignored for AbLang model).
+        child (str): The child nucleotide sequence (ignored for MLM model).
 
         Returns:
         numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
@@ -690,7 +690,7 @@ class AbLangBase(BaseModel):
         return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
 
 
-class AbLang1(AbLangBase):
+class AbLang1(MLMBase):
     def __init__(
         self,
         chain="heavy",
@@ -741,7 +741,7 @@ class AbLang1(AbLangBase):
         return arr_sorted
 
 
-class AbLang2(AbLangBase):
+class AbLang2(MLMBase):
     def __init__(
         self,
         version="ablang2-paired",
@@ -839,7 +839,7 @@ class AbLang2(AbLangBase):
             raise ValueError("masking must be set to True or False")
 
 
-class CachedESM1v(BaseModel):
+class CachedESM1v(MLMBase):
     def __init__(self, model_name=None, scoring_strategy="masked"):
         """
         Initialize ESM1v with cached selection matrices generated in esm_precompute.py.
@@ -860,9 +860,9 @@ class CachedESM1v(BaseModel):
         """
         self.selection_matrices = load_and_convert_to_dict(hdf5_path)
 
-    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+    def probability_array_of_seq(self, parent, child=None) -> np.ndarray:
         """
-        Find probability matrix corresponding to parent sequence via lookup table.
+        Find probability matrix corresponding to parent sequence via lookup table. Use in MLMBase class scaling.
 
         Parameters:
         parent (str): The parent sequence for which we want the array of probabilities.
