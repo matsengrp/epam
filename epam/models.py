@@ -62,7 +62,7 @@ FULLY_SPECIFIED_MODELS = [
         {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
     ),
     # ("ESM1v_wt", "CachedESM1v", {}),
-    ("ESM1v_mask", "CachedESM1v", {"sf_rescale": "sigmoid-normalize"}),
+    ("ESM1v_mask", "CachedESM1v", {"scoring_strategy": "masked"}),
     (
         "SHMpleESM_wt",
         "SHMpleESM",
@@ -840,18 +840,16 @@ class AbLang2(AbLangBase):
 
 
 class CachedESM1v(BaseModel):
-    def __init__(self, model_name=None, sf_rescale=None):
+    def __init__(self, model_name=None, scoring_strategy="masked"):
         """
         Initialize ESM1v with cached selection matrices generated in esm_precompute.py.
 
-        If sf_rescale is set to "sigmoid", the selection factors are rescaled using a sigmoid transformation.
-
         Parameters:
         model_name (str, optional): The name of the model.
-        sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy. Ignoring for wt-marginals selection factors.
         """
         super().__init__(model_name=model_name)
-        self.sf_rescale = sf_rescale
+        self.scoring_strategy = scoring_strategy
+
 
     def preload_esm_data(self, hdf5_path):
         """
@@ -876,19 +874,21 @@ class CachedESM1v(BaseModel):
         assert (
             parent in self.selection_matrices.keys()
         ), f"{parent} not present in CachedESM."
-        if self.sf_rescale == "sigmoid" or self.sf_rescale == "sigmoid-normalize":
-            # Sigmoid transformation for selection factors with some values greater than 1.
-            ratio_sel_matrix = torch.tensor(self.selection_matrices[parent])
-            sel_tensor = utils.ratios_to_sigmoid(ratio_sel_matrix)
+        
+        # Selection matrix precomputed for parent sequence
+        # probabilities for wt-marginals, probability ratios for masked-marginals
+        sel_matrix = self.selection_matrices[parent]
 
-            if self.sf_rescale == "sigmoid-normalize":
-                # Normalize the selection matrix.
-                row_sums = sel_tensor.sum(dim=1, keepdim=True)
-                sel_tensor /= row_sums
+        # Normalize the probability ratios to sum to 1.
+        if self.scoring_strategy == "masked":
+            sel_matrix = sel_matrix / np.sum(sel_matrix, axis=1, keepdims=True)
 
-            sel_matrix = sel_tensor.numpy()
-        else:
-            sel_matrix = self.selection_matrices[parent]
+        # Assert that each row/probability distribution sums to 1.
+        if not np.allclose(np.sum(sel_matrix, axis=1), 1.0, atol=1e-5):
+            print(
+                f"Warning: rowsums of ESM sel_matrix do not sum to 1."
+            )
+        
         return sel_matrix
 
 
