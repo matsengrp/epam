@@ -38,6 +38,8 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, model_number=1)
     }, "Invalid ESM1v model number. Select a number between 1 and 5."
     model_location = f"esm1v_t33_650M_UR90S_{model_number}"
 
+    print(f"Using ESM1v model number: {model_number}")
+
     device = pick_device()
 
     # Initialize the model

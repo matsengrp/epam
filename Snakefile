@@ -31,6 +31,7 @@ set3_model_name_to_spec = {
 }
 
 batch_number = range(1, number_of_batches+1)
+esm_model_numbers = range(1, 6)
 
 def get_model_class(model_name, set_model_name_to_spec):
     return set_model_name_to_spec.get(model_name, (None, None))[0]
@@ -40,9 +41,19 @@ def get_model_params(model_name, set_model_name_to_spec):
 
 
 rule all:
+    # input:
+    #     "output/combined_performance.csv",
+    #     "output/combined_timing.csv",
     input:
-        "output/combined_performance.csv",
-        "output/combined_timing.csv",
+        expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_{part}.hdf5", 
+               pcp_input=pcp_input, 
+               esm_model_number = esm_model_numbers,
+               part=batch_number)
+    # input:
+    #     out_hdf5="pcp_batched_inputs/{pcp_input}_esm1_{part}.hdf5", 
+    # params:
+    #     part=lambda wildcards: wildcards.part,
+    #     pcp_input=pcp_input
 
 
 rule split_pcp_batches:
@@ -63,143 +74,144 @@ rule precompute_esm:
     input:
         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv", 
     output:
-        out_hdf5="pcp_batched_inputs/{pcp_input}_{part}.hdf5", 
+        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_{part}.hdf5", 
     params:
-        part=lambda wildcards: wildcards.part  # Define a dynamic wildcard for {part}
+        part=lambda wildcards: wildcards.part,  # Define a dynamic wildcard for {part}
+        esm_model_number=lambda wildcards: wildcards.esm_model_number
     shell: 
         """
-        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals"
+        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals" {params.esm_model_number}
         """
 
 
-rule run_model_set1:
-    input:
-        in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
-        hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
-    output:
-        complete="_ignore/flag_files/{pcp_input}_{part}_{model_name}.done",
-        aaprob="output/{pcp_input}/set1/{model_name}/batch{part}/aaprob.hdf5",
-    params:
-        part=lambda wildcards: wildcards.part,
-        model_class=lambda wildcards: get_model_class(wildcards.model_name, set1_model_name_to_spec),
-        model_params=lambda wildcards: get_model_params(wildcards.model_name, set1_model_name_to_spec),
-    benchmark:
-        "output/{pcp_input}/set1/{model_name}/batch{part}/timing.tsv"
-    wildcard_constraints:
-        model_name="|".join(set1_models),
-    shell:
-        """
-        mkdir -p output/{wildcards.pcp_input}/set1/{wildcards.model_name}/batch{params.part}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
-        touch {output.complete}
-        """
+# rule run_model_set1:
+#     input:
+#         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
+#         hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
+#     output:
+#         complete="_ignore/flag_files/{pcp_input}_{part}_{model_name}.done",
+#         aaprob="output/{pcp_input}/set1/{model_name}/batch{part}/aaprob.hdf5",
+#     params:
+#         part=lambda wildcards: wildcards.part,
+#         model_class=lambda wildcards: get_model_class(wildcards.model_name, set1_model_name_to_spec),
+#         model_params=lambda wildcards: get_model_params(wildcards.model_name, set1_model_name_to_spec),
+#     benchmark:
+#         "output/{pcp_input}/set1/{model_name}/batch{part}/timing.tsv"
+#     wildcard_constraints:
+#         model_name="|".join(set1_models),
+#     shell:
+#         """
+#         mkdir -p output/{wildcards.pcp_input}/set1/{wildcards.model_name}/batch{params.part}
+#         epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+#         touch {output.complete}
+#         """
 
 
-rule run_model_set2:
-    input:
-        expand("_ignore/flag_files/{pcp_input}_{part}_{model}.done", pcp_input=pcp_inputs, part=batch_number, model=set1_model_name_to_spec.keys()),
-        in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
-        hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
-    output:
-        complete="_ignore/flag_files/{pcp_input}_{part}_{model_name}.done",
-        aaprob="output/{pcp_input}/set2/{model_name}/batch{part}/aaprob.hdf5",
-    params:
-        part=lambda wildcards: wildcards.part,
-        model_class=lambda wildcards: get_model_class(wildcards.model_name, set2_model_name_to_spec),
-        model_params=lambda wildcards: get_model_params(wildcards.model_name, set2_model_name_to_spec),
-    benchmark:
-        "output/{pcp_input}/set2/{model_name}/batch{part}/timing.tsv"
-    wildcard_constraints:
-        model_name="|".join(set2_models),
-    shell:
-        """
-        mkdir -p output/{wildcards.pcp_input}/set2/{wildcards.model_name}/batch{params.part}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
-        touch {output.complete}
-        """
+# rule run_model_set2:
+#     input:
+#         expand("_ignore/flag_files/{pcp_input}_{part}_{model}.done", pcp_input=pcp_inputs, part=batch_number, model=set1_model_name_to_spec.keys()),
+#         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
+#         hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
+#     output:
+#         complete="_ignore/flag_files/{pcp_input}_{part}_{model_name}.done",
+#         aaprob="output/{pcp_input}/set2/{model_name}/batch{part}/aaprob.hdf5",
+#     params:
+#         part=lambda wildcards: wildcards.part,
+#         model_class=lambda wildcards: get_model_class(wildcards.model_name, set2_model_name_to_spec),
+#         model_params=lambda wildcards: get_model_params(wildcards.model_name, set2_model_name_to_spec),
+#     benchmark:
+#         "output/{pcp_input}/set2/{model_name}/batch{part}/timing.tsv"
+#     wildcard_constraints:
+#         model_name="|".join(set2_models),
+#     shell:
+#         """
+#         mkdir -p output/{wildcards.pcp_input}/set2/{wildcards.model_name}/batch{params.part}
+#         epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+#         touch {output.complete}
+#         """
 
 
-rule run_model_set3:
-    input:
-        expand("_ignore/flag_files/{{pcp_input}}_{{part}}_{model}.done", pcp_input=pcp_inputs, part=batch_number, model = set2_model_name_to_spec.keys()),
-        in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
-        hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
-    output:
-        aaprob="output/{pcp_input}/set3/{model_name}/batch{part}/aaprob.hdf5",
-    params:
-        part=lambda wildcards: wildcards.part,
-        model_class=lambda wildcards: get_model_class(wildcards.model_name, set3_model_name_to_spec),
-        model_params=lambda wildcards: get_model_params(wildcards.model_name, set3_model_name_to_spec),
-    benchmark:
-        "output/{pcp_input}/set3/{model_name}/batch{part}/timing.tsv"
-    wildcard_constraints:   
-        model_name=set3_models,
-    shell:
-        """
-        mkdir -p output/{wildcards.pcp_input}/set3/{wildcards.model_name}/batch{params.part}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
-        """
+# rule run_model_set3:
+#     input:
+#         expand("_ignore/flag_files/{{pcp_input}}_{{part}}_{model}.done", pcp_input=pcp_inputs, part=batch_number, model = set2_model_name_to_spec.keys()),
+#         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
+#         hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
+#     output:
+#         aaprob="output/{pcp_input}/set3/{model_name}/batch{part}/aaprob.hdf5",
+#     params:
+#         part=lambda wildcards: wildcards.part,
+#         model_class=lambda wildcards: get_model_class(wildcards.model_name, set3_model_name_to_spec),
+#         model_params=lambda wildcards: get_model_params(wildcards.model_name, set3_model_name_to_spec),
+#     benchmark:
+#         "output/{pcp_input}/set3/{model_name}/batch{part}/timing.tsv"
+#     wildcard_constraints:   
+#         model_name=set3_models,
+#     shell:
+#         """
+#         mkdir -p output/{wildcards.pcp_input}/set3/{wildcards.model_name}/batch{params.part}
+#         epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+#         """
 
 
-rule combine_aaprob_files:
-    input:
-        expand(
-            "output/{{pcp_input}}/{{set_model}}/batch{part}/aaprob.hdf5",
-            part=batch_number,
-        ),
-    output:
-        "output/{pcp_input}/{set_model}/combined_aaprob.hdf5",
-    run:
-        input_files = ",".join(input)
-        output_file = output[0]
+# rule combine_aaprob_files:
+#     input:
+#         expand(
+#             "output/{{pcp_input}}/{{set_model}}/batch{part}/aaprob.hdf5",
+#             part=batch_number,
+#         ),
+#     output:
+#         "output/{pcp_input}/{set_model}/combined_aaprob.hdf5",
+#     run:
+#         input_files = ",".join(input)
+#         output_file = output[0]
         
-        subprocess.run(
-            f"epam concatenate_hdf5s {input_files} {output_file}", shell=True, check=True
-        )
+#         subprocess.run(
+#             f"epam concatenate_hdf5s {input_files} {output_file}", shell=True, check=True
+#         )
 
 
-rule evaluate_performance:
-    input:
-        "output/{pcp_input}/{set_model}/combined_aaprob.hdf5", 
-    output:
-        "output/{pcp_input}/{set_model}/performance.csv",
-    shell:
-        """
-        epam evaluate {input} {output}
-        """
+# rule evaluate_performance:
+#     input:
+#         "output/{pcp_input}/{set_model}/combined_aaprob.hdf5", 
+#     output:
+#         "output/{pcp_input}/{set_model}/performance.csv",
+#     shell:
+#         """
+#         epam evaluate {input} {output}
+#         """
 
 
-rule combine_performance_files:
-    input:
-        expand(
-            "output/{pcp_input}/{set_model}/performance.csv",
-            pcp_input=pcp_input,
-            set_model=model_combos,
-        ),
-    output:
-        "output/combined_performance.csv",
-        "output/combined_timing.csv",
-    run:
-        input_files = ",".join(input)
-        input_timing_files = ",".join(
-            f"output/{pcp_input}/{set_model}/batch{part}/timing.tsv"
-            for set_model in model_combos
-            for part in batch_number
-        )
-        output_file = output[0]
-        output_timing_file = output[1]
-        subprocess.run(
-            f"epam concatenate_csvs {input_files} {output_file}", shell=True, check=True
-        )
-        subprocess.run(
-            f"epam concatenate_csvs {input_timing_files} {output_timing_file} --is_tsv --record_path",
-            shell=True,
-            check=True,
-        )
+# rule combine_performance_files:
+#     input:
+#         expand(
+#             "output/{pcp_input}/{set_model}/performance.csv",
+#             pcp_input=pcp_input,
+#             set_model=model_combos,
+#         ),
+#     output:
+#         "output/combined_performance.csv",
+#         "output/combined_timing.csv",
+#     run:
+#         input_files = ",".join(input)
+#         input_timing_files = ",".join(
+#             f"output/{pcp_input}/{set_model}/batch{part}/timing.tsv"
+#             for set_model in model_combos
+#             for part in batch_number
+#         )
+#         output_file = output[0]
+#         output_timing_file = output[1]
+#         subprocess.run(
+#             f"epam concatenate_csvs {input_files} {output_file}", shell=True, check=True
+#         )
+#         subprocess.run(
+#             f"epam concatenate_csvs {input_timing_files} {output_timing_file} --is_tsv --record_path",
+#             shell=True,
+#             check=True,
+#         )
 
 
-rule clean_flag_files:
-    shell:
-        """
-        rm -f _ignore/flag_files/*.done
-        """
+# rule clean_flag_files:
+#     shell:
+#         """
+#         rm -f _ignore/flag_files/*.done
+#         """
