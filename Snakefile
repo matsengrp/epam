@@ -31,7 +31,7 @@ set3_model_name_to_spec = {
 }
 
 batch_number = range(1, number_of_batches+1)
-esm_model_numbers = range(1, 3)#6)
+esm_model_numbers = range(1, 6)
 
 def get_model_class(model_name, set_model_name_to_spec):
     return set_model_name_to_spec.get(model_name, (None, None))[0]
@@ -42,12 +42,11 @@ def get_model_params(model_name, set_model_name_to_spec):
 
 rule all:
     # input:
-    #     "output/combined_performance.csv",
-    #     "output/combined_timing.csv",
+    #     expand("output/{pcp_input}/combined_performance.csv", pcp_input=config["pcp_input"]),
+    #     expand("output/{pcp_input}/combined_timing.csv", pcp_input=config["pcp_input"]),
     input:
-        expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_ratios_{part}.hdf5", 
+        expand("pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_ratios_{part}.hdf5", 
                pcp_input=pcp_input, 
-               esm_model_number = esm_model_numbers,
                part=batch_number)
 
 
@@ -65,33 +64,46 @@ rule all:
 #         """
 
 
-rule precompute_esm:
-    input:
-        in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv", 
-    output:
-        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_logits_{part}.hdf5", 
-    params:
-        part=lambda wildcards: wildcards.part,  # Define a dynamic wildcard for {part}
-        esm_model_number=lambda wildcards: wildcards.esm_model_number
-    shell: 
-        """
-        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals" {params.esm_model_number}
-        """
+# rule precompute_esm:
+#     input:
+#         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv", 
+#     output:
+#         out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_logits_{part}.hdf5", 
+#     params:
+#         part=lambda wildcards: wildcards.part,  # Define a dynamic wildcard for {part}
+#         esm_model_number=lambda wildcards: wildcards.esm_model_number
+#     shell: 
+#         """
+#         epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals" {params.esm_model_number}
+#         """
 
-rule process_esm:
+# rule process_esm:
+#     input:
+#         in_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_logits_{part}.hdf5",
+#     output:
+#         out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5",
+#     params:
+#         part=lambda wildcards: wildcards.part,
+#         esm_model_number=lambda wildcards: wildcards.esm_model_number
+#     shell:
+#         """
+#         epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
+#         """
+
+rule ensemble_esm:
     input:
-        in_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_logits_{part}.hdf5",
+        expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5", 
+               pcp_input=pcp_input, 
+               esm_model_number=esm_model_numbers,
+               part=batch_number)
     output:
-        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_ratios_{part}.hdf5",
+        out_hdf5="pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_ratios_{part}.hdf5",
     params:
-        part=lambda wildcards: wildcards.part,
-        esm_model_number=lambda wildcards: wildcards.esm_model_number
+        part=lambda wildcards: wildcards.part
     shell:
         """
-        epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
+        epam ensemble_esm {input} {output.out_hdf5}
         """
-
-# rule ensemble_esm
 
 # rule run_esm_models
 
@@ -200,8 +212,8 @@ rule process_esm:
 #             set_model=model_combos,
 #         ),
 #     output:
-#         "output/combined_performance.csv",
-#         "output/combined_timing.csv",
+#         "output/{pcp_input}/combined_performance.csv",
+#         "output/{pcp_input}/combined_timing.csv",
 #     run:
 #         input_files = ",".join(input)
 #         input_timing_files = ",".join(
