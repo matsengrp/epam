@@ -209,7 +209,7 @@ def process_esm_output(logit_hdf5_path, probability_hdf5_path, scoring_strategy)
 
 def ensemble_esm_models(
     hdf5_files, output_hdf5
-):  # THIS SHOULD BE ON PROCESSED FILES (PROBS or PROB RATIOS)
+): 
     """
     Ensemble ESM-1v probabilities from multiple HDF5 files and save to a new HDF5 file.
 
@@ -253,7 +253,7 @@ def ensemble_esm_models(
     # Initialize ensemble dictionary
     ensemble_dict = {}
 
-    # Iterate through parent sequences and average ESM1v logits
+    # Iterate through parent sequences and average ESM1v probabilities or probability ratios
     for parent in parent_seqs[0]:
         ensemble_matrix = np.mean(
             [parent_esm_dict[parent] for parent_esm_dict in parent_esm_dicts], axis=0

@@ -95,15 +95,23 @@ rule ensemble_esm:
         expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5", 
                pcp_input=pcp_input, 
                esm_model_number=esm_model_numbers,
-               part=batch_number)
+               part="{part}")
     output:
-        out_hdf5="pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_ratios_{part}.hdf5",
-    params:
-        part=lambda wildcards: wildcards.part
-    shell:
-        """
-        epam ensemble_esm {input} {output.out_hdf5}
-        """
+        "pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_ratios_{part}.hdf5",
+    # params:
+    #     part=lambda wildcards: wildcards.part
+    # shell:
+    #     """
+    #     epam ensemble_esm_models {input} {output.out_hdf5}
+    #     """
+    run:
+        input_files = ",".join(input)
+        output_file = output[0]
+        
+        subprocess.run(
+            f"epam ensemble_esm_models {input_files} {output_file}", shell=True, check=True
+        )
+
 
 # rule run_esm_models
 
