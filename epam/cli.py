@@ -150,6 +150,21 @@ def esm_bulk_precompute(
     )
 
 
+def process_esm_output(input_hdf5_path, output_hdf5_path, esm_scoring_strategy):
+    """
+    This subcommand processes the likelihood output of ESM1v precomputation to generate HDF5
+    files with ESM probabilities/probability ratios for use in ESM models.
+
+    Args:
+        input_hdf5_path (str): Path to the HDF5 file containing ESM1v logits for the 20 AA tokens.
+        output_hdf5_path (str): Path to the output HDF5 file with ESM1v probabilities/probability ratios.
+        esm_scoring_strategy (str): The scoring strategy used in ESM1v precompute. Options are 'wt-marginals' and 'masked-marginals'.
+    """
+    esm_precompute.process_esm_output(
+        input_hdf5_path, output_hdf5_path, esm_scoring_strategy
+    )
+
+
 def shmplify(weights_path, csv_path):
     """
     This command precomputes SHMple rates and substitution probabilities, and then

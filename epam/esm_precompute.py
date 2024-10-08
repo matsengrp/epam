@@ -97,7 +97,7 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, model_number=1)
                 # and end token.
                 len_seq = len(sequences_aa[i])
                 matrix = aa_logits_np[i, 1 : len_seq + 1, :]
-                parent = sequences[i]
+                parent = sequences_aa[i]
                 outfile.create_dataset(
                     f"{parent}", data=matrix, compression="gzip", compression_opts=4
                 )
@@ -137,7 +137,7 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, model_number=1)
                 len_seq = len(sequences_aa[seq])
                 matrix = aa_logits_np[1 : len_seq + 1, :]
 
-                parent = sequences[seq]
+                parent = sequences_aa[seq]
 
                 outfile.create_dataset(
                     f"{parent}", data=matrix, compression="gzip", compression_opts=4
@@ -150,7 +150,7 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, model_number=1)
 
 def process_esm_output(logit_hdf5_path, probability_hdf5_path, scoring_strategy):
     """
-    Take ESM-1v logits and convert to probabilities based on scoring strategy.
+    Take ESM-1v logits and convert to probabilities or probability ratios based on scoring strategy.
 
     logit_hdf5_path (str): Path to the HDF5 file containing ESM-1v logits.
     probability_hdf5_path (str): Path to the output HDF5 file.
@@ -207,7 +207,9 @@ def process_esm_output(logit_hdf5_path, probability_hdf5_path, scoring_strategy)
                 )
 
 
-def ensemble_esm_models(hdf5_files, output_hdf5):
+def ensemble_esm_models(
+    hdf5_files, output_hdf5
+):  # THIS SHOULD BE ON PROCESSED FILES (PROBS or PROB RATIOS)
     """
     Ensemble ESM-1v probabilities from multiple HDF5 files and save to a new HDF5 file.
 

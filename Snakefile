@@ -12,11 +12,11 @@ model_name_to_spec = {
     for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS 
 }
 
-set1_models = ("AbLang1", "AbLang2_mask", "ESM1v_mask", "S5F", "S5FESM_mask")
+set1_models = ("AbLang1", "AbLang2_wt", "AbLang2_mask", "ESM1v_mask", "S5F", "S5FESM_mask", "S5FBLOSUM", "NetamSHM", "NetamSHM_productive", "NetamESM_mask", "NetamBLOSUM")
 set2_models = ("SHMple_default", "SHMple_productive")
 set3_models = ("SHMpleESM_mask")
 
-model_combos = ["set1/AbLang1", "set1/AbLang2_mask", "set1/ESM1v_mask", "set1/S5F", "set1/S5FESM_mask", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMpleESM_mask"]
+model_combos = ["set1/AbLang1", "set1/AbLang2_wt", "set1/AbLang2_mask", "set1/ESM1v_mask", "set1/S5F", "set1/S5FESM_mask", "set1/S5FBLOSUM", "set1/NetamSHM", "set1/NetamSHM_productive", "set1/NetamESM_mask", "set1/NetamBLOSUM", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMpleESM_mask"]
 
 set1_model_name_to_spec = {
     key: model_name_to_spec[key] for key in set1_models
@@ -31,7 +31,7 @@ set3_model_name_to_spec = {
 }
 
 batch_number = range(1, number_of_batches+1)
-esm_model_numbers = range(1, 6)
+esm_model_numbers = range(1, 3)#6)
 
 def get_model_class(model_name, set_model_name_to_spec):
     return set_model_name_to_spec.get(model_name, (None, None))[0]
@@ -45,36 +45,31 @@ rule all:
     #     "output/combined_performance.csv",
     #     "output/combined_timing.csv",
     input:
-        expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_{part}.hdf5", 
+        expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_ratios_{part}.hdf5", 
                pcp_input=pcp_input, 
                esm_model_number = esm_model_numbers,
                part=batch_number)
-    # input:
-    #     out_hdf5="pcp_batched_inputs/{pcp_input}_esm1_{part}.hdf5", 
-    # params:
-    #     part=lambda wildcards: wildcards.part,
-    #     pcp_input=pcp_input
 
 
-rule split_pcp_batches:
-    input:
-        "pcp_inputs/{pcp_input}.csv"
-    output:
-        out_csvs=dynamic("pcp_batched_inputs/{pcp_input}_{part}.csv")  
-    params:
-        output_dir="pcp_batched_inputs/",
-        batch_size=pcp_per_batch
-    shell:
-        """
-        python scripts/split_pcp_files.py {input} {params.output_dir} {params.batch_size}
-        """
+# rule split_pcp_batches:
+#     input:
+#         "pcp_inputs/{pcp_input}.csv"
+#     output:
+#         out_csvs=dynamic("pcp_batched_inputs/{pcp_input}_{part}.csv")  
+#     params:
+#         output_dir="pcp_batched_inputs/",
+#         batch_size=pcp_per_batch
+#     shell:
+#         """
+#         python scripts/split_pcp_files.py {input} {params.output_dir} {params.batch_size}
+#         """
 
 
 rule precompute_esm:
     input:
         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv", 
     output:
-        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_{part}.hdf5", 
+        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_logits_{part}.hdf5", 
     params:
         part=lambda wildcards: wildcards.part,  # Define a dynamic wildcard for {part}
         esm_model_number=lambda wildcards: wildcards.esm_model_number
@@ -83,6 +78,22 @@ rule precompute_esm:
         epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals" {params.esm_model_number}
         """
 
+rule process_esm:
+    input:
+        in_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_logits_{part}.hdf5",
+    output:
+        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_ratios_{part}.hdf5",
+    params:
+        part=lambda wildcards: wildcards.part,
+        esm_model_number=lambda wildcards: wildcards.esm_model_number
+    shell:
+        """
+        epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
+        """
+
+# rule ensemble_esm
+
+# rule run_esm_models
 
 # rule run_model_set1:
 #     input:
