@@ -33,6 +33,16 @@ set3_model_name_to_spec = {
 batch_number = range(1, number_of_batches+1)
 esm_model_numbers = range(1, 6)
 
+ensemble_models = ("ESM1v_mask", "S5FESM_mask", "NetamESM_mask")
+ensemble_model_name_to_spec = {
+    key: model_name_to_spec[key] for key in ensemble_models
+}
+
+individual_esm_models = ("ESM1v_mask", "S5FESM_mask", "NetamESM_mask")
+individual_esm_model_name_to_spec = {
+    key: model_name_to_spec[key] for key in individual_esm_models
+}
+
 def get_model_class(model_name, set_model_name_to_spec):
     return set_model_name_to_spec.get(model_name, (None, None))[0]
 
@@ -45,8 +55,10 @@ rule all:
     #     expand("output/{pcp_input}/combined_performance.csv", pcp_input=config["pcp_input"]),
     #     expand("output/{pcp_input}/combined_timing.csv", pcp_input=config["pcp_input"]),
     input:
-        expand("pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_ratios_{part}.hdf5", 
+        expand("output/{pcp_input}/esm{esm_model_number}/{model_name}/batch{part}/aaprob.hdf5", 
                pcp_input=pcp_input, 
+               esm_model_number=esm_model_numbers,
+               model_name=ensemble_models,
                part=batch_number)
 
 
@@ -90,30 +102,65 @@ rule all:
 #         epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
 #         """
 
-rule ensemble_esm:
-    input:
-        expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5", 
-               pcp_input=pcp_input, 
-               esm_model_number=esm_model_numbers,
-               part="{part}")
-    output:
-        "pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_ratios_{part}.hdf5",
-    # params:
-    #     part=lambda wildcards: wildcards.part
-    # shell:
-    #     """
-    #     epam ensemble_esm_models {input} {output.out_hdf5}
-    #     """
-    run:
-        input_files = ",".join(input)
-        output_file = output[0]
+# rule ensemble_esm:
+#     input:
+#         expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5", 
+#                pcp_input=pcp_input, 
+#                esm_model_number=esm_model_numbers,
+#                part="{part}")
+#     output:
+#         "pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_ratios_{part}.hdf5",
+#     run:
+#         input_files = ",".join(input)
+#         output_file = output[0]
         
-        subprocess.run(
-            f"epam ensemble_esm_models {input_files} {output_file}", shell=True, check=True
-        )
+#         subprocess.run(
+#             f"epam ensemble_esm_models {input_files} {output_file}", shell=True, check=True
+#         )
 
 
-# rule run_esm_models
+# rule run_esm_ensemble_models:
+#     input:
+#         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
+#         hdf5_path="pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_ratios_{part}.hdf5",
+#     output:
+#         aaprob="output/{pcp_input}/ensemble_set/{model_name}/batch{part}/aaprob.hdf5",
+#     params:
+#         part=lambda wildcards: wildcards.part,
+#         model_class=lambda wildcards: get_model_class(wildcards.model_name, ensemble_model_name_to_spec),
+#         model_params=lambda wildcards: get_model_params(wildcards.model_name, ensemble_model_name_to_spec),
+#     benchmark:
+#         "output/{pcp_input}/ensemble_set/{model_name}/batch{part}/timing.tsv"
+#     wildcard_constraints:
+#         model_name="|".join(ensemble_models),
+#     shell:
+#         """
+#         mkdir -p output/{wildcards.pcp_input}/ensemble_set/{wildcards.model_name}/batch{params.part}
+#         epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+#         """
+
+
+rule run_esm_individual_models:
+    input:
+        in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
+        hdf5_path="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5",
+    output:
+        aaprob="output/{pcp_input}/esm{esm_model_number}/{model_name}/batch{part}/aaprob.hdf5",
+    params:
+        part=lambda wildcards: wildcards.part,
+        model_class=lambda wildcards: get_model_class(wildcards.model_name, individual_esm_model_name_to_spec),
+        model_params=lambda wildcards: get_model_params(wildcards.model_name, individual_esm_model_name_to_spec),
+        esm_model_number=lambda wildcards: wildcards.esm_model_number
+    benchmark:
+        "output/{pcp_input}/esm{esm_model_number}/{model_name}/batch{part}/timing.tsv"
+    wildcard_constraints:
+        model_name="|".join(individual_esm_models),
+    shell:
+        """
+        mkdir -p output/{wildcards.pcp_input}/esm{params.esm_model_number}/{wildcards.model_name}/batch{params.part}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+        """
+
 
 # rule run_model_set1:
 #     input:
