@@ -45,7 +45,7 @@ with resources.path("epam", "__init__.py") as p:
 
 FULLY_SPECIFIED_MODELS = [
     ("AbLang1", "AbLang1", {"chain": "heavy"}),
-    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
+    ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
     (
         "AbLang2_mask",
         "AbLang2",
@@ -551,8 +551,8 @@ class MLMBase(BaseModel):
         This function takes log_branch_length as input and returns the log
         probability of the child sequence. It uses log of branch length to
         ensure non-negativity. The probability of the child sequence is scaled
-        here by e^{-tau} (scaling_factor), which is bounded between 0 and 1. We assume 
-        that MLM probabilities correspond to a branch length much larger than those 
+        here by e^{-tau} (scaling_factor), which is bounded between 0 and 1. We assume
+        that MLM probabilities correspond to a branch length much larger than those
         observed in our PCPs, and interpolate between no evolutionary time and the larger
         time scales in MLM training data.
 
@@ -621,8 +621,8 @@ class MLMBase(BaseModel):
         For fair comparison with CTMC models, we apply a linear rescaling of the amino acid probabilities. By itself,
         MLMs do not have any notion of branch length and will make the same predicition regardless of evolutionary
         time between the parent and child sequence. We rescale each prob_arr with scaling_factor, where the probability of
-        no subsititution is (1 - scaling_factor) + scaling_factor * prob_arr and the probability of subsitution is 
-        scaling_factor * prob_arr. For each PCP, the value of scaling_factor is optimized to maximize the likelihood of 
+        no subsititution is (1 - scaling_factor) + scaling_factor * prob_arr and the probability of subsitution is
+        scaling_factor * prob_arr. For each PCP, the value of scaling_factor is optimized to maximize the likelihood of
         the child sequence. This is more or less equivalent to scaling the branch length in SHMple mut-sel models.
 
 
@@ -842,14 +842,13 @@ class AbLang2(MLMBase):
 class CachedESM1v(MLMBase):
     def __init__(self, model_name=None, scoring_strategy="masked"):
         """
-        Initialize ESM1v with cached selection matrices generated in esm_precompute.py.
+        Initialize ESM1v with cached selection matrices generated in esm_precompute.py for standalone model with scaling.
 
         Parameters:
         model_name (str, optional): The name of the model.
         """
         super().__init__(model_name=model_name)
         self.scoring_strategy = scoring_strategy
-
 
     def preload_esm_data(self, hdf5_path):
         """
@@ -874,7 +873,7 @@ class CachedESM1v(MLMBase):
         assert (
             parent in self.selection_matrices.keys()
         ), f"{parent} not present in CachedESM."
-        
+
         # Selection matrix precomputed for parent sequence
         # probabilities for wt-marginals, probability ratios for masked-marginals
         sel_matrix = self.selection_matrices[parent]
@@ -885,11 +884,64 @@ class CachedESM1v(MLMBase):
 
         # Assert that each row/probability distribution sums to 1.
         if not np.allclose(np.sum(sel_matrix, axis=1), 1.0, atol=1e-5):
-            print(
-                f"Warning: rowsums of ESM sel_matrix do not sum to 1."
-            )
-        
+            print(f"Warning: rowsums of ESM sel_matrix do not sum to 1.")
+
         return sel_matrix
+    
+
+
+class ESM1vSelModel(BaseModel):
+    def __init__(self, model_name=None, sf_rescale=None):
+        """
+        Initialize ESM1v with cached selection matrices generated in esm_precompute.py. Use as selection factors in MutSel classes.
+
+        If sf_rescale is set to "sigmoid", the selection factors are rescaled using a sigmoid transformation.
+
+        Parameters:
+        model_name (str, optional): The name of the model.
+        sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy. Ignoring for wt-marginals selection factors.
+        """
+        super().__init__(model_name=model_name)
+        self.sf_rescale = sf_rescale
+
+    def preload_esm_data(self, hdf5_path):
+        """
+        Preload ESM1v data from HDF5 file.
+
+        Parameters:
+        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
+        """
+        self.selection_matrices = load_and_convert_to_dict(hdf5_path)
+
+    def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
+        """
+        Find probability matrix corresponding to parent sequence via lookup table.
+
+        Parameters:
+        parent (str): The parent sequence for which we want the array of probabilities.
+        child (str): The child sequence (ignored for ESM1v model)
+
+        Returns:
+        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+        """
+        assert (
+            parent in self.selection_matrices.keys()
+        ), f"{parent} not present in precomputed ESM dictionary."
+        if self.sf_rescale == "sigmoid" or self.sf_rescale == "sigmoid-normalize":
+            # Sigmoid transformation for selection factors with some values greater than 1.
+            ratio_sel_matrix = torch.tensor(self.selection_matrices[parent])
+            sel_tensor = utils.ratios_to_sigmoid(ratio_sel_matrix)
+
+            if self.sf_rescale == "sigmoid-normalize":
+                # Normalize the selection matrix.
+                row_sums = sel_tensor.sum(dim=1, keepdim=True)
+                sel_tensor /= row_sums
+
+            sel_matrix = sel_tensor.numpy()
+        else:
+            sel_matrix = self.selection_matrices[parent]
+        return sel_matrix
+
 
 
 class SHMpleESM(MutSelModel):
@@ -903,7 +955,7 @@ class SHMpleESM(MutSelModel):
         """
         super().__init__(
             mutation_model=SHMple(weights_directory=weights_directory),
-            selection_model=CachedESM1v(sf_rescale=sf_rescale),
+            selection_model=ESM1vSelModel(sf_rescale=sf_rescale),
             *args,
             **kwargs,
         )
@@ -918,7 +970,8 @@ class SHMpleESM(MutSelModel):
         self.selection_model.preload_esm_data(hdf5_path)
 
     def build_selection_matrix_from_parent(self, parent):
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+        parent_aa = translate_sequence(parent)
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent_aa))
 
 
 class NetamSHM(MutModel):
@@ -984,7 +1037,7 @@ class NetamSHMESM(MutSelModel):
         """
         super().__init__(
             mutation_model=NetamSHM(model_path_prefix=model_path_prefix),
-            selection_model=CachedESM1v(sf_rescale=sf_rescale),
+            selection_model=ESM1vSelModel(sf_rescale=sf_rescale),
             *args,
             **kwargs,
         )
@@ -999,7 +1052,8 @@ class NetamSHMESM(MutSelModel):
         self.selection_model.preload_esm_data(hdf5_path)
 
     def build_selection_matrix_from_parent(self, parent):
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+        parent_aa = translate_sequence(parent)
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent_aa))
 
 
 class S5F(MutModel):
@@ -1135,7 +1189,7 @@ class S5FESM(MutSelModel):
         """
         super().__init__(
             mutation_model=S5F(muts_file=muts_file, subs_file=subs_file),
-            selection_model=CachedESM1v(sf_rescale=sf_rescale),
+            selection_model=ESM1vSelModel(sf_rescale=sf_rescale),
             *args,
             **kwargs,
         )
@@ -1150,7 +1204,8 @@ class S5FESM(MutSelModel):
         self.selection_model.preload_esm_data(hdf5_path)
 
     def build_selection_matrix_from_parent(self, parent):
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+        parent_aa = sequences.translate_sequence(parent)
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent_aa))
 
 
 class BLOSUM(BaseModel):
