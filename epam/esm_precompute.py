@@ -207,9 +207,7 @@ def process_esm_output(logit_hdf5_path, probability_hdf5_path, scoring_strategy)
                 )
 
 
-def ensemble_esm_models(
-    hdf5_files, output_hdf5
-): 
+def ensemble_esm_models(hdf5_files, output_hdf5):
     """
     Ensemble ESM-1v probabilities from multiple HDF5 files and save to a new HDF5 file.
 

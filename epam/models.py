@@ -45,7 +45,7 @@ with resources.path("epam", "__init__.py") as p:
 
 FULLY_SPECIFIED_MODELS = [
     ("AbLang1", "AbLang1", {"chain": "heavy"}),
-    ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
+    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
     (
         "AbLang2_mask",
         "AbLang2",
@@ -887,7 +887,6 @@ class CachedESM1v(MLMBase):
             print(f"Warning: rowsums of ESM sel_matrix do not sum to 1.")
 
         return sel_matrix
-    
 
 
 class ESM1vSelModel(BaseModel):
@@ -943,7 +942,6 @@ class ESM1vSelModel(BaseModel):
         return sel_matrix
 
 
-
 class SHMpleESM(MutSelModel):
     def __init__(self, weights_directory, sf_rescale=None, *args, **kwargs):
         """
@@ -971,7 +969,9 @@ class SHMpleESM(MutSelModel):
 
     def build_selection_matrix_from_parent(self, parent):
         parent_aa = translate_sequence(parent)
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent_aa))
+        return torch.tensor(
+            self.selection_model.aaprobs_of_parent_child_pair(parent_aa)
+        )
 
 
 class NetamSHM(MutModel):
@@ -1053,7 +1053,9 @@ class NetamSHMESM(MutSelModel):
 
     def build_selection_matrix_from_parent(self, parent):
         parent_aa = translate_sequence(parent)
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent_aa))
+        return torch.tensor(
+            self.selection_model.aaprobs_of_parent_child_pair(parent_aa)
+        )
 
 
 class S5F(MutModel):
@@ -1205,7 +1207,9 @@ class S5FESM(MutSelModel):
 
     def build_selection_matrix_from_parent(self, parent):
         parent_aa = sequences.translate_sequence(parent)
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent_aa))
+        return torch.tensor(
+            self.selection_model.aaprobs_of_parent_child_pair(parent_aa)
+        )
 
 
 class BLOSUM(BaseModel):
