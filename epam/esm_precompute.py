@@ -211,7 +211,7 @@ def ensemble_esm_models(hdf5_files, output_hdf5):
     """
     Ensemble ESM-1v probabilities from multiple HDF5 files and save to a new HDF5 file.
 
-    hdf5_files (list): List of paths to HDF5 files containing ESM-1v logits for models 1-5.
+    hdf5_files (list): List of paths to HDF5 files containing ESM-1v quantities for models 1-5.
     output_hdf5 (str): Path to the output HDF5 file.
     """
 
@@ -237,7 +237,7 @@ def ensemble_esm_models(hdf5_files, output_hdf5):
         checksum = infile.attrs["checksum"]
         pcp_filename = infile.attrs["pcp_filename"]
 
-    # Load ESM1v logits from each HDF5 file
+    # Load ESM1v quantities from each HDF5 file
     parent_esm_dicts = []
     for hdf5_file in hdf5_files:
         parent_esm_dicts.append(load_and_convert_to_dict(hdf5_file))

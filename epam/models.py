@@ -621,7 +621,7 @@ class MLMBase(BaseModel):
         For fair comparison with CTMC models, we apply a linear rescaling of the amino acid probabilities. By itself,
         MLMs do not have any notion of branch length and will make the same predicition regardless of evolutionary
         time between the parent and child sequence. We rescale each prob_arr with scaling_factor, where the probability of
-        no subsititution is (1 - scaling_factor) + scaling_factor * prob_arr and the probability of subsitution is
+        no substitution is scaling_factor + (1 - scaling_factor) * prob_arr and the probability of substitution is
         scaling_factor * prob_arr. For each PCP, the value of scaling_factor is optimized to maximize the likelihood of
         the child sequence. This is more or less equivalent to scaling the branch length in SHMple mut-sel models.
 
