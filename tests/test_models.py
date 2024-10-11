@@ -6,12 +6,12 @@ import os
 from importlib import resources
 import epam.models
 import epam.gcreplay_models
-from epam.esm_precompute import precompute_and_save
+from epam.esm_precompute import precompute_and_save, process_esm_output
 from epam.esm_precompute import load_and_convert_to_dict
 from netam.sequences import translate_sequence
 from epam.models import (
+    MLMBase,
     AbLang1,
-    AbLang2,
     MutModel,
     SHMple,
     MutSelModel,
@@ -94,11 +94,13 @@ def test_mut_sel_probability():
 def test_cached_esm_wt(tol=1e-4):
     source = "10-random-from-10x"
     pcp_file = f"data/{source}.csv"
-    hdf5_file = f"_ignore/{source}_cached_wt.hdf5"
-    compare_file = f"data/{source}-wt.hdf5"
+    logit_file = f"_ignore/{source}_cached_wt.hdf5"
+    prob_file = f"_ignore/{source}-wt_prob.hdf5"
+    compare_file = f"data/{source}-wt_prob.hdf5"
 
-    precompute_and_save(pcp_file, hdf5_file, "wt-marginals")
-    cached_esm_dict = load_and_convert_to_dict(hdf5_file)
+    precompute_and_save(pcp_file, logit_file, "wt-marginals")
+    process_esm_output(logit_file, prob_file, "wt-marginals")
+    cached_esm_dict = load_and_convert_to_dict(prob_file)
     ref_esm_dict = load_and_convert_to_dict(compare_file)
 
     for key in cached_esm_dict.keys():
@@ -147,8 +149,10 @@ def hdf5_files_identical(path_1, path_2, tol=1e-4):
 
 
 with resources.path("epam", "__init__.py") as p:
-    pcp_hdf5_wt_path = str(p.parent.parent) + "/data/10-random-from-10x-wt.hdf5"
-    pcp_hdf5_mask_path = str(p.parent.parent) + "/data/10-random-from-10x-mask.hdf5"
+    pcp_hdf5_wt_path = str(p.parent.parent) + "/data/10-random-from-10x-wt_prob.hdf5"
+    pcp_hdf5_mask_path = (
+        str(p.parent.parent) + "/data/10-random-from-10x-mask_prob_ratio.hdf5"
+    )
 
 
 def test_snapshot():
@@ -171,7 +175,7 @@ def test_snapshot():
             # Because we're using a snapshot, we don't want to optimize:
             # optimization is fiddly and we want to be able to change it without
             # breaking the snapshot test.
-            if isinstance(model, (MutModel, AbLang1, AbLang2)):
+            if isinstance(model, (MutModel, MLMBase)):
                 model.max_optimization_steps = 0
             out_file = f"_ignore/{source}-{model_name}.hdf5"
             if model_name in ("ESM1v_wt", "SHMpleESM_wt"):

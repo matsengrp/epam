@@ -430,7 +430,7 @@ def calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs):
                 log_probs_substitution.append(np.log(p_i if p_i != 0 else SMALL_PROB))
             else:
                 log_probs_substitution.append(
-                    np.log(1 - p_i) if p_i != 1 else np.log(1 - SMALL_PROB)
+                    np.log(1 - p_i) if p_i < 1 else np.log(SMALL_PROB)
                 )
 
     cross_entropy_loss = (

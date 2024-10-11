@@ -12,11 +12,11 @@ model_name_to_spec = {
     for model_name, model_class, model_params in epam.models.FULLY_SPECIFIED_MODELS 
 }
 
-set1_models = ("AbLang1", "AbLang2_mask", "ESM1v_mask", "S5F", "S5FESM_mask")
+set1_models = ("AbLang1", "AbLang2_wt", "AbLang2_mask", "ESM1v_mask", "S5F", "S5FESM_mask", "S5FBLOSUM", "NetamSHM", "NetamSHM_productive", "NetamESM_mask", "NetamBLOSUM")
 set2_models = ("SHMple_default", "SHMple_productive")
 set3_models = ("SHMpleESM_mask")
 
-model_combos = ["set1/AbLang1", "set1/AbLang2_mask", "set1/ESM1v_mask", "set1/S5F", "set1/S5FESM_mask", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMpleESM_mask"]
+model_combos = ["set1/AbLang1", "set1/AbLang2_wt", "set1/AbLang2_mask", "set1/ESM1v_mask", "set1/S5F", "set1/S5FESM_mask", "set1/S5FBLOSUM", "set1/NetamSHM", "set1/NetamSHM_productive", "set1/NetamESM_mask", "set1/NetamBLOSUM", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMpleESM_mask"]
 
 set1_model_name_to_spec = {
     key: model_name_to_spec[key] for key in set1_models
@@ -41,8 +41,8 @@ def get_model_params(model_name, set_model_name_to_spec):
 
 rule all:
     input:
-        "output/combined_performance.csv",
-        "output/combined_timing.csv",
+        expand("output/{pcp_input}/combined_performance.csv", pcp_input=config["pcp_input"]),
+        expand("output/{pcp_input}/combined_timing.csv", pcp_input=config["pcp_input"]),
 
 
 rule split_pcp_batches:
@@ -65,7 +65,7 @@ rule precompute_esm:
     output:
         out_hdf5="pcp_batched_inputs/{pcp_input}_{part}.hdf5", 
     params:
-        part=lambda wildcards: wildcards.part  # Define a dynamic wildcard for {part}
+        part=lambda wildcards: wildcards.part,  # Define a dynamic wildcard for {part}
     shell: 
         """
         epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals"
@@ -177,8 +177,8 @@ rule combine_performance_files:
             set_model=model_combos,
         ),
     output:
-        "output/combined_performance.csv",
-        "output/combined_timing.csv",
+        "output/{pcp_input}/combined_performance.csv",
+        "output/{pcp_input}/combined_timing.csv",
     run:
         input_files = ",".join(input)
         input_timing_files = ",".join(
