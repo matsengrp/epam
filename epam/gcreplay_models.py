@@ -220,8 +220,8 @@ class GCReplaySHM(models.MutModel):
             substitution probabilities as Torch tensors.
         """
         # Passenger mouse analysis gives mutation probabilities;
-        # derive the Poisson rates (corresponding to branch length of 1).
-        rates = torch.tensor(-np.log(1 - self.mut_probs), dtype=torch.float)
+        # set the Poisson rates (corresponding to branch length of 1).
+        rates = torch.tensor(self.mut_probs, dtype=torch.float)
         sub_probs = torch.tensor(self.sub_probs, dtype=torch.float)
         return rates, sub_probs
 
