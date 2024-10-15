@@ -10,13 +10,45 @@ from epam.evaluation import (
     locate_child_substitutions,
     calculate_site_substitution_probabilities,
     locate_top_k_substitutions,
+    locate_child_substitutions,
+    identify_child_substitutions,
 )
 from netam.sequences import (
+    AA_STR_SORTED,
     translate_sequences,
     translate_sequence,
 )
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Rectangle
+
+
+def highest_k_substitutions(k, matrix_i, parent_aa, i):
+    """
+    Return the k highest ranked substitution for site i in a given parent-child pair.
+
+    Parameters:
+    k (int): number of top substitutions to find.
+    matrix_i (np.array): aaprob matrix for parent-child pair at aa site i.
+    parent_aa (str): Parent amino acid sequence.
+    i (int): Index of amino acid site substituted.
+
+    Returns:
+    pred_aa_subs (list): Predicted amino acid substitutions (most likely non-parent aa).
+
+    """
+    prob_sorted_aa_indices = matrix_i.argsort()[::-1]
+
+    pred_aa_ranked = "".join((np.array(list(AA_STR_SORTED))[prob_sorted_aa_indices]))
+
+    # skip most likely aa if it is the parent aa (enforce substitution)
+    pred_aa_subs = []
+    for aa in pred_aa_ranked:
+        if aa != parent_aa[i]:
+            pred_aa_subs.append(aa)
+        if len(pred_aa_subs) == k:
+            break
+
+    return pred_aa_subs
 
 
 def annotate_sites_df(
@@ -369,7 +401,7 @@ def plot_sites_observed_vs_expected(
     df,
     ax,
     numbering_dict=None,
-    fwk_color="#0072B2",
+    fwr_color="#0072B2",
     cdr_color="#E69F00",
     logy=False,
 ):
@@ -386,7 +418,7 @@ def plot_sites_observed_vs_expected(
     df (pd.DataFrame): dataframe of observed and predicted sites of substitution.
     ax (fig.ax): figure axis for plotting site counts. If None, plot is not drawn.
     numbering_dict (dict): mapping (sample_id, family) to numbering list.
-    fwk_color (str): color for the FWK sites.
+    fwr_color (str): color for the FWR sites.
     cdr_color (str): color for the CDR sites.
     logy (bool): whether to show y-axis in log-scale.
 
@@ -405,15 +437,15 @@ def plot_sites_observed_vs_expected(
     expected = []
     exp_err = []
     observed = []
-    fwk_expected = []
+    fwr_expected = []
     for site in xvals:
         site_df = df[df["site"] == site]
         site_probs = site_df["prob"].to_numpy()
         expected.append(np.sum(site_probs))
         exp_err.append(np.sqrt(np.sum(site_probs * (1 - site_probs))))
         observed.append(df[(df["mutation"] == 1) & (df["site"] == site)].shape[0])
-        site_fwk_probs = site_df[site_df["is_cdr"] == False]["prob"].to_numpy()
-        fwk_expected.append(np.sum(site_fwk_probs))
+        site_fwr_probs = site_df[site_df["is_cdr"] == False]["prob"].to_numpy()
+        fwr_expected.append(np.sum(site_fwr_probs))
 
     expected = np.array(expected)
     exp_err = np.array(exp_err)
@@ -440,11 +472,11 @@ def plot_sites_observed_vs_expected(
 
         ax.bar(
             xvals,
-            fwk_expected,
+            fwr_expected,
             width=1,
             facecolor="white",
-            edgecolor=fwk_color,
-            label="Expected (FWK)",
+            edgecolor=fwr_color,
+            label="Expected (FWR)",
         )
 
         ax.plot(
@@ -768,6 +800,385 @@ def plot_sites_observed_vs_top_k_predictions(
     }
 
 
+def get_sub_acc_from_aaprob(aaprob_path, top_k=1):
+    """
+    Determines the sites of observed substitutions and whether the amino acid substitution is predicted
+    among the top-k most probable for every PCP in a dataset, using the aaprob file of matrices.
+
+    Parameters:
+    aaprob_path (str): path to aaprob matrix for parent-child pairs.
+    top_k (int): the number of top substitutions to consider for matching to observed.
+
+    Returns tuple with:
+    pcp_indices (list): indices to the reference PCP file.
+    pcp_sub_locations (list): per-PCP lists of substitution locations (positions along the sequence string).
+    pcp_sub_correct (list): per-PCP lists of True/False whether substitution prediction contains the correct amino acid.
+    pcp_is_cdr (list): per-PCP lists of True/False whether amino acid site is in a CDR.
+    pcp_sample_family_dict (dict): mapping PCP index to (sample_id, family) 2-tuple.
+    """
+    pcp_path = pcp_path_of_aaprob_path(aaprob_path)
+    pcp_df = load_and_filter_pcp_df(pcp_path)
+    nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
+    aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
+    parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
+
+    pcp_sub_locations = [
+        locate_child_substitutions(parent, child)
+        for parent, child in zip(parent_aa_seqs, child_aa_seqs)
+    ]
+
+    pcp_indices = []
+    pcp_sub_correct = []
+    pcp_is_cdr = []
+    pcp_sample_family_dict = {}
+    with h5py.File(aaprob_path, "r") as matfile:
+        for index in range(len(parent_aa_seqs)):
+            pcp_index = pcp_df.index[index]
+            pcp_row = pcp_df.loc[pcp_index]
+            grp = matfile[
+                "matrix" + str(pcp_index)
+            ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
+            matrix = grp["data"]
+
+            pcp_indices.append(pcp_index)
+
+            parent_aa = parent_aa_seqs[index]
+            child_aa = child_aa_seqs[index]
+            pcp_sub_correct.append(
+                [
+                    child_aa[j]
+                    in highest_k_substitutions(top_k, matrix[j, :], parent_aa, j)
+                    for j in range(len(parent_aa))
+                    if parent_aa[j] != child_aa[j]
+                ]
+            )
+
+            cdr_anno = pcp_sites_cdr_annotation(pcp_row)
+            pcp_is_cdr.append(
+                [
+                    cdr_anno[j]
+                    for j in range(len(parent_aa))
+                    if parent_aa[j] != child_aa[j]
+                ]
+            )
+
+            pcp_sample_family_dict[pcp_index] = tuple(
+                pcp_df.loc[pcp_index][["sample_id", "family"]]
+            )
+
+    return (
+        pcp_indices,
+        pcp_sub_locations,
+        pcp_sub_correct,
+        pcp_is_cdr,
+        pcp_sample_family_dict,
+    )
+
+
+def get_site_subs_acc_df(
+    sub_acc_tuple,
+    numbering_dict=None,
+):
+    """
+    Returns a dataframe that annotates for each site of observed substitution:
+    the index of the PCP it belongs to,
+    the site position in the amino acid sequence,
+    whether the predicted amino acid substitution is correct.
+
+    Parameters:
+    subs_and_preds_tuple (tuple): 5-tuple of
+                                  pcp_indices - list of indices to the reference PCP file,
+                                  pcp_sub_locations - list of per-PCP lists of substitution locations,
+                                  pcp_sub_correct - list of per-PCP lists whether amino acid prediction is correct,
+                                  pcp_is_cdr = list of per-PCP lists whether amino acid site is in a CDR,
+                                  pcp_sample_family_dict - dictionary mapping PCP index to (sample_id, family) 2-tuple.
+    numbering_dict (dict): mapping (sample_id, family) to numbering list.
+
+    Returns:
+    output_df (pd.DataFrame): dataframe with columns 'pcp_index', 'site', 'correct', 'is_cdr'.
+    """
+
+    pcp_indices = sub_acc_tuple[0]
+    pcp_sub_locations = sub_acc_tuple[1]
+    pcp_sub_correct = sub_acc_tuple[2]
+    pcp_is_cdr = sub_acc_tuple[3]
+    pcp_sample_family_dict = sub_acc_tuple[4]
+
+    pcp_index_col = []
+    site_col = []
+    pred_col = []
+    is_cdr_col = []
+    for i in range(len(pcp_indices)):
+        nbkey = pcp_sample_family_dict[pcp_indices[i]]
+        if (numbering_dict is not None) and (nbkey not in numbering_dict):
+            continue
+
+        for j in range(len(pcp_sub_locations[i])):
+            site = pcp_sub_locations[i][j]
+            pcp_index_col.append(pcp_indices[i])
+            if numbering_dict is None:
+                site_col.append(site)
+            else:
+                site_col.append(numbering_dict[nbkey][site])
+            pred_col.append(pcp_sub_correct[i][j])
+            is_cdr_col.append(pcp_is_cdr[i][j])
+
+    output_df = pd.DataFrame(columns=["pcp_index", "site", "correct", "is_cdr"])
+    output_df["pcp_index"] = pcp_index_col
+    output_df["site"] = site_col
+    output_df["correct"] = pred_col
+    output_df["is_cdr"] = is_cdr_col
+
+    return output_df
+
+
+def plot_sites_subs_acc(
+    df,
+    counts_ax,
+    subacc_ax,
+    numbering_dict=None,
+    fwr_color="#0072B2",
+    cdr_color="#E69F00",
+    logy=False,
+):
+    """
+    Draws a figure of observed substitutions and the accuracy of amino acid predictions across PCPs in a dataset.
+    The input dataframe requires three columns:
+    'site' (site position -- may be at the level of nucleotide, or codon, or amino acid, etc.)
+    'correct' (True/False whether the amino acid substitution prediction is correct)
+    'is_cdr' (True/False whether the site is in a CDR)
+    Each dataframe row corresponds to a site in a specific sequence.
+    Assumes only sites with observed substitution are in the dataframe.
+
+    Parameters:
+    df (pd.DataFrame): dataframe of observed and predicted sites of substitution.
+    counts_ax (fig.ax): figure axis for plotting site counts. If None, plot is not drawn.
+    subacc_ax (fig.ax): figure axis for plotting site accuracy. If None, plot is not drawn.
+    numbering_dict (dict): mapping (sample_id, family) to numbering list.
+    fwr_color (str): color for FWR sites.
+    cdr_color (str): color for CDR sites.
+    logy (bool): whether to show y-axis in log-scale.
+
+    Returns:
+    A dictionary with results labeled:
+    total_subacc (float): overall substitution accuracy of the dataset.
+    site_subacc (list): per-site substitution accuracy of the dataset.
+    """
+    if numbering_dict is None:
+        xvals = np.arange(np.min(df["site"]), np.max(df["site"]) + 1)
+    else:
+        xvals = numbering_dict[("reference", 0)]
+
+    observed = []
+    correct = []
+    fwr_observed = []
+    fwr_correct = []
+    for site in xvals:
+        site_df = df[df["site"] == site]
+        nobs = site_df.shape[0]
+        observed.append(nobs)
+        ncorr = site_df[site_df["correct"] == True].shape[0]
+        correct.append(ncorr)
+
+        fwr_nobs = site_df[site_df["is_cdr"] == False].shape[0]
+        fwr_observed.append(fwr_nobs)
+        fwr_ncorr = site_df[
+            (site_df["correct"] == True) & (site_df["is_cdr"] == False)
+        ].shape[0]
+        fwr_correct.append(fwr_ncorr)
+    observed = np.array(observed)
+    correct = np.array(correct)
+    fwr_observed = np.array(fwr_observed)
+    fwr_correct = np.array(fwr_correct)
+
+    # compute substitution accuracy
+    total_subacc = df[df["correct"] == True].shape[0] / df.shape[0]
+    site_subacc = [c / o if o > 0 else -1 for c, o in zip(correct, observed)]
+    fwr_site_subacc = [
+        c / o if o > 0 else -1 for c, o in zip(fwr_correct, fwr_observed)
+    ]
+
+    if counts_ax is not None:
+        counts_ax.bar(
+            xvals,
+            observed,
+            width=1,
+            facecolor="white",
+            edgecolor=cdr_color,
+            label="CDR",
+        )
+
+        counts_ax.bar(
+            xvals,
+            fwr_observed,
+            width=1,
+            facecolor="white",
+            edgecolor=fwr_color,
+            label="FWR",
+        )
+
+        counts_ax.bar(
+            xvals,
+            correct,
+            width=1,
+            color=cdr_color,
+            edgecolor=cdr_color,
+        )
+
+        counts_ax.bar(
+            xvals,
+            fwr_correct,
+            width=1,
+            color=fwr_color,
+            edgecolor=fwr_color,
+        )
+
+        if subacc_ax is None:
+            if df.dtypes["site"] == "object":
+                counts_ax.tick_params(axis="x", labelsize=7, labelrotation=90)
+            else:
+                counts_ax.tick_params(axis="x", labelsize=16)
+            counts_ax.set_xlabel(
+                "amino acid sequence position", fontsize=20, labelpad=10
+            )
+        counts_ax.tick_params(axis="y", labelsize=16)
+        counts_ax.set_ylabel("number of substitutions", fontsize=20, labelpad=10)
+        counts_ax.margins(x=0.01)
+
+        if logy:
+            counts_ax.set_yscale("log")
+
+        counts_ax.legend(fontsize=15)
+
+    if subacc_ax is not None:
+        subacc_ax.plot(
+            xvals,
+            site_subacc,
+            marker="d",
+            markersize=4,
+            linewidth=0,
+            color="black",
+        )
+
+        if df.dtypes["site"] == "object":
+            subacc_ax.tick_params(axis="x", labelsize=7, labelrotation=90)
+        else:
+            subacc_ax.tick_params(axis="x", labelsize=16)
+        subacc_ax.set_xlabel("amino acid sequence position", fontsize=20, labelpad=10)
+        subacc_ax.tick_params(axis="y", labelsize=16)
+        subacc_ax.set_ylabel("sub. acc.", fontsize=20, labelpad=10)
+        subacc_ax.margins(x=0.01)
+        subacc_ax.set_ylim(-0.02, 1.02)
+        subacc_ax.grid(axis="y")
+
+        # Assumes IMGT numbering
+        for cdr_bounds in [("27", "38"), ("56", "65"), ("105", "117")]:
+            xlower = xvals.index(cdr_bounds[0])
+            xupper = xvals.index(cdr_bounds[1])
+            subacc_ax.add_patch(
+                Rectangle(
+                    (xlower - 0.5, 0),
+                    xupper - xlower + 1,
+                    subacc_ax.get_ylim()[1],
+                    color=cdr_color,
+                    alpha=0.2,
+                )
+            )
+
+    return {
+        "total_subacc": total_subacc,
+        "site_subacc": site_subacc,
+    }
+
+
+def get_site_csp_df(
+    aaprob_path,
+    numbering_dict=None,
+):
+    """
+    Computes the site conditional substitution probabilities (CSP)
+    for every substitution in a dataset.
+    There are 20 CSPs for each site and each row in the output dataframe
+    corresponds to a site-CSP pair.
+    Returns a dataframe that annotates for each site-CSP
+    the index of the PCP it belongs to,
+    the site position in the amino acid sequence,
+    the amino acid of the CSP,
+    whether a substitution to the amino acid is observed in the child sequence,
+    and whether the site is in a CDR.
+
+    Parameters:
+    aaprob_path (str): path to aaprob matrix for parent-child pairs.
+    numbering_dict (dict): mapping (sample_id, family) to numbering list.
+
+    Returns:
+    output_df (pd.DataFrame): dataframe with columns pcp_index, site, prob, aa, mutation, is_cdr.
+    """
+    pcp_path = pcp_path_of_aaprob_path(aaprob_path)
+    pcp_df = load_and_filter_pcp_df(pcp_path)
+    nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
+    aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
+    parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
+
+    pcp_index_col = []
+    sites_col = []
+    site_csp = []
+    site_sub_flags = []
+    site_aa_col = []
+    is_cdr_col = []
+    with h5py.File(aaprob_path, "r") as matfile:
+        for index in range(len(parent_aa_seqs)):
+            pcp_index = pcp_df.index[index]
+            pcp_row = pcp_df.loc[pcp_index]
+            grp = matfile[
+                "matrix" + str(pcp_index)
+            ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
+            matrix = grp["data"]
+
+            parent = parent_aa_seqs[index]
+            child = child_aa_seqs[index]
+
+            pcp_subs_locations = locate_child_substitutions(parent, child)
+            pcp_subs_aa = identify_child_substitutions(parent, child)
+
+            if numbering_dict is None:
+                numbering = np.arange(len(parent))
+            else:
+                nbkey = tuple(pcp_row[["sample_id", "family"]])
+                if nbkey in numbering_dict:
+                    numbering = numbering_dict[nbkey]
+                else:
+                    continue
+
+            pcp_is_cdr = pcp_sites_cdr_annotation(pcp_row)
+
+            for sub_loc, sub_aa in zip(pcp_subs_locations, pcp_subs_aa):
+                csp = matrix[sub_loc, :]
+                csp[AA_STR_SORTED.index(parent[sub_loc])] = 0
+                csp = csp / np.sum(csp)
+
+                pcp_index_col.append([pcp_index] * 20)
+                sites_col.append([numbering[sub_loc]] * 20)
+                site_csp.append(csp)
+                site_aa_col.append(list(AA_STR_SORTED))
+                site_sub_flags.append(
+                    [True if aa == sub_aa else False for aa in AA_STR_SORTED]
+                )
+                is_cdr_col.append([pcp_is_cdr[sub_loc]] * 20)
+
+    output_df = pd.DataFrame(
+        columns=["pcp_index", "site", "prob", "mutation", "is_cdr"]
+    )
+    output_df["pcp_index"] = np.concatenate(pcp_index_col)
+    output_df["site"] = np.concatenate(sites_col)
+    output_df["prob"] = np.concatenate(site_csp)
+    output_df["aa"] = np.concatenate(site_aa_col)
+    output_df["mutation"] = np.concatenate(site_sub_flags)
+    output_df["is_cdr"] = np.concatenate(is_cdr_col)
+
+    return output_df
+
+
 def pcp_sites_cdr_annotation(pcp_row):
     """
 
@@ -846,9 +1257,9 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
             exclude = False
             for nn in numbering:
                 if "." in nn and nn[:3] != "111" and nn[:3] != "112":
-                    exclusion_dict[
-                        (sample_id, int(family))
-                    ] = f"Invalid IMGT insertion: {nn}"
+                    exclusion_dict[(sample_id, int(family))] = (
+                        f"Invalid IMGT insertion: {nn}"
+                    )
                     if verbose == True:
                         print(f"Invalid IMGT insertion: {nn}", sample_id, family)
                     exclude = True
@@ -868,9 +1279,9 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                 pcp_row = test_df.iloc[0]
                 test_seq = translate_sequence(pcp_row["parent"])
                 if len(test_seq) != len(numbering):
-                    exclusion_dict[
-                        (sample_id, int(family))
-                    ] = "ANARCI seq length mismatch!"
+                    exclusion_dict[(sample_id, int(family))] = (
+                        "ANARCI seq length mismatch!"
+                    )
                     if verbose == True:
                         print("ANARCI seq length mismatch!", sample_id, family)
                     continue
@@ -883,9 +1294,9 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                     exclude = False
                     for nn, is_cdr in zip(numbering, cdr_anno):
                         if is_imgt_cdr(nn) != is_cdr:
-                            exclusion_dict[
-                                (sample_id, int(family))
-                            ] = "IMGT mismatch with CDR annotation!"
+                            exclusion_dict[(sample_id, int(family))] = (
+                                "IMGT mismatch with CDR annotation!"
+                            )
                             if verbose == True:
                                 print(
                                     "IMGT mismatch with CDR annotation!",
