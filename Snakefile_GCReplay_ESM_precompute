@@ -1,0 +1,51 @@
+import json
+import subprocess
+
+igh_pcp_inputs = glob_wildcards("pcp_gcreplay_inputs/igh/{name}.csv").name
+igk_pcp_inputs = glob_wildcards("pcp_gcreplay_inputs/igk/{name}.csv").name
+esm_model_numbers = range(1, 6)
+
+rule all:
+    input:
+        expand("pcp_gcreplay_inputs/{chain}/gctrees_2022-06-16_{chain}_pcp_esm_ensemble_mask_ratios.hdf5", 
+               chain=["igh", "igk"]),
+
+
+rule precompute_esm:
+    input:
+        in_csv="pcp_gcreplay_inputs/{chain}/gctrees_2022-06-16_{chain}_pcp.csv", 
+    output:
+        out_hdf5="pcp_gcreplay_inputs/{chain}/gctrees_2022-06-16_{chain}_pcp_esm{esm_model_number}_mask_logits.hdf5", 
+    params:
+        esm_model_number=lambda wildcards: wildcards.esm_model_number,
+    shell: 
+        """
+        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals" {params.esm_model_number}
+        """
+
+rule process_esm:
+    input:
+        in_hdf5="pcp_gcreplay_inputs/{chain}/gctrees_2022-06-16_{chain}_pcp_esm{esm_model_number}_mask_logits.hdf5",
+    output:
+        out_hdf5="pcp_gcreplay_inputs/{chain}/gctrees_2022-06-16_{chain}_pcp_esm{esm_model_number}_mask_ratios.hdf5",
+    params:
+        esm_model_number=lambda wildcards: wildcards.esm_model_number,  # Define a dynamic wildcard for {esm_model_number}
+    shell:
+        """
+        epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
+        """
+
+rule ensemble_esm:
+    input:
+        expand("pcp_gcreplay_inputs/{chain}/gctrees_2022-06-16_{chain}_pcp_esm{esm_model_number}_mask_ratios.hdf5", 
+               chain="{chain}", 
+               esm_model_number=esm_model_numbers),
+    output:
+        "pcp_gcreplay_inputs/{chain}/gctrees_2022-06-16_{chain}_pcp_esm_ensemble_mask_ratios.hdf5",
+    run:
+        input_files = ",".join(input)
+        output_file = output[0]
+
+        subprocess.run(
+            f"epam ensemble_esm_models {input_files} {output_file}", shell=True, check=True
+        )
