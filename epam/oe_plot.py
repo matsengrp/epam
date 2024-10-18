@@ -994,9 +994,6 @@ def plot_sites_subs_acc(
     # compute substitution accuracy
     total_subacc = df[df["correct"] == True].shape[0] / df.shape[0]
     site_subacc = [c / o if o > 0 else -1 for c, o in zip(correct, observed)]
-    fwr_site_subacc = [
-        c / o if o > 0 else -1 for c, o in zip(fwr_correct, fwr_observed)
-    ]
 
     if counts_ax is not None:
         counts_ax.bar(
@@ -1071,26 +1068,130 @@ def plot_sites_subs_acc(
         subacc_ax.set_ylim(-0.02, 1.02)
         subacc_ax.grid(axis="y")
 
-        # Assumes IMGT numbering
-        for cdr_bounds in [("27", "38"), ("56", "65"), ("105", "117")]:
-            xlower = xvals.index(cdr_bounds[0])
-            xupper = xvals.index(cdr_bounds[1])
-            subacc_ax.add_patch(
-                Rectangle(
-                    (xlower - 0.5, 0),
-                    xupper - xlower + 1,
-                    subacc_ax.get_ylim()[1],
-                    color=cdr_color,
-                    alpha=0.2,
-                )
-            )
-
     return {
         "total_subacc": total_subacc,
         "site_subacc": site_subacc,
     }
 
 
+def plot_sites_multi_subacc(
+    df_list,
+    markers,
+    colors,
+    modelnames,
+    counts_ax,
+    subacc_ax,
+    numbering_dict=None,
+    logy=False,
+):
+    """
+    Draws a figure of per-site observed substitutions with number of correct predictions, 
+    and per-site substitution accuracies, for a list of models.
+    The input dataframes requires two columns:
+    'site' (site position of a substitution -- may be at the level of nucleotide, or codon, or amino acid, etc.)
+    'correct' (True/False whether the amino acid substitution prediction is correct)
+    Each dataframe row corresponds to a site in a specific sequence.
+    Assumes only sites with observed substitution are in the dataframe.
+
+    Parameters:
+    df_list (list of pd.DataFrame): list of dataframes of observed and predicted sites of substitution.
+    markers (list): list of marker styles for each model
+    colors (list): list of colors for each model
+    modelnames (list): list of model names for each model
+    counts_ax (fig.ax): figure axis for plotting site counts. If None, plot is not drawn.
+    subacc_ax (fig.ax): figure axis for plotting site accuracy. If None, plot is not drawn.
+    numbering_dict (dict): mapping (sample_id, family) to numbering list.
+    logy (bool): whether to show y-axis in log-scale.
+
+    """
+    if numbering_dict is None:
+        xvals = np.arange(np.min(df_list[0]["site"]), np.max(df_list[0]["site"]) + 1)
+    else:
+        xvals = numbering_dict[("reference", 0)]
+        
+    
+    observed = []
+    correct_list = []
+    for i in range(len(df_list)):
+        df = df_list[i]
+        correct = []
+        for site in xvals:
+            site_df = df[df["site"] == site]
+            if i==0:
+                nobs = site_df.shape[0]
+                observed.append(nobs)
+            ncorr = site_df[site_df["correct"] == True].shape[0]
+            correct.append(ncorr)
+        correct = np.array(correct)
+        correct_list.append(correct)
+    observed = np.array(observed)
+    
+    # compute substitution accuracy
+    site_subacc_list = [[c/o if o>0 else -1 for c,o in zip(correct,observed)] for correct in correct_list]
+    
+    if counts_ax is not None:
+        counts_ax.plot(
+            xvals,
+            observed,
+            marker='o',
+            markersize=6,
+            linewidth=2,
+            color="black",
+            label="observed",
+        )
+
+        for correct, marker, color, modelname in zip(correct_list, markers, colors, modelnames):
+            counts_ax.plot(
+                xvals,
+                correct,
+                marker=marker,
+                markersize=6,
+                fillstyle="none",
+                linewidth=2,
+                color=color,
+                label=modelname
+            )
+
+        if subacc_ax is None:
+            if df.dtypes["site"] == "object":
+                counts_ax.tick_params(axis="x", labelsize=7, labelrotation=90)
+            else:
+                counts_ax.tick_params(axis="x", labelsize=16)
+            counts_ax.set_xlabel("amino acid sequence position", fontsize=20, labelpad=10)
+        counts_ax.tick_params(axis="y", labelsize=16)
+        counts_ax.set_ylabel("number of substitutions", fontsize=20, labelpad=10)
+        counts_ax.margins(x=0.01)
+        
+        if logy:
+            counts_ax.set_yscale("log")
+
+        counts_ax.legend(fontsize=15)
+
+    if subacc_ax is not None:
+
+        for site_subacc, marker, color in zip(site_subacc_list, markers, colors):
+            subacc_ax.plot(
+                xvals,
+                site_subacc,
+                marker=marker,
+                markersize=6,
+                fillstyle="none",
+                linewidth=2,
+                color=color
+            )
+        
+        if df.dtypes["site"] == "object":
+            subacc_ax.tick_params(axis="x", labelsize=7, labelrotation=90)
+        else:
+            subacc_ax.tick_params(axis="x", labelsize=16)
+        subacc_ax.set_xlabel("amino acid sequence position", fontsize=20, labelpad=10)
+        subacc_ax.tick_params(axis="y", labelsize=16)
+        subacc_ax.set_ylabel("sub. acc.", fontsize=20, labelpad=10)
+        subacc_ax.margins(x=0.01)
+        subacc_ax.set_ylim(-0.02,1.02)
+        subacc_ax.grid(axis='y')
+        
+        
 def get_site_csp_df(
     aaprob_path,
     numbering_dict=None,
