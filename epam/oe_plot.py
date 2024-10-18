@@ -51,6 +51,23 @@ def highest_k_substitutions(k, matrix_i, parent_aa, i):
     return pred_aa_subs
 
 
+def check_for_out_of_range(df):
+    """
+    Check for probabilities out of range in a DataFrame.
+
+    Parameters:
+    df (pd.DataFrame): DataFrame with column 'prob'.
+
+    """
+    out_of_range = df[(df["prob"] < 0) | (df["prob"] > 1)]
+    if len(out_of_range) > 0:
+        print(
+            f"Warning: {len(out_of_range)} rows of {len(df)} have probabilities out of range."
+        )
+        print("Here's a sample:")
+        print(out_of_range.head())
+
+
 def annotate_sites_df(
     df,
     pcp_df,
@@ -224,6 +241,7 @@ def plot_observed_vs_expected(
     counts_twinx_ax (fig.ax): handle to the probability y-axis (right side) of the counts plot, if drawn.
 
     """
+    check_for_out_of_range(df)
     model_probs = df["prob"].to_numpy()
 
     # set default binning if None specified
@@ -428,6 +446,8 @@ def plot_sites_observed_vs_expected(
     residual (float): square root of the sum of squared bin-by-bin differences between observed and expected, divided by total expected.
 
     """
+    check_for_out_of_range(df)
+
     if numbering_dict is None:
         xvals = np.arange(np.min(df["site"]), np.max(df["site"]) + 1)
     else:
@@ -1085,7 +1105,7 @@ def plot_sites_multi_subacc(
     logy=False,
 ):
     """
-    Draws a figure of per-site observed substitutions with number of correct predictions, 
+    Draws a figure of per-site observed substitutions with number of correct predictions,
     and per-site substitution accuracies, for a list of models.
     The input dataframes requires two columns:
     'site' (site position of a substitution -- may be at the level of nucleotide, or codon, or amino acid, etc.)
@@ -1108,8 +1128,7 @@ def plot_sites_multi_subacc(
         xvals = np.arange(np.min(df_list[0]["site"]), np.max(df_list[0]["site"]) + 1)
     else:
         xvals = numbering_dict[("reference", 0)]
-        
-    
+
     observed = []
     correct_list = []
     for i in range(len(df_list)):
@@ -1117,7 +1136,7 @@ def plot_sites_multi_subacc(
         correct = []
         for site in xvals:
             site_df = df[df["site"] == site]
-            if i==0:
+            if i == 0:
                 nobs = site_df.shape[0]
                 observed.append(nobs)
             ncorr = site_df[site_df["correct"] == True].shape[0]
@@ -1125,22 +1144,27 @@ def plot_sites_multi_subacc(
         correct = np.array(correct)
         correct_list.append(correct)
     observed = np.array(observed)
-    
+
     # compute substitution accuracy
-    site_subacc_list = [[c/o if o>0 else -1 for c,o in zip(correct,observed)] for correct in correct_list]
-    
+    site_subacc_list = [
+        [c / o if o > 0 else -1 for c, o in zip(correct, observed)]
+        for correct in correct_list
+    ]
+
     if counts_ax is not None:
         counts_ax.plot(
             xvals,
             observed,
-            marker='o',
+            marker="o",
             markersize=6,
             linewidth=2,
             color="black",
             label="observed",
         )
 
-        for correct, marker, color, modelname in zip(correct_list, markers, colors, modelnames):
+        for correct, marker, color, modelname in zip(
+            correct_list, markers, colors, modelnames
+        ):
             counts_ax.plot(
                 xvals,
                 correct,
@@ -1149,7 +1173,7 @@ def plot_sites_multi_subacc(
                 fillstyle="none",
                 linewidth=2,
                 color=color,
-                label=modelname
+                label=modelname,
             )
 
         if subacc_ax is None:
@@ -1157,11 +1181,13 @@ def plot_sites_multi_subacc(
                 counts_ax.tick_params(axis="x", labelsize=7, labelrotation=90)
             else:
                 counts_ax.tick_params(axis="x", labelsize=16)
-            counts_ax.set_xlabel("amino acid sequence position", fontsize=20, labelpad=10)
+            counts_ax.set_xlabel(
+                "amino acid sequence position", fontsize=20, labelpad=10
+            )
         counts_ax.tick_params(axis="y", labelsize=16)
         counts_ax.set_ylabel("number of substitutions", fontsize=20, labelpad=10)
         counts_ax.margins(x=0.01)
-        
+
         if logy:
             counts_ax.set_yscale("log")
 
@@ -1177,9 +1203,9 @@ def plot_sites_multi_subacc(
                 markersize=6,
                 fillstyle="none",
                 linewidth=2,
-                color=color
+                color=color,
             )
-        
+
         if df.dtypes["site"] == "object":
             subacc_ax.tick_params(axis="x", labelsize=7, labelrotation=90)
         else:
@@ -1188,10 +1214,10 @@ def plot_sites_multi_subacc(
         subacc_ax.tick_params(axis="y", labelsize=16)
         subacc_ax.set_ylabel("sub. acc.", fontsize=20, labelpad=10)
         subacc_ax.margins(x=0.01)
-        subacc_ax.set_ylim(-0.02,1.02)
-        subacc_ax.grid(axis='y')
-        
-        
+        subacc_ax.set_ylim(-0.02, 1.02)
+        subacc_ax.grid(axis="y")
+
+
 def get_site_csp_df(
     aaprob_path,
     numbering_dict=None,
