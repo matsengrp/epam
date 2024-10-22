@@ -7,6 +7,7 @@ import bisect
 import matplotlib.pyplot as plt
 from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
 from epam.evaluation import (
+    highest_k_substitutions,
     locate_child_substitutions,
     calculate_site_substitution_probabilities,
     locate_top_k_substitutions,
@@ -20,35 +21,6 @@ from netam.sequences import (
 )
 from matplotlib.collections import PatchCollection
 from matplotlib.patches import Rectangle
-
-
-def highest_k_substitutions(k, matrix_i, parent_aa, i):
-    """
-    Return the k highest ranked substitution for site i in a given parent-child pair.
-
-    Parameters:
-    k (int): number of top substitutions to find.
-    matrix_i (np.array): aaprob matrix for parent-child pair at aa site i.
-    parent_aa (str): Parent amino acid sequence.
-    i (int): Index of amino acid site substituted.
-
-    Returns:
-    pred_aa_subs (list): Predicted amino acid substitutions (most likely non-parent aa).
-
-    """
-    prob_sorted_aa_indices = matrix_i.argsort()[::-1]
-
-    pred_aa_ranked = "".join((np.array(list(AA_STR_SORTED))[prob_sorted_aa_indices]))
-
-    # skip most likely aa if it is the parent aa (enforce substitution)
-    pred_aa_subs = []
-    for aa in pred_aa_ranked:
-        if aa != parent_aa[i]:
-            pred_aa_subs.append(aa)
-        if len(pred_aa_subs) == k:
-            break
-
-    return pred_aa_subs
 
 
 def check_for_out_of_range(df):

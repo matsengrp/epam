@@ -119,7 +119,7 @@ def evaluate_dataset(aaprob_path):
 
                 def find_highest_ranked_substitutions(matrix, parent, child):
                     return [
-                        highest_ranked_substitution(matrix[j, :], parent, j)
+                        highest_k_substitutions(1, matrix[j, :], parent, j)[0]
                         for j in range(len(parent))
                         if parent[j] != child[j]
                     ]
@@ -294,17 +294,18 @@ def calculate_site_substitution_probabilities(aaprobs, parent_aa):
     return site_sub_probs
 
 
-def highest_ranked_substitution(matrix_i, parent_aa, i):
+def highest_k_substitutions(k, matrix_i, parent_aa, i):
     """
-    Return the highest ranked substitution for site i in a given parent-child pair.
+    Return the k highest ranked substitution for site i in a given parent-child pair.
 
     Parameters:
+    k (int): number of top substitutions to find.
     matrix_i (np.array): aaprob matrix for parent-child pair at aa site i.
     parent_aa (str): Parent amino acid sequence.
     i (int): Index of amino acid site substituted.
 
     Returns:
-    pred_aa_sub (str): Predicted amino acid substitution (most likely non-parent aa).
+    pred_aa_subs (list): Predicted amino acid substitutions (most likely non-parent aa).
 
     """
     prob_sorted_aa_indices = matrix_i.argsort()[::-1]
@@ -312,12 +313,14 @@ def highest_ranked_substitution(matrix_i, parent_aa, i):
     pred_aa_ranked = "".join((np.array(list(AA_STR_SORTED))[prob_sorted_aa_indices]))
 
     # skip most likely aa if it is the parent aa (enforce substitution)
-    if pred_aa_ranked[0] == parent_aa[i]:
-        pred_aa_sub = pred_aa_ranked[1]
-    elif pred_aa_ranked[0] != parent_aa[i]:
-        pred_aa_sub = pred_aa_ranked[0]
+    pred_aa_subs = []
+    for aa in pred_aa_ranked:
+        if aa != parent_aa[i]:
+            pred_aa_subs.append(aa)
+        if len(pred_aa_subs) == k:
+            break
 
-    return pred_aa_sub
+    return pred_aa_subs
 
 
 def locate_top_k_substitutions(site_sub_probs, k_sub):
