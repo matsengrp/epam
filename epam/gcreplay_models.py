@@ -313,7 +313,9 @@ class GCReplaySHMESM(models.MutSelModel):
 
     def build_selection_matrix_from_parent(self, parent):
         parent_aa = sequences.translate_sequence(parent)
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent_aa))
+        return torch.tensor(
+            self.selection_model.aaprobs_of_parent_child_pair(parent_aa)
+        )
 
 
 class GCReplaySHMpleDMS(models.MutSelModel):

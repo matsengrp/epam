@@ -820,6 +820,71 @@ def plot_sites_observed_vs_top_k_predictions(
     }
 
 
+def get_sub_acc_from_csp_df(df, pcp_df, top_k=1):
+    """
+    Determines the sites of observed substitutions and whether the amino acid substitution is predicted
+    among the top-k most probable for every PCP in a dataset, using a dataframe of CSPs at sites of substitutions.
+    The input DataFrame describes a site and conditional substitution probability (CSP) in each row for an amino acid.
+    The `site` corresponds to a site of substitution, and there are 20 rows for each site to cover all amino acids.
+    Each row is expected to have the `pcp_index` column, indicating the index of the PCP the site belongs to.
+    `prob` denotes a CSP and `aa` denotes the index in AA_STR_SORTED of the corresponding amino acid.
+    `is_target` denotes if the amino acid is the observed substitution target.
+
+    Parameters:
+    df (pd.DataFrame): site CSPs DataFrame.
+    pcp_df (pd.DataFrame): corresponding PCP DataFrame, to access various annotations.
+
+    Returns tuple with:
+    pcp_indices (list): indices to the reference PCP file.
+    pcp_sub_locations (list): per-PCP lists of substitution locations (positions along the sequence string).
+    pcp_sub_correct (list): per-PCP lists of True/False whether substitution prediction contains the correct amino acid.
+    pcp_is_cdr (list): per-PCP lists of True/False whether amino acid site is in a CDR.
+    pcp_sample_family_dict (dict): mapping PCP index to (sample_id, family) 2-tuple.
+    """
+    pcp_indices = []
+    pcp_sub_locations = []
+    pcp_sub_correct = []
+    pcp_is_cdr = []
+    pcp_sample_family_dict = {}
+
+    pcp_groups = df.groupby("pcp_index")
+    for pcp_index in df["pcp_index"].drop_duplicates():
+        pcp_row = pcp_df.loc[pcp_index]
+        cdr_anno = pcp_sites_cdr_annotation(pcp_row)
+
+        group_df = pcp_groups.get_group(pcp_index)
+
+        pcp_indices.append(pcp_index)
+
+        sub_locations = group_df["site"].drop_duplicates().tolist()
+        pcp_sub_locations.append(sub_locations)
+
+        sites_correct = []
+        sites_is_cdr = []
+        site_groups = group_df.groupby("site")
+        for site in sub_locations:
+            site_df = site_groups.get_group(site)
+            csp = site_df["prob"].to_numpy()
+            is_target = site_df["is_target"].to_numpy()
+
+            csp_sorted_indices = csp.argsort()[::-1]
+            sites_correct.append(True in is_target[csp_sorted_indices[:top_k]])
+            sites_is_cdr.append(cdr_anno[site])
+
+        pcp_sub_correct.append(sites_correct)
+        pcp_is_cdr.append(sites_is_cdr)
+
+        pcp_sample_family_dict[pcp_index] = tuple(pcp_row[["sample_id", "family"]])
+
+    return (
+        pcp_indices,
+        pcp_sub_locations,
+        pcp_sub_correct,
+        pcp_is_cdr,
+        pcp_sample_family_dict,
+    )
+
+
 def get_sub_acc_from_aaprob(aaprob_path, top_k=1):
     """
     Determines the sites of observed substitutions and whether the amino acid substitution is predicted
@@ -1218,6 +1283,90 @@ def plot_sites_multi_subacc(
         subacc_ax.grid(axis="y")
 
 
+def annotate_site_csp_df(
+    df,
+    pcp_df,
+    numbering_dict=None,
+):
+    """
+    Create a DataFrame with modified or additional annotations for site numbering and CDR label.
+    The input DataFrame describes a site and conditional substitution probability (CSP) in each row for an amino acid.
+    The `site` corresponds to a site of substitution, and there are 20 rows for each site to cover all amino acids.
+    Each row is expected to have the `pcp_index` column, indicating the index of the PCP the site belongs to.
+    `prob` denotes a CSP and `aa` denotes the index in AA_STR_SORTED of the corresponding amino acid.
+    `is_target` denotes if the amino acid is the observed substitution target.
+
+    Parameters:
+    df (pd.DataFrame): site CSPs DataFrame.
+    pcp_df (pd.DataFrame): PCP file of the dataset.
+    numbering_dict (dict): mapping (sample_id, family) to numbering list.
+
+    Returns:
+    output_df (pd.DataFrame): a new dataframe with columns pcp_index, site, prob, aa, mutation, is_cdr.
+    Notes:
+    The `site` column will be changed if a numbering scheme was specified by numbering_dict.
+    `mutation` column is the same content as `is_target`, the column name change allows it to be usable by various plotting functions.
+    `aa` is in terms of alphabet symbols
+    The size of output_df may be different from input df if there were PCPs that did not have a valid ANARCI numbering.
+    """
+
+    site_col = []
+    is_cdr_col = []
+
+    pcp_groups = df.groupby("pcp_index")
+    for pcp_index in df["pcp_index"].drop_duplicates():
+        pcp_row = pcp_df.loc[pcp_index]
+
+        pcp_group_df = pcp_groups.get_group(pcp_index)
+        nsites = pcp_group_df.shape[0]
+        # assert (
+        #     nsites == len(pcp_row["parent"]) // 3
+        # ), f"number of sites ({nsites}) does not match sequence length ({len(pcp_row['parent']) // 3})"
+
+        if numbering_dict is None:
+            numbering = np.arange(nsites)
+        else:
+            nbkey = tuple(pcp_row[["sample_id", "family"]])
+            if nbkey in numbering_dict:
+                numbering = numbering_dict[nbkey]
+            else:
+                # Assign sites as "None", marking them for exclusion from output.
+                numbering = ["None"] * nsites
+
+        pcp_is_cdr = pcp_sites_cdr_annotation(pcp_row)
+
+        for site in pcp_group_df["site"].drop_duplicates():
+            if site >= len(pcp_is_cdr):
+                print(pcp_index, site, len(pcp_is_cdr))
+                continue
+            if numbering_dict is None:
+                site_col.append([site] * 20)
+            else:
+                nbkey = tuple(pcp_row[["sample_id", "family"]])
+                if nbkey in numbering_dict:
+                    site_col.append([numbering_dict[nbkey][site]] * 20)
+                else:
+                    # Assign sites as "None", marking them for exclusion from output.
+                    site_col.append(["None"] * 20)
+
+            is_cdr_col.append([pcp_is_cdr[site]] * 20)
+
+    output_df = pd.DataFrame(
+        columns=["pcp_index", "site", "prob", "aa", "mutation", "is_cdr"]
+    )
+    output_df["pcp_index"] = df["pcp_index"].to_numpy()
+    output_df["site"] = np.concatenate(site_col)
+    output_df["prob"] = df["prob"].to_numpy()
+    output_df["aa"] = [AA_STR_SORTED[i] for i in df["aa"]]
+    output_df["mutation"] = df["is_target"].to_numpy()
+    output_df["is_cdr"] = np.concatenate(is_cdr_col)
+
+    if numbering_dict is None:
+        return output_df
+    else:
+        return output_df[output_df["site"] != "None"]
+
+
 def get_site_csp_df(
     aaprob_path,
     numbering_dict=None,
@@ -1308,12 +1457,13 @@ def get_site_csp_df(
 
 def pcp_sites_cdr_annotation(pcp_row):
     """
+    Annotations for CDR or not for all sites in a PCP.
 
     Parameters:
-    pcp_row (pd.Series):
+    pcp_row (pd.Series): A row from the corresponding PCP file
 
     Returns:
-
+    An (ordered) list of booleans for whether each site is in the CDR or not. The list is the same length as the sequence.
     """
     cdr1 = (
         pcp_row["cdr1_codon_start"] // 3,
