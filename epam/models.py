@@ -1097,8 +1097,8 @@ class S5F(MutModel):
         [motifs] = self._motif_list([parent])
         mut_probs = np.array([self._motif_mutability(motif) for motif in motifs])
 
-        # S5F gives mutability probabilities; derive the Poisson rates (corresponding to branch length of 1).
-        rates = torch.tensor(-np.log(1 - mut_probs), dtype=torch.float)
+        # S5F gives mutability probabilities; set the Poisson rates (corresponding to branch length of 1).
+        rates = torch.tensor(mut_probs, dtype=torch.float)
 
         sub_probs = torch.tensor(
             np.stack([self._motif_substitution(motif) for motif in motifs]),

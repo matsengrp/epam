@@ -220,8 +220,8 @@ class GCReplaySHM(models.MutModel):
             substitution probabilities as Torch tensors.
         """
         # Passenger mouse analysis gives mutation probabilities;
-        # derive the Poisson rates (corresponding to branch length of 1).
-        rates = torch.tensor(-np.log(1 - self.mut_probs), dtype=torch.float)
+        # set the Poisson rates (corresponding to branch length of 1).
+        rates = torch.tensor(self.mut_probs, dtype=torch.float)
         sub_probs = torch.tensor(self.sub_probs, dtype=torch.float)
         return rates, sub_probs
 
@@ -297,7 +297,7 @@ class GCReplaySHMESM(models.MutSelModel):
         """
         super().__init__(
             mutation_model=GCReplaySHM(shm_data_file),
-            selection_model=models.CachedESM1v(sf_rescale=sf_rescale),
+            selection_model=models.ESM1vSelModel(sf_rescale=sf_rescale),
             *args,
             **kwargs,
         )
@@ -312,7 +312,10 @@ class GCReplaySHMESM(models.MutSelModel):
         self.selection_model.preload_esm_data(hdf5_path)
 
     def build_selection_matrix_from_parent(self, parent):
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+        parent_aa = sequences.translate_sequence(parent)
+        return torch.tensor(
+            self.selection_model.aaprobs_of_parent_child_pair(parent_aa)
+        )
 
 
 class GCReplaySHMpleDMS(models.MutSelModel):

@@ -1,0 +1,132 @@
+import subprocess
+
+dms_data_file = "data/gcreplay/final_variant_scores.csv"
+shm_hc_data_file = 'data/gcreplay/chigy_hc_mutation_rates_nt.csv'
+shm_lc_data_file = 'data/gcreplay/chigy_lc_mutation_rates_nt.csv'
+GCREPLAY_IGH_MODELS = [
+    ("GCReplayESM_igh",           "CachedESM1v", {}),
+    ("GCReplaySHMESMSigmoid_igh", "GCReplaySHMESM", { "shm_data_file": shm_hc_data_file, "sf_rescale": "sigmoid", "init_branch_length": 1}),
+]
+GCREPLAY_IGK_MODELS = [
+    ("GCReplayESM_igk",           "CachedESM1v", {}),
+    ("GCReplaySHMESMSigmoid_igk", "GCReplaySHMESM", { "shm_data_file": shm_lc_data_file, "sf_rescale": "sigmoid", "init_branch_length": 1}),
+]
+
+igh_model_name_to_spec = {
+    model_name: [model_class, str({**model_params, "model_name": model_name})]
+    for model_name, model_class, model_params in GCREPLAY_IGH_MODELS
+}
+igk_model_name_to_spec = {
+    model_name: [model_class, str({**model_params, "model_name": model_name})]
+    for model_name, model_class, model_params in GCREPLAY_IGK_MODELS
+}
+
+igh_pcp_inputs = glob_wildcards("pcp_gcreplay_inputs/igh/{name}.csv").name
+igk_pcp_inputs = glob_wildcards("pcp_gcreplay_inputs/igk/{name}.csv").name
+esm_versions = ['1','2','3','4','5','_ensemble']
+
+rule all:
+    input:
+        "output_gcreplay_esm/igh/combined_performance.csv",
+        "output_gcreplay_esm/igk/combined_performance.csv",
+
+
+rule run_igh_model:
+    input:
+        in_csv="pcp_gcreplay_inputs/igh/{pcp_input}.csv",
+        hdf5_path="pcp_gcreplay_inputs/igh/gctrees_2022-06-16_igh_pcp_esm{member}_mask_ratios.hdf5",
+    output:
+        aaprob="output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/aaprob.hdf5",
+        performance="output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/performance.csv",
+    params:
+        model_class=lambda wildcards: igh_model_name_to_spec[wildcards.model_name][0],
+        model_params=lambda wildcards: igh_model_name_to_spec[wildcards.model_name][1],
+    benchmark:
+        "output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/timing.tsv"
+    shell:
+        """
+        mkdir -p output_gcreplay_esm/igh/{wildcards.pcp_input}/{wildcards.model_name}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam evaluate {output.aaprob} {output.performance}
+        """
+
+
+rule run_igk_model:
+    input:
+        in_csv="pcp_gcreplay_inputs/igk/{pcp_input}.csv",
+        hdf5_path="pcp_gcreplay_inputs/igk/gctrees_2022-06-16_igk_pcp_esm{member}_mask_ratios.hdf5"
+    output:
+        aaprob="output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/aaprob.hdf5",
+        performance="output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/performance.csv",
+    params:
+        model_class=lambda wildcards: igk_model_name_to_spec[wildcards.model_name][0],
+        model_params=lambda wildcards: igk_model_name_to_spec[wildcards.model_name][1],
+    benchmark:
+        "output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/timing.tsv"
+    shell:
+        """
+        mkdir -p output_gcreplay_esm/igk/{wildcards.pcp_input}/{wildcards.model_name}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam evaluate {output.aaprob} {output.performance}
+        """
+        
+
+rule combine_igh_performance_files:
+    input:
+        expand(
+            "output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/performance.csv",
+            pcp_input=igh_pcp_inputs,
+            model_name=igh_model_name_to_spec.keys(),
+            member=esm_versions,
+        ),
+    output:
+        "output_gcreplay_esm/igh/combined_performance.csv",
+        "output_gcreplay_esm/igh/combined_timing.csv",
+    run:
+        input_files = ",".join(input)
+        input_timing_files = ",".join(
+            f"output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/timing.tsv"
+            for pcp_input in igh_pcp_inputs
+            for model_name in igh_model_name_to_spec.keys()
+            for member in esm_versions
+        )
+        output_file = output[0]
+        output_timing_file = output[1]
+        subprocess.run(
+            f"epam concatenate_csvs {input_files} {output_file}", shell=True, check=True
+        )
+        subprocess.run(
+            f"epam concatenate_csvs {input_timing_files} {output_timing_file} --is_tsv --record_path",
+            shell=True,
+            check=True,
+        )
+
+rule combine_igk_performance_files:
+    input:
+        expand(
+            "output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/performance.csv",
+            pcp_input=igk_pcp_inputs,
+            model_name=igk_model_name_to_spec.keys(),
+            member=esm_versions,
+        ),
+    output:
+        "output_gcreplay_esm/igk/combined_performance.csv",
+        "output_gcreplay_esm/igk/combined_timing.csv",
+    run:
+        input_files = ",".join(input)
+        input_timing_files = ",".join(
+            f"output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/timing.tsv"
+            for pcp_input in igk_pcp_inputs
+            for model_name in igk_model_name_to_spec.keys()
+            for member in esm_versions
+        )
+        output_file = output[0]
+        output_timing_file = output[1]
+        subprocess.run(
+            f"epam concatenate_csvs {input_files} {output_file}", shell=True, check=True
+        )
+        subprocess.run(
+            f"epam concatenate_csvs {input_timing_files} {output_timing_file} --is_tsv --record_path",
+            shell=True,
+            check=True,
+        )

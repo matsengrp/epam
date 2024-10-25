@@ -4,7 +4,7 @@ import h5py
 import pandas as pd
 import numpy as np
 from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
-from epam.annotate_pcps import get_cdr_fwk_seqs
+from epam.annotate_pcps import get_cdr_fwr_seqs
 from netam.common import SMALL_PROB
 from netam.sequences import (
     AA_STR_SORTED,
@@ -56,11 +56,11 @@ def evaluate_dataset(aaprob_path):
         lambda row: translate_sequence(row["child"]), axis=1
     )
     (
-        pcp_df["parent_fwk_seq"],
+        pcp_df["parent_fwr_seq"],
         pcp_df["parent_cdr_seq"],
-        pcp_df["child_fwk_seq"],
+        pcp_df["child_fwr_seq"],
         pcp_df["child_cdr_seq"],
-    ) = zip(*pcp_df.apply(get_cdr_fwk_seqs, axis=1))
+    ) = zip(*pcp_df.apply(get_cdr_fwr_seqs, axis=1))
 
     region_parent_aa_seqs = {}
     region_child_aa_seqs = {}
@@ -68,7 +68,7 @@ def evaluate_dataset(aaprob_path):
     region_sub_aa_ids = {}
     region_k_subs = {}
 
-    for region in ["full", "fwk", "cdr"]:
+    for region in ["full", "fwr", "cdr"]:
         if region == "full":
             region_parent_aa_seqs[region] = pcp_df["parent_aa"].to_numpy()
             region_child_aa_seqs[region] = pcp_df["child_aa"].to_numpy()
@@ -100,7 +100,7 @@ def evaluate_dataset(aaprob_path):
 
     with h5py.File(aaprob_path, "r") as matfile:
         model_name = matfile.attrs["model_name"]
-        for region in ["full", "fwk", "cdr"]:
+        for region in ["full", "fwr", "cdr"]:
             region_site_sub_probs[region] = []
             region_model_sub_aa_ids[region] = []
 
@@ -119,7 +119,7 @@ def evaluate_dataset(aaprob_path):
 
                 def find_highest_ranked_substitutions(matrix, parent, child):
                     return [
-                        highest_ranked_substitution(matrix[j, :], parent, j)
+                        highest_k_substitutions(1, matrix[j, :], parent, j)[0]
                         for j in range(len(parent))
                         if parent[j] != child[j]
                     ]
@@ -138,7 +138,7 @@ def evaluate_dataset(aaprob_path):
     region_cross_ent = {}
     region_aa_sub_freq = {}
 
-    for region in ["full", "fwk", "cdr"]:
+    for region in ["full", "fwr", "cdr"]:
         region_top_k_sub_locations[region] = [
             locate_top_k_substitutions(region_site_sub_prob, k_sub)
             for region_site_sub_prob, k_sub in zip(
@@ -186,9 +186,9 @@ def evaluate_dataset(aaprob_path):
         "sub_accuracy": region_sub_acc["full"],
         "r_precision": region_r_prec["full"],
         "cross_entropy": region_cross_ent["full"],
-        "fwk_sub_accuracy": region_sub_acc["fwk"],
-        "fwk_r_precision": region_r_prec["fwk"],
-        "fwk_cross_entropy": region_cross_ent["fwk"],
+        "fwr_sub_accuracy": region_sub_acc["fwr"],
+        "fwr_r_precision": region_r_prec["fwr"],
+        "fwr_cross_entropy": region_cross_ent["fwr"],
         "cdr_sub_accuracy": region_sub_acc["cdr"],
         "cdr_r_precision": region_r_prec["cdr"],
         "cdr_cross_entropy": region_cross_ent["cdr"],
@@ -198,11 +198,11 @@ def evaluate_dataset(aaprob_path):
             np.min(region_aa_sub_freq["full"]),
             np.max(region_aa_sub_freq["full"]),
         ),
-        "fwk_avg_k_subs": np.mean(region_k_subs["fwk"]),
-        "fwk_avg_aa_sub_freq": np.mean(region_aa_sub_freq["fwk"]),
-        "fwk_aa_sub_freq_range": (
-            np.min(region_aa_sub_freq["fwk"]),
-            np.max(region_aa_sub_freq["fwk"]),
+        "fwr_avg_k_subs": np.mean(region_k_subs["fwr"]),
+        "fwr_avg_aa_sub_freq": np.mean(region_aa_sub_freq["fwr"]),
+        "fwr_aa_sub_freq_range": (
+            np.min(region_aa_sub_freq["fwr"]),
+            np.max(region_aa_sub_freq["fwr"]),
         ),
         "cdr_avg_k_subs": np.mean(region_k_subs["cdr"]),
         "cdr_avg_aa_sub_freq": np.mean(region_aa_sub_freq["cdr"]),
@@ -270,7 +270,7 @@ def calculate_site_substitution_probabilities(aaprobs, parent_aa):
     site_sub_probs = []
 
     for i in range(len(parent_aa)):
-        # assign 0 probability of substitution to sites outside region of interest in CDR and FWK sequences
+        # assign 0 probability of substitution to sites outside region of interest in CDR and FWR sequences
         if parent_aa[i] == "-":
             site_sub_probs.append(0.0)
         else:
@@ -294,17 +294,18 @@ def calculate_site_substitution_probabilities(aaprobs, parent_aa):
     return site_sub_probs
 
 
-def highest_ranked_substitution(matrix_i, parent_aa, i):
+def highest_k_substitutions(k, matrix_i, parent_aa, i):
     """
-    Return the highest ranked substitution for site i in a given parent-child pair.
+    Return the k highest ranked substitution for site i in a given parent-child pair.
 
     Parameters:
+    k (int): number of top substitutions to find.
     matrix_i (np.array): aaprob matrix for parent-child pair at aa site i.
     parent_aa (str): Parent amino acid sequence.
     i (int): Index of amino acid site substituted.
 
     Returns:
-    pred_aa_sub (str): Predicted amino acid substitution (most likely non-parent aa).
+    pred_aa_subs (list): Predicted amino acid substitutions (most likely non-parent aa).
 
     """
     prob_sorted_aa_indices = matrix_i.argsort()[::-1]
@@ -312,12 +313,14 @@ def highest_ranked_substitution(matrix_i, parent_aa, i):
     pred_aa_ranked = "".join((np.array(list(AA_STR_SORTED))[prob_sorted_aa_indices]))
 
     # skip most likely aa if it is the parent aa (enforce substitution)
-    if pred_aa_ranked[0] == parent_aa[i]:
-        pred_aa_sub = pred_aa_ranked[1]
-    elif pred_aa_ranked[0] != parent_aa[i]:
-        pred_aa_sub = pred_aa_ranked[0]
+    pred_aa_subs = []
+    for aa in pred_aa_ranked:
+        if aa != parent_aa[i]:
+            pred_aa_subs.append(aa)
+        if len(pred_aa_subs) == k:
+            break
 
-    return pred_aa_sub
+    return pred_aa_subs
 
 
 def locate_top_k_substitutions(site_sub_probs, k_sub):
@@ -442,14 +445,14 @@ def calculate_cross_entropy_loss(pcp_sub_locations, site_sub_probs):
 
 def calculate_aa_substitution_frequencies_by_region(parent_aa, child_aa):
     """
-    Calculate the fraction of sites that differ between the parent and child FWK or CDR sequences.
+    Calculate the fraction of sites that differ between the parent and child FWR or CDR sequences.
 
     Parameters:
-    parent_aa (str): Amino acid sequence of parent. FWK sequences will have CDR sites masked with '-' and vice versa.
+    parent_aa (str): Amino acid sequence of parent. FWR sequences will have CDR sites masked with '-' and vice versa.
     child_aa (str): Amino acid sequence of child.
 
     Returns:
-    aa_sub_frequency (float): Fraction of sites that differ between the parent and child FWK or CDR sequences.
+    aa_sub_frequency (float): Fraction of sites that differ between the parent and child FWR or CDR sequences.
 
     """
     parent = parent_aa.replace("-", "")
@@ -457,7 +460,7 @@ def calculate_aa_substitution_frequencies_by_region(parent_aa, child_aa):
 
     assert len(parent) == len(
         child
-    ), "Parent and child FWK/CDR sequences must be the same length."
+    ), "Parent and child FWR/CDR sequences must be the same length."
 
     aa_sub_frequency = sum(1 for p, c in zip(parent, child) if p != c) / len(parent)
 

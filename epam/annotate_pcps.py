@@ -1,4 +1,4 @@
-"""Functions for parsing PCPs by region (CDR v FWK)."""
+"""Functions for parsing PCPs by region (CDR v FWR)."""
 
 import pandas as pd
 
@@ -68,7 +68,7 @@ def seq_df_of_pcp_df(pcp_df):
 
 def aa_regions_of_row(row):
     """
-    Calculate Python-style amino acid start and end positions for CDR and FWK regions from a single DataFrame row.
+    Calculate Python-style amino acid start and end positions for CDR and FWR regions from a single DataFrame row.
 
     By Python-style, we mean that the start position is inclusive and the end position is exclusive.
     """
@@ -85,14 +85,14 @@ def aa_regions_of_row(row):
         raise ValueError("Row must have either 'dnsm' or 'parent_aa' column")
     regions.update(
         {
-            "FWK1": (0, regions["CDR1"][0]),
-            "FWK2": (regions["CDR1"][1], regions["CDR2"][0]),
-            "FWK3": (regions["CDR2"][1], regions["CDR3"][0]),
-            "FWK4": (regions["CDR3"][1], length),
+            "FWR1": (0, regions["CDR1"][0]),
+            "FWR2": (regions["CDR1"][1], regions["CDR2"][0]),
+            "FWR3": (regions["CDR2"][1], regions["CDR3"][0]),
+            "FWR4": (regions["CDR3"][1], length),
         }
     )
     regions = {
-        k: regions[k] for k in ["FWK1", "CDR1", "FWK2", "CDR2", "FWK3", "CDR3", "FWK4"]
+        k: regions[k] for k in ["FWR1", "CDR1", "FWR2", "CDR2", "FWR3", "CDR3", "FWR4"]
     }
     return regions
 
@@ -111,7 +111,7 @@ def aaprob_by_region(aaprob, regions):
     return {region: aaprob[start:end, :] for region, (start, end) in regions.items()}
 
 
-def get_cdr_fwk_seqs(row):
+def get_cdr_fwr_seqs(row):
     """
     Get amino acid sequences by region from a single amino acid sequence.
     """
@@ -123,16 +123,16 @@ def get_cdr_fwk_seqs(row):
     # intialize the strings
     # this naming is maybe confusing because masked_cdr is the framework sequence and vice versa
     parent_masked_cdr = ["-" for _ in range(len(parent_aa))]
-    parent_masked_fwk = ["-" for _ in range(len(parent_aa))]
+    parent_masked_fwr = ["-" for _ in range(len(parent_aa))]
     child_masked_cdr = ["-" for _ in range(len(child_aa))]
-    child_masked_fwk = ["-" for _ in range(len(child_aa))]
+    child_masked_fwr = ["-" for _ in range(len(child_aa))]
 
     # fill in regions
     for region, (start, end) in regions.items():
         if region.startswith("CDR"):
             for i in range(start, end):
-                parent_masked_fwk[i] = parent_aa[i]
-                child_masked_fwk[i] = child_aa[i]
+                parent_masked_fwr[i] = parent_aa[i]
+                child_masked_fwr[i] = child_aa[i]
         else:
             for i in range(start, end):
                 parent_masked_cdr[i] = parent_aa[i]
@@ -140,8 +140,8 @@ def get_cdr_fwk_seqs(row):
 
     # convert lists to strings
     parent_masked_cdr = "".join(parent_masked_cdr)
-    parent_masked_fwk = "".join(parent_masked_fwk)
+    parent_masked_fwr = "".join(parent_masked_fwr)
     child_masked_cdr = "".join(child_masked_cdr)
-    child_masked_fwk = "".join(child_masked_fwk)
+    child_masked_fwr = "".join(child_masked_fwr)
 
-    return parent_masked_cdr, parent_masked_fwk, child_masked_cdr, child_masked_fwk
+    return parent_masked_cdr, parent_masked_fwr, child_masked_cdr, child_masked_fwr
