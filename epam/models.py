@@ -51,31 +51,8 @@ FULLY_SPECIFIED_MODELS = [
         "AbLang2",
         {"version": "ablang2-paired", "chain": "heavy", "masking": True},
     ),
-    (
-        "SHMple_default",
-        "SHMple",
-        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
-    ),
-    (
-        "SHMple_productive",
-        "SHMple",
-        {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
-    ),
     # ("ESM1v_wt", "CachedESM1v", {}),
     ("ESM1v_mask", "CachedESM1v", {"scoring_strategy": "masked"}),
-    (
-        "SHMpleESM_wt",
-        "SHMpleESM",
-        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
-    ),
-    (
-        "SHMpleESM_mask",
-        "SHMpleESM",
-        {
-            "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
-            "sf_rescale": "sigmoid",
-        },
-    ),
     (
         "S5F",
         "S5F",

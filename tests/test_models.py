@@ -178,11 +178,10 @@ def test_snapshot():
             if isinstance(model, (MutModel, MLMBase)):
                 model.max_optimization_steps = 0
             out_file = f"_ignore/{source}-{model_name}.hdf5"
-            if model_name in ("ESM1v_wt", "SHMpleESM_wt"):
+            if model_name in ("ESM1v_wt"):
                 model.preload_esm_data(pcp_hdf5_wt_path)
             if model_name in (
                 "ESM1v_mask",
-                "SHMpleESM_mask",
                 "S5FESM_mask",
                 "NetamESM_mask",
             ):
