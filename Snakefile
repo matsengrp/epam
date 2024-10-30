@@ -13,21 +13,11 @@ model_name_to_spec = {
 }
 
 set1_models = ("AbLang1", "AbLang2_wt", "AbLang2_mask", "ESM1v_mask", "S5F", "S5FESM_mask", "S5FBLOSUM", "NetamSHM", "NetamSHM_productive", "NetamESM_mask", "NetamBLOSUM")
-set2_models = ("SHMple_default", "SHMple_productive")
-set3_models = ("SHMpleESM_mask")
 
-model_combos = ["set1/AbLang1", "set1/AbLang2_wt", "set1/AbLang2_mask", "set1/ESM1v_mask", "set1/S5F", "set1/S5FESM_mask", "set1/S5FBLOSUM", "set1/NetamSHM", "set1/NetamSHM_productive", "set1/NetamESM_mask", "set1/NetamBLOSUM", "set2/SHMple_default", "set2/SHMple_productive", "set3/SHMpleESM_mask"]
+model_combos = ["set1/AbLang1", "set1/AbLang2_wt", "set1/AbLang2_mask", "set1/ESM1v_mask", "set1/S5F", "set1/S5FESM_mask", "set1/S5FBLOSUM", "set1/NetamSHM", "set1/NetamSHM_productive", "set1/NetamESM_mask", "set1/NetamBLOSUM"]
 
 set1_model_name_to_spec = {
     key: model_name_to_spec[key] for key in set1_models
-}
-
-set2_model_name_to_spec = {
-    key: model_name_to_spec[key] for key in set2_models
-}
-
-set3_model_name_to_spec = {
-    set3_models: model_name_to_spec[set3_models]
 }
 
 batch_number = range(1, number_of_batches+1)
@@ -77,7 +67,6 @@ rule run_model_set1:
         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
         hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
     output:
-        complete="_ignore/flag_files/{pcp_input}_{part}_{model_name}.done",
         aaprob="output/{pcp_input}/set1/{model_name}/batch{part}/aaprob.hdf5",
     params:
         part=lambda wildcards: wildcards.part,
@@ -90,53 +79,6 @@ rule run_model_set1:
     shell:
         """
         mkdir -p output/{wildcards.pcp_input}/set1/{wildcards.model_name}/batch{params.part}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
-        touch {output.complete}
-        """
-
-
-rule run_model_set2:
-    input:
-        expand("_ignore/flag_files/{pcp_input}_{part}_{model}.done", pcp_input=pcp_inputs, part=batch_number, model=set1_model_name_to_spec.keys()),
-        in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
-        hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
-    output:
-        complete="_ignore/flag_files/{pcp_input}_{part}_{model_name}.done",
-        aaprob="output/{pcp_input}/set2/{model_name}/batch{part}/aaprob.hdf5",
-    params:
-        part=lambda wildcards: wildcards.part,
-        model_class=lambda wildcards: get_model_class(wildcards.model_name, set2_model_name_to_spec),
-        model_params=lambda wildcards: get_model_params(wildcards.model_name, set2_model_name_to_spec),
-    benchmark:
-        "output/{pcp_input}/set2/{model_name}/batch{part}/timing.tsv"
-    wildcard_constraints:
-        model_name="|".join(set2_models),
-    shell:
-        """
-        mkdir -p output/{wildcards.pcp_input}/set2/{wildcards.model_name}/batch{params.part}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
-        touch {output.complete}
-        """
-
-
-rule run_model_set3:
-    input:
-        expand("_ignore/flag_files/{{pcp_input}}_{{part}}_{model}.done", pcp_input=pcp_inputs, part=batch_number, model = set2_model_name_to_spec.keys()),
-        in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
-        hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
-    output:
-        aaprob="output/{pcp_input}/set3/{model_name}/batch{part}/aaprob.hdf5",
-    params:
-        part=lambda wildcards: wildcards.part,
-        model_class=lambda wildcards: get_model_class(wildcards.model_name, set3_model_name_to_spec),
-        model_params=lambda wildcards: get_model_params(wildcards.model_name, set3_model_name_to_spec),
-    benchmark:
-        "output/{pcp_input}/set3/{model_name}/batch{part}/timing.tsv"
-    wildcard_constraints:   
-        model_name=set3_models,
-    shell:
-        """
-        mkdir -p output/{wildcards.pcp_input}/set3/{wildcards.model_name}/batch{params.part}
         epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
         """
 
@@ -196,10 +138,3 @@ rule combine_performance_files:
             shell=True,
             check=True,
         )
-
-
-rule clean_flag_files:
-    shell:
-        """
-        rm -f _ignore/flag_files/*.done
-        """
