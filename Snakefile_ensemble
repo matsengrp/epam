@@ -73,6 +73,7 @@ rule precompute_esm:
         epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals" {params.esm_model_number}
         """
 
+
 rule process_esm:
     input:
         in_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_logits_{part}.hdf5",
@@ -85,6 +86,7 @@ rule process_esm:
         """
         epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
         """
+
 
 rule ensemble_esm:
     input:

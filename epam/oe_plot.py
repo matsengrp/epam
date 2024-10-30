@@ -1231,7 +1231,6 @@ def plot_sites_multi_subacc(
         counts_ax.legend(fontsize=15)
 
     if subacc_ax is not None:
-
         for site_subacc, marker, color in zip(site_subacc_list, markers, colors):
             subacc_ax.plot(
                 xvals,
@@ -1506,9 +1505,9 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
             exclude = False
             for nn in numbering:
                 if "." in nn and nn[:3] != "111" and nn[:3] != "112":
-                    exclusion_dict[(sample_id, int(family))] = (
-                        f"Invalid IMGT insertion: {nn}"
-                    )
+                    exclusion_dict[
+                        (sample_id, int(family))
+                    ] = f"Invalid IMGT insertion: {nn}"
                     if verbose == True:
                         print(f"Invalid IMGT insertion: {nn}", sample_id, family)
                     exclude = True
@@ -1528,9 +1527,9 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                 pcp_row = test_df.iloc[0]
                 test_seq = translate_sequence(pcp_row["parent"])
                 if len(test_seq) != len(numbering):
-                    exclusion_dict[(sample_id, int(family))] = (
-                        "ANARCI seq length mismatch!"
-                    )
+                    exclusion_dict[
+                        (sample_id, int(family))
+                    ] = "ANARCI seq length mismatch!"
                     if verbose == True:
                         print("ANARCI seq length mismatch!", sample_id, family)
                     continue
@@ -1543,9 +1542,9 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                     exclude = False
                     for nn, is_cdr in zip(numbering, cdr_anno):
                         if is_imgt_cdr(nn) != is_cdr:
-                            exclusion_dict[(sample_id, int(family))] = (
-                                "IMGT mismatch with CDR annotation!"
-                            )
+                            exclusion_dict[
+                                (sample_id, int(family))
+                            ] = "IMGT mismatch with CDR annotation!"
                             if verbose == True:
                                 print(
                                     "IMGT mismatch with CDR annotation!",
