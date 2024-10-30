@@ -6,7 +6,7 @@ import numpy as np
 import h5py
 
 import os
-from epam import evaluation, models, gcreplay_models, shmple_precompute, esm_precompute
+from epam import evaluation, models, gcreplay_models, esm_precompute
 from epam.utils import generate_file_checksum
 from netam import framework
 
@@ -176,19 +176,6 @@ def ensemble_esm_models(individual_model_paths, ensemble_model_path):
     """
     individual_model_paths = individual_model_paths.split(",")
     esm_precompute.ensemble_esm_models(individual_model_paths, ensemble_model_path)
-
-
-def shmplify(weights_path, csv_path):
-    """
-    This command precomputes SHMple rates and substitution probabilities, and then
-    saves those values in an HDF5 file along with the whole original df from the CSV.
-
-    Args:
-        weights_path (str): Path to the directory containing the SHMple weights.
-        csv_path (str): Path to the CSV file containing the parent sequences.
-    """
-    output_hdf5_path = csv_path.replace(".csv", ".shmple.hdf5")
-    shmple_precompute.precompute_and_save(weights_path, csv_path, output_hdf5_path)
 
 
 def main():
