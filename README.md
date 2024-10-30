@@ -9,19 +9,6 @@ Note: Depending on OS, a conda-forge or mamba install of [datrie](https://github
 
 The `netam` package needs to be installed within the epam conda environment (though outside the epam file directory). Separately clone the repository (https://github.com/matsengrp/netam) and run `make install`.
 
-Installing on GPU:
-
-    conda create -n epam-gpu python=3.9
-    conda activate epam-gpu
-    conda install datrie
-    make install-cuda
-
-Getting SHMple weights:
-
-    mkdir data/shmple_weights
-    scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/my_shmoof data/shmple_weights/
-    scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/prod_shmple data/shmple_weights/
-    scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/weights/greiff_size2 data/shmple_weights/
 
 Getting GCReplay-DMS data:
 
@@ -42,4 +29,4 @@ Getting S5F data:
 
 Running it to get matrices:
 
-    epam aaprob SHMple '{"weights_directory":"data/shmple_weights/my_shmoof"}' _ignore/wyatt-10x-1p5m_pcp_2023-09-11.first100.csv _ignore/output.hdf5
+    epam aaprob NetamSHM '{"model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0"}' _ignore/wyatt-10x-1p5m_pcp_2023-09-11.first100.csv _ignore/output.hdf5
