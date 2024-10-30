@@ -54,25 +54,40 @@ rule precompute_esm:
     input:
         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv", 
     output:
-        out_hdf5="pcp_batched_inputs/{pcp_input}_{part}.hdf5", 
+        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_logits_{part}.hdf5", 
     params:
         part=lambda wildcards: wildcards.part,  # Define a dynamic wildcard for {part}
+        esm_model_number=lambda wildcards: wildcards.esm_model_number
     shell: 
         """
-        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals"
+        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals" {params.esm_model_number}
+        """
+
+rule process_esm:
+    input:
+        in_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_logits_{part}.hdf5",
+    output:
+        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5",
+    params:
+        part=lambda wildcards: wildcards.part,
+        esm_model_number=lambda wildcards: wildcards.esm_model_number
+    shell:
+        """
+        epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
         """
 
 
 rule run_models:
     input:
         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
-        hdf5_path="pcp_batched_inputs/{pcp_input}_{part}.hdf5",
+        hdf5_path="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5",
     output:
         aaprob="output/{pcp_input}/{model_name}/batch{part}/aaprob.hdf5",
     params:
         part=lambda wildcards: wildcards.part,
         model_class=lambda wildcards: model_name_to_spec[wildcards.model_name][0],
         model_params=lambda wildcards: model_name_to_spec[wildcards.model_name][1],
+        esm_model_number=lambda wildcards: wildcards.esm_model_number
         # model_class=lambda wildcards: get_model_class(wildcards.model_name, set1_model_name_to_spec),
         # model_params=lambda wildcards: get_model_params(wildcards.model_name, set1_model_name_to_spec),
     benchmark:
