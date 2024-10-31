@@ -240,7 +240,7 @@ class GCReplaySHM(models.MutModel):
         """
         rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
+        return molevol.aaprobs_of_parent_scaled_rates_and_csps(
             parent_idxs, rates * branch_length, sub_probs
         )
 
