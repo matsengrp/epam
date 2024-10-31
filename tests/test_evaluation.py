@@ -14,7 +14,8 @@ def test_evaluate():
     ablang_heavy.write_aaprobs(example_pcp_path, example_aaprobs_path_ab)
 
     netam = NetamSHM(
-        model_path_prefix= "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0", model_name="netam_default"
+        model_path_prefix="/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+        model_name="netam_default",
     )
     netam.write_aaprobs(example_pcp_path, example_aaprobs_path_shm)
 

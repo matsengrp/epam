@@ -9,14 +9,7 @@ import epam.gcreplay_models
 from epam.esm_precompute import precompute_and_save, process_esm_output
 from epam.esm_precompute import load_and_convert_to_dict
 from netam.sequences import translate_sequence
-from epam.models import (
-    MLMBase,
-    AbLang1,
-    MutModel,
-    NetamSHM,
-    MutSelModel,
-    NetamSHMESM
-)
+from epam.models import MLMBase, AbLang1, MutModel, NetamSHM, MutSelModel, NetamSHMESM
 
 parent_seqs = [
     "EVQLVESGPGLVQPGKSLRLSCVASGFTFSGYGMHWVRQAPGKGLEWIALIIYDESNKYYADSVKGRFTISRDNSKNTLYLQMSSLRAEDTAVFYCAKVKFYDPTAPNDYWGQGTLVTVSS",
