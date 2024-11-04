@@ -66,11 +66,7 @@ rule process_esm:
 rule run_models:
     input:
         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
-        hdf5_path=expand(
-            "pcp_batched_inputs/{{pcp_input}}_esm{esm_model_number}_mask_ratios_{part}.hdf5",
-            esm_model_number=esm_model_number, 
-            part=batch_number
-        ),
+        hdf5_path="pcp_batched_inputs/{pcp_input}_esm1_mask_ratios_{part}.hdf5",
     output:
         aaprob="output/{pcp_input}/{model_name}/batch{part}/aaprob.hdf5",
     params:
@@ -89,8 +85,7 @@ rule run_models:
 rule combine_aaprob_files:
     input:
         expand(
-            "output/{{pcp_input}}/{model_name}/batch{part}/aaprob.hdf5",
-            model_name=model_name_to_spec.keys(),
+            "output/{{pcp_input}}/{{model_name}}/batch{part}/aaprob.hdf5",
             part=batch_number,
         ),
     output:
