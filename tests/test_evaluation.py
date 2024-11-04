@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
-from epam.models import AbLang1, SHMple
+from epam.models import AbLang1, NetamSHM
 from epam.evaluation import *
 
 example_pcp_path = "data/parent-child-example.csv"
 example_aaprobs_path_ab = "tests/matrices_ablang.hdf5"
-example_aaprobs_path_shm = "tests/matrices_shmple.hdf5"
+example_aaprobs_path_shm = "tests/matrices_netam.hdf5"
 example_model_eval_path = "tests/model-performance.csv"
 
 
@@ -13,14 +13,15 @@ def test_evaluate():
     ablang_heavy = AbLang1(chain="heavy")
     ablang_heavy.write_aaprobs(example_pcp_path, example_aaprobs_path_ab)
 
-    shmple = SHMple(
-        weights_directory="data/shmple_weights/my_shmoof", model_name="my_shmoof"
+    netam = NetamSHM(
+        model_path_prefix="/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+        model_name="netam_default",
     )
-    shmple.write_aaprobs(example_pcp_path, example_aaprobs_path_shm)
+    netam.write_aaprobs(example_pcp_path, example_aaprobs_path_shm)
 
     # check model name
     assert ablang_heavy.model_name == "AbLang1"
-    assert shmple.model_name == "my_shmoof"
+    assert netam.model_name == "netam_default"
 
     test_sets = [example_aaprobs_path_ab, example_aaprobs_path_shm]
     evaluate(test_sets, example_model_eval_path)
@@ -89,10 +90,10 @@ def test_highest_ranked_substitution():
     parent_aa = "AQ"
 
     # case when highest predicted aa is parent aa, select next highest
-    assert highest_ranked_substitution(example_matrix[0, :], parent_aa, 0) == "D"
+    assert highest_k_substitutions(1, example_matrix[0, :], parent_aa, 0)[0] == "D"
 
     # case when highest predicted aa is not parent aa, select highest
-    assert highest_ranked_substitution(example_matrix[1, :], parent_aa, 1) == "G"
+    assert highest_k_substitutions(1, example_matrix[1, :], parent_aa, 1)[0] == "G"
 
 
 def test_locate_top_k_substitutions():

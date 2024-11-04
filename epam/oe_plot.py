@@ -1231,7 +1231,6 @@ def plot_sites_multi_subacc(
         counts_ax.legend(fontsize=15)
 
     if subacc_ax is not None:
-
         for site_subacc, marker, color in zip(site_subacc_list, markers, colors):
             subacc_ax.plot(
                 xvals,

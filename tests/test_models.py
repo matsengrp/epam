@@ -9,14 +9,7 @@ import epam.gcreplay_models
 from epam.esm_precompute import precompute_and_save, process_esm_output
 from epam.esm_precompute import load_and_convert_to_dict
 from netam.sequences import translate_sequence
-from epam.models import (
-    MLMBase,
-    AbLang1,
-    MutModel,
-    SHMple,
-    MutSelModel,
-    SHMpleESM,
-)
+from epam.models import MLMBase, AbLang1, MutModel, NetamSHM, MutSelModel, NetamSHMESM
 
 parent_seqs = [
     "EVQLVESGPGLVQPGKSLRLSCVASGFTFSGYGMHWVRQAPGKGLEWIALIIYDESNKYYADSVKGRFTISRDNSKNTLYLQMSSLRAEDTAVFYCAKVKFYDPTAPNDYWGQGTLVTVSS",
@@ -35,22 +28,22 @@ def test_ablang():
 
 parent_nt_seq = "CAGGTGCAGCTGGTGGAG"  # QVQLVE
 child_nt_seq = "CAGGCGCAGCCGGCGGAG"  # QAQPAE
-weights_path = "data/shmple_weights/my_shmoof"
+crepe_path = "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0"
 
 
-def test_shmple():
-    shmple_shmoof = SHMple(weights_directory=weights_path, optimize=False)
-    aaprobs = shmple_shmoof.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
+def test_netam():
+    netam_oof = NetamSHM(model_path_prefix=crepe_path, optimize=False)
+    aaprobs = netam_oof.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
     child_aa_seq = translate_sequence(child_nt_seq)
-    prob_vec = shmple_shmoof.probability_vector_of_child_seq(aaprobs, child_aa_seq)
+    prob_vec = netam_oof.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
 
     # When we optimize the branch length, we should have a higher probability overall.
-    optimizable_shmple = SHMple(weights_directory=weights_path)
-    opt_aaprobs = optimizable_shmple.aaprobs_of_parent_child_pair(
+    optimizable_netam = NetamSHM(model_path_prefix=crepe_path)
+    opt_aaprobs = optimizable_netam.aaprobs_of_parent_child_pair(
         parent_nt_seq, child_nt_seq
     )
-    opt_prob_vec = optimizable_shmple.probability_vector_of_child_seq(
+    opt_prob_vec = optimizable_netam.probability_vector_of_child_seq(
         opt_aaprobs, child_aa_seq
     )
     assert opt_prob_vec.prod() > prob_vec.prod()
@@ -59,8 +52,8 @@ def test_shmple():
 class MutSelThreonine(MutSelModel):
     """A mutation selection model with a selection matrix that loves Threonine."""
 
-    def __init__(self, weights_directory, modelname="SillyMutSel"):
-        super().__init__(weights_directory, modelname)
+    def __init__(self, crepe_path, modelname="SillyMutSel"):
+        super().__init__(crepe_path, modelname)
 
     def build_selection_matrix_from_parent(self, parent):
         matrix = torch.zeros((1, 20))
@@ -77,7 +70,7 @@ ex_parent_codon = "ACG"
 
 
 def test_mut_sel_probability():
-    mutsel = MutSelThreonine(weights_path)
+    mutsel = MutSelThreonine(crepe_path)
     # Note we're dividing by two here
     ex_mut_rates = -torch.log(1.0 - ex_mut_probs) / 2.0
     # This is an ACG -> TGG mutation.
@@ -105,16 +98,6 @@ def test_cached_esm_wt(tol=1e-4):
 
     for key in cached_esm_dict.keys():
         assert np.allclose(ref_esm_dict[key], cached_esm_dict[key], rtol=tol)
-
-
-def test_nasty_shmple_esm():
-    bad_pcp_file = "data/wyatt_10x_loss_nan.csv"
-    bad_esm_file = "_ignore/wyatt_10x_loss_nan_cached_esm.hdf5"
-    bad_out_file = "_ignore/wyatt_10x_loss_nan.hdf5"
-    precompute_and_save(bad_pcp_file, bad_esm_file, "wt-marginals")
-    shmple_esm = SHMpleESM(weights_directory=weights_path)
-    shmple_esm.preload_esm_data(bad_esm_file)
-    shmple_esm.write_aaprobs(bad_pcp_file, bad_out_file)
 
 
 class ConserveEverythingExceptTyrosine:
@@ -178,11 +161,10 @@ def test_snapshot():
             if isinstance(model, (MutModel, MLMBase)):
                 model.max_optimization_steps = 0
             out_file = f"_ignore/{source}-{model_name}.hdf5"
-            if model_name in ("ESM1v_wt", "SHMpleESM_wt"):
+            if model_name in ("ESM1v_wt"):
                 model.preload_esm_data(pcp_hdf5_wt_path)
             if model_name in (
                 "ESM1v_mask",
-                "SHMpleESM_mask",
                 "S5FESM_mask",
                 "NetamESM_mask",
             ):

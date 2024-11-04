@@ -17,8 +17,6 @@ import ablang
 import ablang2
 
 import netam.framework
-
-import shmple
 import netam.molevol as molevol
 import netam.sequences as sequences
 from netam.sequences import (
@@ -51,31 +49,8 @@ FULLY_SPECIFIED_MODELS = [
         "AbLang2",
         {"version": "ablang2-paired", "chain": "heavy", "masking": True},
     ),
-    (
-        "SHMple_default",
-        "SHMple",
-        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
-    ),
-    (
-        "SHMple_productive",
-        "SHMple",
-        {"weights_directory": DATA_DIR + "shmple_weights/prod_shmple"},
-    ),
     # ("ESM1v_wt", "CachedESM1v", {}),
     ("ESM1v_mask", "CachedESM1v", {"scoring_strategy": "masked"}),
-    (
-        "SHMpleESM_wt",
-        "SHMpleESM",
-        {"weights_directory": DATA_DIR + "shmple_weights/my_shmoof"},
-    ),
-    (
-        "SHMpleESM_mask",
-        "SHMpleESM",
-        {
-            "weights_directory": DATA_DIR + "shmple_weights/my_shmoof",
-            "sf_rescale": "sigmoid",
-        },
-    ),
     (
         "S5F",
         "S5F",
@@ -367,67 +342,6 @@ class MutModel(BaseModel):
         return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
 
 
-class SHMple(MutModel):
-    def __init__(self, weights_directory: str, *args, **kwargs):
-        """
-        Initialize a SHMple model with specified directory to trained model weights.
-
-        Parameters:
-        weights_directory (str): directory path to trained model weights.
-        """
-        super().__init__(*args, **kwargs)
-        self.model = shmple.AttentionModel(
-            weights_dir=weights_directory, log_level=logging.WARNING
-        )
-
-    def predict_rates_and_normed_subs_probs(
-        self, parent: str
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        A wrapper for the predict_mutabilities_and_substitutions method of the
-        SHMple model that normalizes the substitution probabilities, as well as
-        unpacking and squeezing the results.
-
-        We have to do this because the SHMple model returns substitution
-        probabilities that are nearly normalized, but not quite.
-
-        Parameters:
-        parent (str): The parent sequence.
-
-        Returns:
-        Tuple[torch.Tensor, torch.Tensor]: A tuple containing the rates and
-            substitution probabilities as Torch tensors.
-        """
-        [rates], [subs] = self.model.predict_mutabilities_and_substitutions(
-            [parent], [1.0]
-        )
-        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return torch.tensor(
-            rates.squeeze(), dtype=torch.float
-        ), molevol.normalize_sub_probs(
-            parent_idxs, torch.tensor(subs, dtype=torch.float)
-        )
-
-    def _aaprobs_of_parent_and_branch_length(
-        self, parent: str, branch_length: float
-    ) -> torch.Tensor:
-        """
-        Calculate the amino acid probabilities for a given parent and branch length.
-
-        Parameters:
-        parent (str): The parent nucleotide sequence.
-        branch_length (float): The length of the branch.
-
-        Returns:
-        np.ndarray: The aaprobs for every codon of the parent sequence.
-        """
-        rates, subs = self.predict_rates_and_normed_subs_probs(parent)
-        parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
-            parent_idxs, rates * branch_length, subs
-        )
-
-
 class MutSelModel(MutModel):
     """A mutation selection model.
 
@@ -496,9 +410,9 @@ class MutSelModel(MutModel):
 class RandomMutSel(MutSelModel):
     """A mutation selection model with a random selection matrix."""
 
-    def __init__(self, weights_directory, *args, **kwargs):
+    def __init__(self, model_path_prefix: str, *args, **kwargs):
         super().__init__(
-            mutation_model=SHMple(weights_directory=weights_directory),
+            mutation_model=NetamSHM(model_path_prefix=model_path_prefix),
             selection_model=None,
             *args,
             **kwargs,
@@ -942,38 +856,6 @@ class ESM1vSelModel(BaseModel):
         return sel_matrix
 
 
-class SHMpleESM(MutSelModel):
-    def __init__(self, weights_directory, sf_rescale=None, *args, **kwargs):
-        """
-        Initialize a mutation-selection model using SHMple for the mutation part and ESM-1v_1 for the selection part.
-
-        Parameters:
-        weights_directory (str): Directory path to trained SHMple model weights.
-        sf_rescale (str, optional): Selection factor rescaling approach used for ratios produced under mask-marginals scoring strategy (see CachedESM1v).
-        """
-        super().__init__(
-            mutation_model=SHMple(weights_directory=weights_directory),
-            selection_model=ESM1vSelModel(sf_rescale=sf_rescale),
-            *args,
-            **kwargs,
-        )
-
-    def preload_esm_data(self, hdf5_path):
-        """
-        Preload ESM1v data from HDF5 file.
-
-        Parameters:
-        hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
-        """
-        self.selection_model.preload_esm_data(hdf5_path)
-
-    def build_selection_matrix_from_parent(self, parent):
-        parent_aa = translate_sequence(parent)
-        return torch.tensor(
-            self.selection_model.aaprobs_of_parent_child_pair(parent_aa)
-        )
-
-
 class NetamSHM(MutModel):
     def __init__(self, model_path_prefix: str, *args, **kwargs):
         """
@@ -1021,7 +903,7 @@ class NetamSHM(MutModel):
         """
         rates, subs = self.predict_rates_and_normed_subs_probs(parent)
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
+        return molevol.aaprobs_of_parent_scaled_rates_and_csps(
             parent_idxs, rates * branch_length, subs
         )
 
@@ -1029,7 +911,7 @@ class NetamSHM(MutModel):
 class NetamSHMESM(MutSelModel):
     def __init__(self, model_path_prefix: str, sf_rescale=None, *args, **kwargs):
         """
-        Initialize a mutation-selection model using Netam SHM for the mutation part and ESM-1v_1 for the selection part.
+        Initialize a mutation-selection model using Netam SHM for the mutation part and ESM-1v for the selection part.
 
         Parameters:
         model_path_prefix (str): directory path prefix (i.e. without file name extension) to trained Netam SHM model weights.
@@ -1122,7 +1004,7 @@ class S5F(MutModel):
         """
         rates, sub_probs = self.predict_rates_and_normed_subs_probs(parent)
         parent_idxs = sequences.nt_idx_tensor_of_str(parent)
-        return molevol.aaprobs_of_parent_scaled_rates_and_sub_probs(
+        return molevol.aaprobs_of_parent_scaled_rates_and_csps(
             parent_idxs, rates * branch_length, sub_probs
         )
 

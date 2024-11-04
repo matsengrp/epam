@@ -1,6 +1,6 @@
 {
     "dataset": "RACE",
-    "number_of_batches": 6,
-    "pcp_per_batch": 4305,
+    "number_of_batches": 5,
+    "pcp_per_batch": 4320,
     "pcp_input": "rodriguez-airr-seq-race-prod_pcp_2024-04-01_MASKED_NI_noN_no-naive"
   }
