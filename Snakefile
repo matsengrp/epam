@@ -13,54 +13,11 @@ model_name_to_spec = {
 }
 
 batch_number = range(1, number_of_batches+1)
-esm_model_number = 1
 
 rule all:
     input:
         expand("output/{pcp_input}/combined_performance.csv", pcp_input=config["pcp_input"]),
         expand("output/{pcp_input}/combined_timing.csv", pcp_input=config["pcp_input"]),
-
-
-rule split_pcp_batches:
-    input:
-        "pcp_inputs/{pcp_input}.csv"
-    output:
-        out_csvs=dynamic("pcp_batched_inputs/{pcp_input}_{part}.csv")  
-    params:
-        output_dir="pcp_batched_inputs/",
-        batch_size=pcp_per_batch
-    shell:
-        """
-        python scripts/split_pcp_files.py {input} {params.output_dir} {params.batch_size}
-        """
-
-
-rule precompute_esm:
-    input:
-        in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv", 
-    output:
-        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_logits_{part}.hdf5", 
-    params:
-        part=lambda wildcards: wildcards.part,  # Define a dynamic wildcard for {part}
-        esm_model_number=lambda wildcards: wildcards.esm_model_number
-    shell: 
-        """
-        epam esm_bulk_precompute {input.in_csv} {output.out_hdf5} "masked-marginals" {params.esm_model_number}
-        """
-
-
-rule process_esm:
-    input:
-        in_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_logits_{part}.hdf5",
-    output:
-        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5",
-    params:
-        part=lambda wildcards: wildcards.part,
-        esm_model_number=lambda wildcards: wildcards.esm_model_number
-    shell:
-        """
-        epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
-        """
 
 
 rule run_models:
