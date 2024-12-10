@@ -4,7 +4,7 @@ black
 fair-esm
 h5py
 pytest
-pulp==2.7.0   # see issue https://github.com/snakemake/snakemake/issues/2607
+pulp
 snakemake
 tensorboardX
 typing_extensions

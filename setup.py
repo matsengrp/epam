@@ -11,7 +11,7 @@ setup(
     long_description_content_type="text/markdown",
     packages=find_packages(),
     install_requires=[
-        "numpy<=1.25",  # This is for tensorflow; may change moving forward
+        "numpy", # <= 1.25",  # This is for tensorflow; may change moving forward
         "matplotlib >= 3.4.3",
         "pandas >= 1.3.3",
         "biopython >= 1.79",
