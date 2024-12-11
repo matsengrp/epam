@@ -2,14 +2,14 @@
 
 ## Developer install
 
-    conda create -n epam 
+    conda create -n epam python=3.9
     conda activate epam
     conda install datrie
     make install
 
 The `netam` package needs to be installed within the epam conda environment (though outside the epam file directory). Separately clone the repository (https://github.com/matsengrp/netam) and run `make install`.
 
-Getting Thrifty data:
+Additionally, a local install of the `thrifty-models` repository is necessary to access model crepes. (https://github.com/matsengrp/thrifty-models/tree/main)
 
 Getting GCReplay-DMS data:
 
