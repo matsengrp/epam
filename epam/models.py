@@ -81,17 +81,17 @@ FULLY_SPECIFIED_MODELS = [
         },
     ),
     (
-        "ThriftyHumV0.2-59", #"NetamSHM",
+        "ThriftyHumV0.2-59",
         "NetamSHM",
         {
             "model_path_prefix": "/home/mjohnso4/thrifty-models/models/ThriftyHumV0.2-59",
         },
     ),
     (
-        "ThriftyProdHumV0.2-59", #"NetamSHM_productive",
+        "ThriftyProdHumV0.2-59",
         "NetamSHM",
         {
-            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/working/crepe/2024-12-08-thrifty-prod",
+            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/working/crepe/2024-12-08-thrifty-prod/cnn_ind_lrg-v1wyatt-simple-0",
         },
     ),
     (
