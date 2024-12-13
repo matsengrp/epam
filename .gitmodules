@@ -1,0 +1,3 @@
+[submodule "thrifty-models"]
+	path = thrifty-models
+	url = https://github.com/matsengrp/thrifty-models

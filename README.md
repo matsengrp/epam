@@ -11,6 +11,10 @@ The `netam` package needs to be installed within the epam conda environment (tho
 
 Additionally, a local install of the `thrifty-models` repository is necessary to access model crepes. (https://github.com/matsengrp/thrifty-models/tree/main)
 
+Getting Thrifty model crepes:
+    git submodule add https://github.com/matsengrp/thrifty-models
+    scp <username>@quokka:/fh/fast/matsen_e/shared/bcr-mut-sel/working/crepe/2024-12-08-thrifty-prod/cnn_ind_lrg-v1wyatt-simple-0* /thrifty-models/models/
+
 Getting GCReplay-DMS data:
 
     mkdir data/gcreplay

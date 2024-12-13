@@ -36,6 +36,7 @@ import Bio.Align.substitution_matrices
 torch.set_num_threads(1)
 
 DATA_DIR = str(resources.files("epam").parent) + "/data/"
+THRIFTY_DIR = str(resources.files("epam").parent) + "/thrifty-models/models/"
 
 # Here's a list of the models and configurations we will use in our tests and
 # pipeline.
@@ -83,14 +84,14 @@ FULLY_SPECIFIED_MODELS = [
         "ThriftyHumV0.2-59",
         "NetamSHM",
         {
-            "model_path_prefix": "/home/mjohnso4/thrifty-models/models/ThriftyHumV0.2-59",
+            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
         },
     ),
     (
         "ThriftyProdHumV0.2-59",
         "NetamSHM",
         {
-            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/working/crepe/2024-12-08-thrifty-prod/cnn_ind_lrg-v1wyatt-simple-0",
+            "model_path_prefix": THRIFTY_DIR + "cnn_ind_lrg-v1wyatt-simple-0",
         },
     ),
     (
