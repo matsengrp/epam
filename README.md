@@ -2,7 +2,7 @@
 
 ## Developer install
 
-    conda create -n epam python=3.9
+    conda create -n epam python=3.11
     conda activate epam
     conda install datrie
     make install
