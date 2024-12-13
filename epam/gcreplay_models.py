@@ -13,8 +13,7 @@ from typing import Tuple
 from epam.esm_precompute import load_and_convert_to_dict
 
 
-with resources.path("epam", "__init__.py") as p:
-    DATA_DIR = str(p.parent.parent) + "/data/"
+DATA_DIR = str(resources.files("epam").parent) + "/data/"
 
 # Here's a list of the models and configurations we will use in our tests.
 

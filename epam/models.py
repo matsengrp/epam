@@ -35,8 +35,7 @@ import Bio.Align.substitution_matrices
 # explictly set number of threads to 1 to avoid slowdowns during branch length optimization
 torch.set_num_threads(1)
 
-with resources.path("epam", "__init__.py") as p:
-    DATA_DIR = str(p.parent.parent) + "/data/"
+DATA_DIR = str(resources.files("epam").parent) + "/data/"
 
 # Here's a list of the models and configurations we will use in our tests and
 # pipeline.

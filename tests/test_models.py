@@ -131,11 +131,8 @@ def hdf5_files_identical(path_1, path_2, tol=1e-4):
     return True
 
 
-with resources.path("epam", "__init__.py") as p:
-    pcp_hdf5_wt_path = str(p.parent.parent) + "/data/10-random-from-10x-wt_prob.hdf5"
-    pcp_hdf5_mask_path = (
-        str(p.parent.parent) + "/data/10-random-from-10x-mask_prob_ratio.hdf5"
-    )
+pcp_hdf5_wt_path = str(resources.files("epam").parent) + "/data/10-random-from-10x-wt_prob.hdf5"
+pcp_hdf5_mask_path = str(resources.files("epam").parent) + "/data/10-random-from-10x-mask_prob_ratio.hdf5"
 
 
 def test_snapshot():
