@@ -95,18 +95,18 @@ FULLY_SPECIFIED_MODELS = [
         },
     ),
     (
-        "NetamESM_mask",
+        "ThriftyESM_mask",
         "NetamSHMESM",
         {
-            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
             "sf_rescale": "sigmoid",
         },
     ),
     (
-        "NetamBLOSUM",
+        "ThriftyBLOSUM",
         "NetamSHMBLOSUM",
         {
-            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
             "sf_rescale": "sigmoid",
         },
     ),

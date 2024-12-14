@@ -163,7 +163,7 @@ def test_snapshot():
             if model_name in (
                 "ESM1v_mask",
                 "S5FESM_mask",
-                "NetamESM_mask",
+                "ThriftyESM_mask",
             ):
                 model.preload_esm_data(pcp_hdf5_mask_path)
             model.write_aaprobs(f"data/{source}.csv", out_file)
