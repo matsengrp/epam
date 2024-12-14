@@ -4,7 +4,6 @@ black
 fair-esm
 h5py
 pytest
-pulp
 snakemake
 tensorboardX
 typing_extensions
