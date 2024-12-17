@@ -181,7 +181,8 @@ class GCReplayDMS(models.BaseModel):
             #       (see: build_codon_mutsel in molevol.py)
             matrix.append(sel_factors.astype(np.float32))
 
-        return np.array(matrix)
+        # hacky fix lack of bl optimization
+        return np.array(matrix), 1, False
 
 
 class GCReplaySHM(models.MutModel):
@@ -275,7 +276,7 @@ class GCReplaySHMDMS(models.MutSelModel):
         )
 
     def build_selection_matrix_from_parent(self, parent):
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent)[0])
 
 
 class GCReplaySHMESM(models.MutSelModel):
