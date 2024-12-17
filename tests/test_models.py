@@ -33,7 +33,7 @@ crepe_path = "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_
 
 def test_netam():
     netam_oof = NetamSHM(model_path_prefix=crepe_path, optimize=False)
-    aaprobs = netam_oof.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)
+    aaprobs = netam_oof.aaprobs_of_parent_child_pair(parent_nt_seq, child_nt_seq)[0]
     child_aa_seq = translate_sequence(child_nt_seq)
     prob_vec = netam_oof.probability_vector_of_child_seq(aaprobs, child_aa_seq)
     assert np.sum(prob_vec[:3]) > np.sum(prob_vec[3:])
@@ -42,7 +42,7 @@ def test_netam():
     optimizable_netam = NetamSHM(model_path_prefix=crepe_path)
     opt_aaprobs = optimizable_netam.aaprobs_of_parent_child_pair(
         parent_nt_seq, child_nt_seq
-    )
+    )[0]
     opt_prob_vec = optimizable_netam.probability_vector_of_child_seq(
         opt_aaprobs, child_aa_seq
     )
