@@ -11,7 +11,7 @@ from epam.utils import generate_file_checksum
 from netam import framework
 
 
-def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
+def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None, log_path=None):
     """
     Generate amino acid probability matrices using the specified model.
 
@@ -21,6 +21,7 @@ def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
         in_path (str): Path to the input file.
         out_path (str): Path where the output file will be written.
         hdf5_path (str, optional): Path to the HDF5 file containing precomputed ESM1v selection factors.
+        log_path (str, optional): Path to the optimized branch length log file.
 
     Examples:
         epam aaprob SHMple '{"weights_directory":"data/shmple_weights/my_shmoof"}' in_path out_path
@@ -46,7 +47,10 @@ def aaprob(model_name, model_args, in_path, out_path, hdf5_path=None):
             )
         print("Preloading ESM1v data...")
         model.preload_esm_data(hdf5_path)
-    model.write_aaprobs(in_path, out_path)
+    if log_path is not None:
+        model.write_aaprobs(in_path, out_path, log_path)
+    else:
+        model.write_aaprobs(in_path, out_path)
 
 
 def evaluate(aaprob_paths_str, model_performance_path):

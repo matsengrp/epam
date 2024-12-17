@@ -25,6 +25,7 @@ rule run_models:
         hdf5_path="pcp_batched_inputs/{pcp_input}_esm1_mask_ratios_{part}.hdf5",
     output:
         aaprob="output/{pcp_input}/{model_name}/batch{part}/aaprob.hdf5",
+        bl_log="output/{pcp_input}/{model_name}/batch{part}/optimized_branch_lengths.csv",
     params:
         part=lambda wildcards: wildcards.part,
         model_class=lambda wildcards: model_name_to_spec[wildcards.model_name][0],
@@ -34,7 +35,7 @@ rule run_models:
     shell:
         """
         mkdir -p output/{wildcards.pcp_input}/{wildcards.model_name}/batch{params.part}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path} {output.bl_log}
         """
 
 
