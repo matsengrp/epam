@@ -126,7 +126,9 @@ class BaseModel(ABC):
         self.model_name = model_name
 
     @abstractmethod
-    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> Tuple[np.ndarray, float, bool]:
+    def aaprobs_of_parent_child_pair(
+        self, parent: str, child: str
+    ) -> Tuple[np.ndarray, float, bool]:
         pass
 
     def probability_vector_of_child_seq(self, prob_arr: np.ndarray, child_seq: str):
@@ -183,7 +185,9 @@ class BaseModel(ABC):
                 assert_full_sequences(parent, child)
                 if utils.pcp_criteria_check(parent, child):
 
-                    matrix, opt_branch_length, converge_status = self.aaprobs_of_parent_child_pair(parent, child)
+                    matrix, opt_branch_length, converge_status = (
+                        self.aaprobs_of_parent_child_pair(parent, child)
+                    )
 
                     # create a group for each matrix + add to hdf5 file
                     grp = outfile.create_group(f"matrix{i}")
@@ -194,7 +198,9 @@ class BaseModel(ABC):
 
                     # log branch length optimization results to csv
                     if log_file is not None:
-                        csv_file.write(f"{i},{parent},{child},{opt_branch_length},{converge_status}\n")
+                        csv_file.write(
+                            f"{i},{parent},{child},{opt_branch_length},{converge_status}\n"
+                        )
 
 
 class MutModel(BaseModel):
@@ -335,7 +341,9 @@ class MutModel(BaseModel):
         )
         if self.init_branch_length is None and branch_length > 0.5:
             print(f"Warning: branch length of {branch_length} is surprisingly large.")
-        aaprob = self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
+        aaprob = self._aaprobs_of_parent_and_branch_length(
+            parent, branch_length
+        ).numpy()
         return aaprob, branch_length, converge_status
 
 
@@ -570,7 +578,9 @@ class MLMBase(BaseModel):
 
         return scaled_prob_arr
 
-    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> Tuple[np.ndarray, float, bool]:
+    def aaprobs_of_parent_child_pair(
+        self, parent: str, child: str
+    ) -> Tuple[np.ndarray, float, bool]:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the MLM model with a branch length optimization.
 
@@ -594,7 +604,11 @@ class MLMBase(BaseModel):
             parent_aa, child_aa, base_branch_length, unscaled_aaprob
         )
 
-        return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length), branch_length, converge_status
+        return (
+            self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length),
+            branch_length,
+            converge_status,
+        )
 
 
 class AbLang1(MLMBase):
