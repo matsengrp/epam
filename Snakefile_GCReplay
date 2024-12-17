@@ -40,6 +40,7 @@ rule run_igh_model:
         in_csv="pcp_gcreplay_inputs/igh/{pcp_input}.csv",
     output:
         aaprob="output_gcreplay/igh/{pcp_input}/{model_name}/aaprob.hdf5",
+        bl_log="output_gcreplay/igh/{pcp_input}/{model_name}/optimized_branch_lengths.csv",
         performance="output_gcreplay/igh/{pcp_input}/{model_name}/performance.csv",
     params:
         model_class=lambda wildcards: igh_model_name_to_spec[wildcards.model_name][0],
@@ -49,7 +50,7 @@ rule run_igh_model:
     shell:
         """
         mkdir -p output_gcreplay/igh/{wildcards.pcp_input}/{wildcards.model_name}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} --log_path={output.bl_log}
         epam evaluate {output.aaprob} {output.performance}
         """
 
@@ -59,6 +60,7 @@ rule run_igk_model:
         in_csv="pcp_gcreplay_inputs/igk/{pcp_input}.csv",
     output:
         aaprob="output_gcreplay/igk/{pcp_input}/{model_name}/aaprob.hdf5",
+        bl_log="output_gcreplay/igk/{pcp_input}/{model_name}/optimized_branch_lengths.csv",
         performance="output_gcreplay/igk/{pcp_input}/{model_name}/performance.csv",
     params:
         model_class=lambda wildcards: igk_model_name_to_spec[wildcards.model_name][0],
@@ -68,7 +70,7 @@ rule run_igk_model:
     shell:
         """
         mkdir -p output_gcreplay/igk/{wildcards.pcp_input}/{wildcards.model_name}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} --log_path={output.bl_log}
         epam evaluate {output.aaprob} {output.performance}
         """
         
