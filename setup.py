@@ -20,7 +20,7 @@ setup(
         "fire",
         "tables",
     ],
-    python_requires=">=3.9,<3.12", 
+    python_requires=">=3.9,<3.13", 
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Science/Research",

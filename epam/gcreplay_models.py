@@ -181,8 +181,8 @@ class GCReplayDMS(models.BaseModel):
             #       (see: build_codon_mutsel in molevol.py)
             matrix.append(sel_factors.astype(np.float32))
 
-        # hacky fix lack of bl optimization
-        return np.array(matrix), 1, False
+        # No branch optimization actually done. Return a default branch length of 1.
+        return np.array(matrix), 1, True
 
 
 class GCReplaySHM(models.MutModel):

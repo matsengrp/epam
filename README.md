@@ -13,7 +13,7 @@ Getting Thrifty model crepes:
 
     git submodule init
     git submodule update
-    scp <username>@quokka:/fh/fast/matsen_e/shared/bcr-mut-sel/working/crepe/2024-12-08-thrifty-prod/cnn_ind_lrg-v1wyatt-simple-0* /thrifty-models/models/
+    scp <username>@quokka:/fh/fast/matsen_e/shared/bcr-mut-sel/working/crepe/2024-12-08-thrifty-prod/cnn_ind_lrg-v1wyatt-simple-0* thrifty-models/models/
 
 Getting GCReplay-DMS data:
 
