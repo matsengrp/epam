@@ -1,0 +1,6 @@
+{
+    "dataset": "Wyatt-IgK",
+    "number_of_batches": 21,
+    "pcp_per_batch": 5010,
+    "pcp_input": "wyatt-10x-1p5m_paired-igk_fs-all_pcp_2024-11-22_NI_noN_no-naive"
+  }

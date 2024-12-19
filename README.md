@@ -2,13 +2,18 @@
 
 ## Developer install
 
-    conda create -n epam python=3.9
+    conda create -n epam python=3.11
     conda activate epam
+    conda install datrie
     make install
-Note: Depending on OS, a conda-forge or mamba install of [datrie](https://github.com/conda-forge/datrie-feedstock) may be required before running `make install`.
 
 The `netam` package needs to be installed within the epam conda environment (though outside the epam file directory). Separately clone the repository (https://github.com/matsengrp/netam) and run `make install`.
 
+Getting Thrifty model crepes:
+
+    git submodule init
+    git submodule update
+    scp <username>@quokka:/fh/fast/matsen_e/shared/bcr-mut-sel/working/crepe/2024-12-08-thrifty-prod/cnn_ind_lrg-v1wyatt-simple-0* thrifty-models/models/
 
 Getting GCReplay-DMS data:
 

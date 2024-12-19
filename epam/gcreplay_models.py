@@ -13,8 +13,7 @@ from typing import Tuple
 from epam.esm_precompute import load_and_convert_to_dict
 
 
-with resources.path("epam", "__init__.py") as p:
-    DATA_DIR = str(p.parent.parent) + "/data/"
+DATA_DIR = str(resources.files("epam").parent) + "/data/"
 
 # Here's a list of the models and configurations we will use in our tests.
 
@@ -182,7 +181,8 @@ class GCReplayDMS(models.BaseModel):
             #       (see: build_codon_mutsel in molevol.py)
             matrix.append(sel_factors.astype(np.float32))
 
-        return np.array(matrix)
+        # No branch optimization actually done. Return a default branch length of 1.
+        return np.array(matrix), 1, True
 
 
 class GCReplaySHM(models.MutModel):
@@ -276,7 +276,9 @@ class GCReplaySHMDMS(models.MutSelModel):
         )
 
     def build_selection_matrix_from_parent(self, parent):
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
+        return torch.tensor(
+            self.selection_model.aaprobs_of_parent_child_pair(parent)[0]
+        )
 
 
 class GCReplaySHMESM(models.MutSelModel):
@@ -316,41 +318,6 @@ class GCReplaySHMESM(models.MutSelModel):
         return torch.tensor(
             self.selection_model.aaprobs_of_parent_child_pair(parent_aa)
         )
-
-
-class GCReplaySHMpleDMS(models.MutSelModel):
-    def __init__(
-        self,
-        weights_directory: str,
-        dms_data_file: str,
-        chain="heavy",
-        sf_rescale=None,
-        scaling=1.0,
-        *args,
-        **kwargs,
-    ):
-        """
-        Initialize a mutation-selection model for GC-Replay data using SHMple for the mutation part and
-        DMS measurements for the selection part.
-
-        Parameters:
-        weights_directory (str): Directory path to trained SHMple model weights.
-        dms_data_file (str): File path to the DMS measurements data.
-        chain (str): Name of the chain, default is "heavy".
-        sf_rescale (str, optional): The selection factor rescaling approach.
-        scaling (float): The multiplicative factor on the parent-child binding difference.
-        """
-        super().__init__(
-            mutation_model=models.SHMple(weights_directory),
-            selection_model=GCReplayDMS(
-                dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling
-            ),
-            *args,
-            **kwargs,
-        )
-
-    def build_selection_matrix_from_parent(self, parent):
-        return torch.tensor(self.selection_model.aaprobs_of_parent_child_pair(parent))
 
 
 class GCReplaySHMBLOSUM(models.MutSelModel):

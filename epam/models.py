@@ -35,8 +35,8 @@ import Bio.Align.substitution_matrices
 # explictly set number of threads to 1 to avoid slowdowns during branch length optimization
 torch.set_num_threads(1)
 
-with resources.path("epam", "__init__.py") as p:
-    DATA_DIR = str(p.parent.parent) + "/data/"
+DATA_DIR = str(resources.files("epam").parent) + "/data/"
+THRIFTY_DIR = str(resources.files("epam").parent) + "/thrifty-models/models/"
 
 # Here's a list of the models and configurations we will use in our tests and
 # pipeline.
@@ -81,32 +81,32 @@ FULLY_SPECIFIED_MODELS = [
         },
     ),
     (
-        "NetamSHM",
+        "ThriftyHumV0.2-59",
         "NetamSHM",
         {
-            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
         },
     ),
     (
-        "NetamSHM_productive",
+        "ThriftyProdHumV0.2-59",
         "NetamSHM",
         {
-            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_lrg-v1wyatt-full-0",
+            "model_path_prefix": THRIFTY_DIR + "cnn_ind_lrg-v1wyatt-simple-0",
         },
     ),
     (
-        "NetamESM_mask",
+        "ThriftyESM_mask",
         "NetamSHMESM",
         {
-            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
             "sf_rescale": "sigmoid",
         },
     ),
     (
-        "NetamBLOSUM",
+        "ThriftyBLOSUM",
         "NetamSHMBLOSUM",
         {
-            "model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0",
+            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
             "sf_rescale": "sigmoid",
         },
     ),
@@ -114,28 +114,21 @@ FULLY_SPECIFIED_MODELS = [
 
 
 class BaseModel(ABC):
-    def __init__(self, model_name=None, logging=False):
+    def __init__(self, model_name=None):
         """
         Initializes a new instance of the BaseModel class.
 
         Parameters:
         model_name (str, optional): The name of the model. If not specified, the class name is used.
-        logging (bool, optional): Whether to generate summary of branch optimization result for each PCP. Default is False.
         """
         if model_name is None:
             model_name = self.__class__.__name__
         self.model_name = model_name
-        self.logging = logging
-        if self.logging == True:
-            self.csv_file = open(
-                f"{self.model_name}_branch_opt_log_{int(time.time())}.csv", "w"
-            )
-            self.csv_file.write(
-                "pcp_index,parent,child,mut_freq,opt_branch_length,fail_to_converge\n"
-            )
 
     @abstractmethod
-    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(
+        self, parent: str, child: str
+    ) -> Tuple[np.ndarray, float, bool]:
         pass
 
     def probability_vector_of_child_seq(self, prob_arr: np.ndarray, child_seq: str):
@@ -158,7 +151,7 @@ class BaseModel(ABC):
             [prob_arr[i, AA_STR_SORTED.index(aa)] for i, aa in enumerate(child_seq)]
         )
 
-    def write_aaprobs(self, pcp_path: str, output_path: str):
+    def write_aaprobs(self, pcp_path: str, output_path: str, log_file: str = None):
         """
         Write an aaprob matrix for each parent-child pair (PCP) of nucleotide sequences with a substitution model.
 
@@ -167,10 +160,17 @@ class BaseModel(ABC):
         Parameters:
         pcp_path (str): file name of parent-child pair data.
         output_path (str): output file name.
+        log_file (str, optional): file name for logging branch optimization results. Default is None.
 
         """
         checksum = utils.generate_file_checksum(pcp_path)
         pcp_df = pd.read_csv(pcp_path, index_col=0)
+
+        if log_file is not None:
+            csv_file = open(log_file, "w")
+            csv_file.write(
+                "pcp_index,parent,child,opt_branch_length,fail_to_converge\n"
+            )
 
         with h5py.File(output_path, "w") as outfile:
             # attributes related to PCP data file
@@ -184,17 +184,23 @@ class BaseModel(ABC):
                 assert_pcp_lengths(parent, child)
                 assert_full_sequences(parent, child)
                 if utils.pcp_criteria_check(parent, child):
-                    if self.logging == True:
-                        self.csv_file.write(f"{i},")
 
-                    matrix = self.aaprobs_of_parent_child_pair(parent, child)
+                    matrix, opt_branch_length, converge_status = (
+                        self.aaprobs_of_parent_child_pair(parent, child)
+                    )
 
-                    # create a group for each matrix
+                    # create a group for each matrix + add to hdf5 file
                     grp = outfile.create_group(f"matrix{i}")
                     grp.attrs["pcp_index"] = i
                     grp.create_dataset(
                         "data", data=matrix, compression="gzip", compression_opts=4
                     )
+
+                    # log branch length optimization results to csv
+                    if log_file is not None:
+                        csv_file.write(
+                            f"{i},{parent},{child},{opt_branch_length},{converge_status}\n"
+                        )
 
 
 class MutModel(BaseModel):
@@ -333,13 +339,12 @@ class MutModel(BaseModel):
         branch_length, converge_status = self._find_optimal_branch_length(
             parent, child, base_branch_length
         )
-        if self.logging == True:
-            self.csv_file.write(
-                f"{parent},{child},{base_branch_length},{branch_length},{converge_status}\n"
-            )
         if self.init_branch_length is None and branch_length > 0.5:
             print(f"Warning: branch length of {branch_length} is surprisingly large.")
-        return self._aaprobs_of_parent_and_branch_length(parent, branch_length).numpy()
+        aaprob = self._aaprobs_of_parent_and_branch_length(
+            parent, branch_length
+        ).numpy()
+        return aaprob, branch_length, converge_status
 
 
 class MutSelModel(MutModel):
@@ -573,7 +578,9 @@ class MLMBase(BaseModel):
 
         return scaled_prob_arr
 
-    def aaprobs_of_parent_child_pair(self, parent: str, child: str) -> np.ndarray:
+    def aaprobs_of_parent_child_pair(
+        self, parent: str, child: str
+    ) -> Tuple[np.ndarray, float, bool]:
         """
         Generate a numpy array of the normalized probability of the various amino acids by site according to the MLM model with a branch length optimization.
 
@@ -596,12 +603,12 @@ class MLMBase(BaseModel):
         branch_length, converge_status = self._find_optimal_branch_length(
             parent_aa, child_aa, base_branch_length, unscaled_aaprob
         )
-        if self.logging == True:
-            self.csv_file.write(
-                f"{parent_aa},{child_aa},{base_branch_length},{branch_length},{converge_status}\n"
-            )
 
-        return self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length)
+        return (
+            self.scale_probability_array(unscaled_aaprob, parent_aa, branch_length),
+            branch_length,
+            converge_status,
+        )
 
 
 class AbLang1(MLMBase):

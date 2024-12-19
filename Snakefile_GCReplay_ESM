@@ -37,6 +37,7 @@ rule run_igh_model:
         hdf5_path="pcp_gcreplay_inputs/igh/gctrees_2022-06-16_igh_pcp_esm{member}_mask_ratios.hdf5",
     output:
         aaprob="output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/aaprob.hdf5",
+        bl_log="output_gcreplay_esm_igh/{pcp_input}/{model_name}/esm{member}/optimized_branch_lengths.csv"
         performance="output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/performance.csv",
     params:
         model_class=lambda wildcards: igh_model_name_to_spec[wildcards.model_name][0],
@@ -46,7 +47,7 @@ rule run_igh_model:
     shell:
         """
         mkdir -p output_gcreplay_esm/igh/{wildcards.pcp_input}/{wildcards.model_name}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path} {output.bl_log}
         epam evaluate {output.aaprob} {output.performance}
         """
 
@@ -57,6 +58,7 @@ rule run_igk_model:
         hdf5_path="pcp_gcreplay_inputs/igk/gctrees_2022-06-16_igk_pcp_esm{member}_mask_ratios.hdf5"
     output:
         aaprob="output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/aaprob.hdf5",
+        bl_log="output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/optimized_branch_lengths.csv"
         performance="output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/performance.csv",
     params:
         model_class=lambda wildcards: igk_model_name_to_spec[wildcards.model_name][0],
@@ -66,7 +68,7 @@ rule run_igk_model:
     shell:
         """
         mkdir -p output_gcreplay_esm/igk/{wildcards.pcp_input}/{wildcards.model_name}
-        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
+        epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path} {output.bl_log}
         epam evaluate {output.aaprob} {output.performance}
         """
         

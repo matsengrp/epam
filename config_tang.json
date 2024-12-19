@@ -1,6 +1,6 @@
 {
     "dataset": "Tang",
     "number_of_batches": 100,
-    "pcp_per_batch": 5178,
-    "pcp_input": "tang-deepshm-prod_pcp_2024-04-01_MASKED_NI_noN_no-naive_rearranged"
+    "pcp_per_batch": 5060,
+    "pcp_input": "tang-deepshm-prod_pcp_2024-08-08_MASKED_NI_noN_no-naive"
   }
