@@ -41,7 +41,6 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, model_number=1)
     print(f"Using ESM1v model number: {model_number}")
 
     device = pick_device()
-    # device = torch.device("cuda:0")
 
     # Initialize the model
     model, alphabet = pretrained.load_model_and_alphabet(model_location)
