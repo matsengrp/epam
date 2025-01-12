@@ -7,15 +7,15 @@ esm_model_numbers = range(1, 6)
 
 rule all:
     input:
-        expand("pcp_gcreplay_inputs/{chain}/gctrees_2024-10-22-full_{chain}_pcp_ensemble_esm_mask_ratios.hdf5", 
+        expand("pcp_gcreplay_inputs/{chain}/gctrees_2025-01-10-full_{chain}_pcp_ensemble_esm_mask_ratios.hdf5", 
                chain=["igh", "igk"]),
 
 
 rule precompute_esm:
     input:
-        in_csv="pcp_gcreplay_inputs/{chain}/gctrees_2024-10-22-full_{chain}_pcp.csv", 
+        in_csv="pcp_gcreplay_inputs/{chain}/gctrees_2025-01-10-full_{chain}_pcp.csv", 
     output:
-        out_hdf5="pcp_gcreplay_inputs/{chain}/gctrees_2024-10-22-full_{chain}_pcp_esm{esm_model_number}_mask_logits.hdf5", 
+        out_hdf5="pcp_gcreplay_inputs/{chain}/gctrees_2025-01-10-full_{chain}_pcp_esm{esm_model_number}_mask_logits.hdf5", 
     params:
         esm_model_number=lambda wildcards: wildcards.esm_model_number,
     shell: 
@@ -25,9 +25,9 @@ rule precompute_esm:
 
 rule process_esm:
     input:
-        in_hdf5="pcp_gcreplay_inputs/{chain}/gctrees_2024-10-22-full_{chain}_pcp_esm{esm_model_number}_mask_logits.hdf5",
+        in_hdf5="pcp_gcreplay_inputs/{chain}/gctrees_2025-01-10-full_{chain}_pcp_esm{esm_model_number}_mask_logits.hdf5",
     output:
-        out_hdf5="pcp_gcreplay_inputs/{chain}/gctrees_2024-10-22-full_{chain}_pcp_esm{esm_model_number}_mask_ratios.hdf5",
+        out_hdf5="pcp_gcreplay_inputs/{chain}/gctrees_2025-01-10-full_{chain}_pcp_esm{esm_model_number}_mask_ratios.hdf5",
     params:
         esm_model_number=lambda wildcards: wildcards.esm_model_number,  # Define a dynamic wildcard for {esm_model_number}
     shell:
@@ -37,11 +37,11 @@ rule process_esm:
 
 rule ensemble_esm:
     input:
-        expand("pcp_gcreplay_inputs/{chain}/gctrees_2024-10-22-full_{chain}_pcp_esm{esm_model_number}_mask_ratios.hdf5", 
+        expand("pcp_gcreplay_inputs/{chain}/gctrees_2025-01-10-full_{chain}_pcp_esm{esm_model_number}_mask_ratios.hdf5", 
                chain="{chain}", 
                esm_model_number=esm_model_numbers),
     output:
-        "pcp_gcreplay_inputs/{chain}/gctrees_2024-10-22-full_{chain}_pcp_ensemble_esm_mask_ratios.hdf5",
+        "pcp_gcreplay_inputs/{chain}/gctrees_2025-01-10-full_{chain}_pcp_ensemble_esm_mask_ratios.hdf5",
     run:
         input_files = ",".join(input)
         output_file = output[0]

@@ -92,19 +92,6 @@ class GCReplayDMS(models.BaseModel):
         dms_df = pd.read_csv(dms_data_file)
         self.dms_chain_df = dms_df[dms_df["chain"] == self.chain]
 
-        # Issue: When 'mutant' amino acid is the wildtype, binding information is not provided.
-        # Patch: Recover wildtype binding at a site from a non-wildtype mutant data: [bind_CGG] - [delta_bind_CGG]
-        for site in self.dms_chain_df["position"].drop_duplicates():
-            site_df = self.dms_chain_df[self.dms_chain_df["position"] == site]
-            non_wt_row_df = site_df[site_df["wildtype"] != site_df["mutant"]].head(1)
-            wt_bind = (
-                non_wt_row_df["bind_CGG"].item()
-                - non_wt_row_df["delta_bind_CGG"].item()
-            )
-            wt_iloc = site_df[site_df["wildtype"] == site_df["mutant"]].index.item()
-            self.dms_chain_df.loc[wt_iloc, "bind_CGG"] = wt_bind
-            self.dms_chain_df.loc[wt_iloc, "delta_bind_CGG"] = 0.0
-
         # Issue: Light chain DMS measurements at positions 129 (F,L), 134 (R) are missing.
         # Patch: Set the missing binding values to the wildtype value.
         if self.chain == "L":
