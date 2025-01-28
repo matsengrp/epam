@@ -90,7 +90,12 @@ def annotate_sites_df(
             nbkey = tuple(pcp_row[["sample_id", "family"]])
             if nbkey in numbering_dict:
                 if has_pcp_site:
-                    sites_col.append([numbering_dict[nbkey][pcp_site] for pcp_site in group_df["pcp_site"]])
+                    sites_col.append(
+                        [
+                            numbering_dict[nbkey][pcp_site]
+                            for pcp_site in group_df["pcp_site"]
+                        ]
+                    )
                 else:
                     sites_col.append(numbering_dict[nbkey])
             else:
@@ -1551,9 +1556,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                 pcp_row = test_df.iloc[0]
                 test_seq = translate_sequence(pcp_row["parent"])
                 if len(test_seq) != len(numbering):
-                    exclusion_dict[(sample_id, family)] = (
-                        "ANARCI seq length mismatch!"
-                    )
+                    exclusion_dict[(sample_id, family)] = "ANARCI seq length mismatch!"
                     if verbose == True:
                         print("ANARCI seq length mismatch!", sample_id, family)
                     continue
