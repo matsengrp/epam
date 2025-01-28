@@ -64,26 +64,44 @@ def annotate_sites_df(
     is_cdr_col = []
 
     pcp_groups = df.groupby("pcp_index")
+    has_pcp_site = "pcp_site" in df.columns
+
     for pcp_index in df["pcp_index"].drop_duplicates():
         pcp_row = pcp_df.loc[pcp_index]
-
         group_df = pcp_groups.get_group(pcp_index)
         nsites = group_df.shape[0]
-        assert (
-            nsites == len(pcp_row["parent"]) // 3
-        ), f"number of sites ({nsites}) does not match sequence length ({len(pcp_row['parent']) // 3})"
+        if has_pcp_site:
+            # Less than is allowed here because some sites may be ignored (e.g. if
+            # ambiguous)
+            assert (
+                nsites <= len(pcp_row["parent"]) // 3
+            ), f"number of sites ({nsites}) is greater than sequence length ({len(pcp_row['parent']) // 3})"
+        else:
+            assert (
+                nsites == len(pcp_row["parent"]) // 3
+            ), f"number of sites ({nsites}) does not match sequence length ({len(pcp_row['parent']) // 3})"
 
         if numbering_dict is None:
-            sites_col.append(np.arange(nsites))
+            if has_pcp_site:
+                sites_col.append(group_df["pcp_site"])
+            else:
+                sites_col.append(np.arange(nsites))
         else:
             nbkey = tuple(pcp_row[["sample_id", "family"]])
             if nbkey in numbering_dict:
-                sites_col.append(numbering_dict[nbkey])
+                if has_pcp_site:
+                    sites_col.append([numbering_dict[nbkey][pcp_site] for pcp_site in group_df["pcp_site"]])
+                else:
+                    sites_col.append(numbering_dict[nbkey])
             else:
                 # Assign sites as "None", marking them for exclusion from output.
                 sites_col.append(["None"] * nsites)
 
-        is_cdr_col.append(pcp_sites_cdr_annotation(pcp_row))
+        if has_pcp_site:
+            cdr_row = pcp_sites_cdr_annotation(pcp_row)
+            is_cdr_col.append([cdr_row[pcp_site] for pcp_site in group_df["pcp_site"]])
+        else:
+            is_cdr_col.append(pcp_sites_cdr_annotation(pcp_row))
 
     df["site"] = np.concatenate(sites_col)
     df["is_cdr"] = np.concatenate(is_cdr_col)
@@ -542,9 +560,15 @@ def get_subs_and_preds_from_mutabilities_df(df, pcp_df):
     for pcp_index in pcp_indices:
         probs = list(df[df["pcp_index"] == pcp_index]["prob"])
         mutations = list(df[df["pcp_index"] == pcp_index]["mutation"])
-        pcp_sub_locations.append(
-            list(i for i in range(len(mutations)) if mutations[i] == True)
-        )
+        if "pcp_site" in df.columns:
+            pcp_sites = list(df[df["pcp_index"] == pcp_index]["pcp_site"])
+            pcp_sub_locations.append(
+                list(i for i, mut in zip(pcp_sites, mutations) if mut)
+            )
+        else:
+            pcp_sub_locations.append(
+                list(i for i in range(len(mutations)) if mutations[i])
+            )
         top_k_sub_locations.append(locate_top_k_substitutions(probs, sum(mutations)))
         pcp_sample_family_dict[pcp_index] = tuple(
             pcp_df.loc[pcp_index][["sample_id", "family"]]
@@ -1505,7 +1529,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
             exclude = False
             for nn in numbering:
                 if "." in nn and nn[:3] != "111" and nn[:3] != "112":
-                    exclusion_dict[(sample_id, int(family))] = (
+                    exclusion_dict[(sample_id, family)] = (
                         f"Invalid IMGT insertion: {nn}"
                     )
                     if verbose == True:
@@ -1519,7 +1543,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
             # Check if clonal family is in PCP file, and that ANARCI preserved sequence length.
             # If not, exclude clonal family from output.
             test_df = pcp_df[
-                (pcp_df["sample_id"] == sample_id) & (pcp_df["family"] == int(family))
+                (pcp_df["sample_id"] == sample_id) & (pcp_df["family"] == family)
             ]
             if test_df.shape[0] == 0:
                 continue
@@ -1527,7 +1551,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                 pcp_row = test_df.iloc[0]
                 test_seq = translate_sequence(pcp_row["parent"])
                 if len(test_seq) != len(numbering):
-                    exclusion_dict[(sample_id, int(family))] = (
+                    exclusion_dict[(sample_id, family)] = (
                         "ANARCI seq length mismatch!"
                     )
                     if verbose == True:
@@ -1542,7 +1566,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                     exclude = False
                     for nn, is_cdr in zip(numbering, cdr_anno):
                         if is_imgt_cdr(nn) != is_cdr:
-                            exclusion_dict[(sample_id, int(family))] = (
+                            exclusion_dict[(sample_id, family)] = (
                                 "IMGT mismatch with CDR annotation!"
                             )
                             if verbose == True:
@@ -1556,7 +1580,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                     if exclude == True:
                         continue
 
-        numbering_dict[(sample_id, int(family))] = numbering
+        numbering_dict[(sample_id, family)] = numbering
 
         # keep track of which site numbers are used
         for nn in numbering:
