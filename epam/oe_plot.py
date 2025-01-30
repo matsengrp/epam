@@ -1495,7 +1495,16 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
 
     for i, row in anarci_df.iterrows():
         # assumes clonal family ID has format "{sample_id}|{family}|{seq_name}"
-        [sample_id, family, seq_name] = row["Id"].split("|")
+        cfinfos = row["Id"].split("|")
+        sample_id = cfinfos[0]
+        # try-block to cast family ID to integer if appropriate
+        try: 
+            int(cfinfos[1])
+        except ValueError:
+            family = cfinfos[1]
+        else:
+            family = int(cfinfos[1])
+
         seqlist = [row[col] for col in numbering_cols]
         numbering = [nn for nn, aa in zip(numbering_cols, seqlist) if aa != "-"]
 
@@ -1505,7 +1514,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
             exclude = False
             for nn in numbering:
                 if "." in nn and nn[:3] != "111" and nn[:3] != "112":
-                    exclusion_dict[(sample_id, int(family))] = (
+                    exclusion_dict[(sample_id, family)] = (
                         f"Invalid IMGT insertion: {nn}"
                     )
                     if verbose == True:
@@ -1519,7 +1528,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
             # Check if clonal family is in PCP file, and that ANARCI preserved sequence length.
             # If not, exclude clonal family from output.
             test_df = pcp_df[
-                (pcp_df["sample_id"] == sample_id) & (pcp_df["family"] == int(family))
+                (pcp_df["sample_id"] == sample_id) & (pcp_df["family"] == family)
             ]
             if test_df.shape[0] == 0:
                 continue
@@ -1527,7 +1536,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                 pcp_row = test_df.iloc[0]
                 test_seq = translate_sequence(pcp_row["parent"])
                 if len(test_seq) != len(numbering):
-                    exclusion_dict[(sample_id, int(family))] = (
+                    exclusion_dict[(sample_id, family)] = (
                         "ANARCI seq length mismatch!"
                     )
                     if verbose == True:
@@ -1542,7 +1551,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                     exclude = False
                     for nn, is_cdr in zip(numbering, cdr_anno):
                         if is_imgt_cdr(nn) != is_cdr:
-                            exclusion_dict[(sample_id, int(family))] = (
+                            exclusion_dict[(sample_id, family)] = (
                                 "IMGT mismatch with CDR annotation!"
                             )
                             if verbose == True:
@@ -1556,7 +1565,7 @@ def get_numbering_dict(anarci_path, pcp_df=None, verbose=False, checks="imgt"):
                     if exclude == True:
                         continue
 
-        numbering_dict[(sample_id, int(family))] = numbering
+        numbering_dict[(sample_id, family)] = numbering
 
         # keep track of which site numbers are used
         for nn in numbering:
