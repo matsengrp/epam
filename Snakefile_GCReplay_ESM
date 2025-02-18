@@ -23,7 +23,7 @@ igk_model_name_to_spec = {
 
 igh_pcp_inputs = glob_wildcards("pcp_gcreplay_inputs/igh/{name}.csv").name
 igk_pcp_inputs = glob_wildcards("pcp_gcreplay_inputs/igk/{name}.csv").name
-esm_versions = ['1','2','3','4','5','_ensemble']
+esm_versions = ['esm1','esm2','esm3','esm4','esm5','ensemble_esm']
 
 rule all:
     input:
@@ -34,16 +34,16 @@ rule all:
 rule run_igh_model:
     input:
         in_csv="pcp_gcreplay_inputs/igh/{pcp_input}.csv",
-        hdf5_path="pcp_gcreplay_inputs/igh/gctrees_2022-06-16_igh_pcp_esm{member}_mask_ratios.hdf5",
+        hdf5_path="pcp_gcreplay_inputs/igh/gctrees_2025-01-10-full_igh_pcp_{member}_mask_ratios.hdf5",
     output:
-        aaprob="output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/aaprob.hdf5",
-        bl_log="output_gcreplay_esm_igh/{pcp_input}/{model_name}/esm{member}/optimized_branch_lengths.csv"
-        performance="output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/performance.csv",
+        aaprob="output_gcreplay_esm/igh/{pcp_input}/{model_name}/{member}/aaprob.hdf5",
+        bl_log="output_gcreplay_esm/igh/{pcp_input}/{model_name}/{member}/optimized_branch_lengths.csv",
+        performance="output_gcreplay_esm/igh/{pcp_input}/{model_name}/{member}/performance.csv",
     params:
         model_class=lambda wildcards: igh_model_name_to_spec[wildcards.model_name][0],
         model_params=lambda wildcards: igh_model_name_to_spec[wildcards.model_name][1],
     benchmark:
-        "output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/timing.tsv"
+        "output_gcreplay_esm/igh/{pcp_input}/{model_name}/{member}/timing.tsv"
     shell:
         """
         mkdir -p output_gcreplay_esm/igh/{wildcards.pcp_input}/{wildcards.model_name}
@@ -55,16 +55,16 @@ rule run_igh_model:
 rule run_igk_model:
     input:
         in_csv="pcp_gcreplay_inputs/igk/{pcp_input}.csv",
-        hdf5_path="pcp_gcreplay_inputs/igk/gctrees_2022-06-16_igk_pcp_esm{member}_mask_ratios.hdf5"
+        hdf5_path="pcp_gcreplay_inputs/igk/gctrees_2025-01-10-full_igk_pcp_{member}_mask_ratios.hdf5"
     output:
-        aaprob="output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/aaprob.hdf5",
-        bl_log="output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/optimized_branch_lengths.csv"
-        performance="output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/performance.csv",
+        aaprob="output_gcreplay_esm/igk/{pcp_input}/{model_name}/{member}/aaprob.hdf5",
+        bl_log="output_gcreplay_esm/igk/{pcp_input}/{model_name}/{member}/optimized_branch_lengths.csv",
+        performance="output_gcreplay_esm/igk/{pcp_input}/{model_name}/{member}/performance.csv",
     params:
         model_class=lambda wildcards: igk_model_name_to_spec[wildcards.model_name][0],
         model_params=lambda wildcards: igk_model_name_to_spec[wildcards.model_name][1],
     benchmark:
-        "output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/timing.tsv"
+        "output_gcreplay_esm/igk/{pcp_input}/{model_name}/{member}/timing.tsv"
     shell:
         """
         mkdir -p output_gcreplay_esm/igk/{wildcards.pcp_input}/{wildcards.model_name}
@@ -76,7 +76,7 @@ rule run_igk_model:
 rule combine_igh_performance_files:
     input:
         expand(
-            "output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/performance.csv",
+            "output_gcreplay_esm/igh/{pcp_input}/{model_name}/{member}/performance.csv",
             pcp_input=igh_pcp_inputs,
             model_name=igh_model_name_to_spec.keys(),
             member=esm_versions,
@@ -87,7 +87,7 @@ rule combine_igh_performance_files:
     run:
         input_files = ",".join(input)
         input_timing_files = ",".join(
-            f"output_gcreplay_esm/igh/{pcp_input}/{model_name}/esm{member}/timing.tsv"
+            f"output_gcreplay_esm/igh/{pcp_input}/{model_name}/{member}/timing.tsv"
             for pcp_input in igh_pcp_inputs
             for model_name in igh_model_name_to_spec.keys()
             for member in esm_versions
@@ -106,7 +106,7 @@ rule combine_igh_performance_files:
 rule combine_igk_performance_files:
     input:
         expand(
-            "output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/performance.csv",
+            "output_gcreplay_esm/igk/{pcp_input}/{model_name}/{member}/performance.csv",
             pcp_input=igk_pcp_inputs,
             model_name=igk_model_name_to_spec.keys(),
             member=esm_versions,
@@ -117,7 +117,7 @@ rule combine_igk_performance_files:
     run:
         input_files = ",".join(input)
         input_timing_files = ",".join(
-            f"output_gcreplay_esm/igk/{pcp_input}/{model_name}/esm{member}/timing.tsv"
+            f"output_gcreplay_esm/igk/{pcp_input}/{model_name}/{member}/timing.tsv"
             for pcp_input in igk_pcp_inputs
             for model_name in igk_model_name_to_spec.keys()
             for member in esm_versions
