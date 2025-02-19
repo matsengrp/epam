@@ -97,12 +97,14 @@ def evaluate_dataset(aaprob_path):
 
     region_site_sub_probs = {}
     region_model_sub_aa_ids = {}
+    region_model_sub_csps = {}
 
     with h5py.File(aaprob_path, "r") as matfile:
         model_name = matfile.attrs["model_name"]
         for region in ["full", "fwr", "cdr"]:
             region_site_sub_probs[region] = []
             region_model_sub_aa_ids[region] = []
+            region_model_sub_csps[region] = []
 
             for index in range(len(region_parent_aa_seqs[region])):
                 pcp_index = pcp_df.index[index]
@@ -132,8 +134,28 @@ def evaluate_dataset(aaprob_path):
                     )
                 )
 
+                def find_substitution_csps(matrix, parent, child):
+                    sub_csps = []
+                    for j in range(len(parent)):
+                        if parent[j] != child[j]:
+                            row = matrix[j, :]
+                            row[AA_STR_SORTED.index(parent[j])] = 0
+                            sub_csps.append(
+                                row[AA_STR_SORTED.index(child[j])] / np.sum(row)
+                            )
+                    return sub_csps
+
+                region_model_sub_csps[region].append(
+                    find_substitution_csps(
+                        matrix,
+                        region_parent_aa_seqs[region][index],
+                        region_child_aa_seqs[region][index],
+                    )
+                )
+
     region_top_k_sub_locations = {}
     region_sub_acc = {}
+    region_csp_perp = {}
     region_r_prec = {}
     region_cross_ent = {}
     region_aa_sub_freq = {}
@@ -150,6 +172,9 @@ def evaluate_dataset(aaprob_path):
             region_sub_aa_ids[region],
             region_model_sub_aa_ids[region],
             region_k_subs[region],
+        )
+        region_csp_perp[region] = calculate_csp_perplexity(
+            region_model_sub_csps[region],
         )
         region_r_prec[region] = calculate_r_precision(
             region_sub_locations[region],
@@ -184,12 +209,15 @@ def evaluate_dataset(aaprob_path):
         "pcp_count": len(pcp_df),
         "model": model_name,
         "sub_accuracy": region_sub_acc["full"],
+        "csp_perplexity": region_csp_perp["full"],
         "r_precision": region_r_prec["full"],
         "cross_entropy": region_cross_ent["full"],
         "fwr_sub_accuracy": region_sub_acc["fwr"],
+        "fwr_csp_perplexity": region_csp_perp["fwr"],
         "fwr_r_precision": region_r_prec["fwr"],
         "fwr_cross_entropy": region_cross_ent["fwr"],
         "cdr_sub_accuracy": region_sub_acc["cdr"],
+        "cdr_csp_perplexity": region_csp_perp["cdr"],
         "cdr_r_precision": region_r_prec["cdr"],
         "cdr_cross_entropy": region_cross_ent["cdr"],
         "avg_k_subs": np.mean(region_k_subs["full"]),
@@ -465,3 +493,33 @@ def calculate_aa_substitution_frequencies_by_region(parent_aa, child_aa):
     aa_sub_frequency = sum(1 for p, c in zip(parent, child) if p != c) / len(parent)
 
     return aa_sub_frequency
+
+
+def perplexity_of_probs(probs):
+    """
+    Calculate the perplexity of an array of probabilities.
+
+    Args:
+        probs (array-like): An array of probabilities. Values should be in
+        (0, 1], but we clip them below at 1e-12 to avoid log(0).
+
+    Returns:
+        float: The perplexity of the input probabilities.
+    """
+    probs = np.clip(probs, SMALL_PROB, None)
+    return np.exp(-np.mean(np.log(probs)))
+
+
+def calculate_csp_perplexity(model_sub_csps):
+    """
+    Calculate CSP perplexity for all PCPs in one data set/HDF5 file.
+    Returns csp perplexity for use in evaluate() and output files.
+
+    Parameters:
+    model_sub_csps (list of np.array): Conditional substitution probabilities predicted by model for the amino acid outcome at substituted sites in each PCP.
+
+    Returns:
+    csp_perplexity (float): Calculated CSP perplexity for data set of PCPs.
+
+    """
+    return perplexity_of_probs(np.concatenate(model_sub_csps))
