@@ -506,8 +506,7 @@ def perplexity_of_probs(probs):
     Returns:
         float: The perplexity of the input probabilities.
     """
-    epsilon = 1e-12
-    probs = np.clip(probs, epsilon, None)
+    probs = np.clip(probs, SMALL_PROB, None)
     return np.exp(-np.mean(np.log(probs)))
 
 
