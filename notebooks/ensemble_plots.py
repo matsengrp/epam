@@ -226,16 +226,16 @@ fig.patch.set_facecolor('white')
 gs = fig.add_gridspec(1, 3)
 axs = gs.subplots(sharex=False, sharey=True)
 
-# axs[0].scatter(results_df['sub_accuracy'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
-axs[0].barh(results_df['sub_accuracy'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
+axs[0].scatter(results_df['sub_accuracy'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
+# axs[0].barh(results_df['sub_accuracy'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
 axs[0].set_title("Substitution accuracy")
 
-# axs[1].scatter(results_df['cross_entropy'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
-axs[1].barh(results_df['cross_entropy'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
+axs[1].scatter(results_df['cross_entropy'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
+# axs[1].barh(results_df['cross_entropy'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
 axs[1].set_title("Cross-entropy loss")
 
-# axs[2].scatter(results_df['r_precision'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
-axs[2].barh(results_df['r_precision'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
+axs[2].scatter(results_df['r_precision'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
+# axs[2].barh(results_df['r_precision'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
 axs[2].set_title("R-precision")
 
 # axs[1,0].scatter(results_df['overlap'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=0.6, s=60)
@@ -251,6 +251,7 @@ axs[2].legend(handles=legend_patches, title='ESM version', loc='center', bbox_to
 
 plt.tight_layout()
 plt.savefig("/home/mjohnso4/epam/output/v1_ensemble/ford-flairr-seq-prod_pcp_2024-04-01_MASKED_NI_noN_no-naive/ensemble_performance.png")
+plt.savefig("/home/mjohnso4/epam/output/v1_ensemble/ford-flairr-seq-prod_pcp_2024-04-01_MASKED_NI_noN_no-naive/ensemble_performance.pdf")
 plt.show()
 # plt.close()
 
