@@ -1,0 +1,866 @@
+---
+title: "GCReplay DMS v ESM v BLOSUM"
+output: 
+  html_document:
+    df_print: kable
+date: "2024-04-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(cowplot)
+library(ggtext)
+library(glue)
+library(rhdf5)
+library(colorspace)
+library(patchwork)
+```
+
+```{r}
+path_to_output <- "/Users/mjohnso4/Documents/epam/data/gcreplay/"
+path_to_replay_esm1 <- glue("{path_to_output}replay_igh_igk_esm1.hdf5")
+path_to_replay_esm2 <- glue("{path_to_output}replay_igh_igk_esm2.hdf5")
+path_to_replay_esm3 <- glue("{path_to_output}replay_igh_igk_esm3.hdf5")
+path_to_replay_esm4 <- glue("{path_to_output}replay_igh_igk_esm4.hdf5")
+path_to_replay_esm5 <- glue("{path_to_output}replay_igh_igk_esm5.hdf5")
+path_to_replay_dms <- glue("{path_to_output}final_variant_scores.csv")
+
+igh_seq = "EVQLQESGPSLVKPSQTLSLTCSVTGDSITSGYWNWIRKFPGNKLEYMGYISYSGSTYYNPSLKSRISITRDTSKNQYYLQLNSVTTEDTATYYCARDFDVWGAGTTVTVSS"
+igk_seq = "DIVMTQSQKFMSTSVGDRVSVTCKASQNVGTNVAWYQQKPGQSPKALIYSASYRYSGVPDRFTGSGSGTDFTLTISNVQSEDLAEYFCQQYNSYPLTFGSGTKLEIKR"
+
+aa_ordered_chr <- c("A", "C", "D", "E", "F", "G", "H", "I", "K", "L", "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y")
+```
+
+
+#### ESM predictions
+
+```{r}
+extract_igh_predictions <- function(path_to_model_result) {
+  igh_esm <- h5read(file = path_to_model_result, name = igh_seq)
+  assertthat::assert_that(dim(igh_esm)[2] == str_length(igh_seq))
+  
+  rownames(igh_esm) <- aa_ordered_chr
+  colnames(igh_esm) <- seq(1, str_length(igh_seq))
+  
+  igh_esm_df <- as.data.frame.table(igh_esm)
+  colnames(igh_esm_df) <- c("mutant", "position", "probability")
+  
+  return(igh_esm_df)
+}
+
+extract_igk_predictions <- function(path_to_model_result) {
+  igk_esm <- h5read(file = path_to_model_result, name = igk_seq)
+  assertthat::assert_that(dim(igk_esm)[2] == str_length(igk_seq))
+  
+  rownames(igk_esm) <- aa_ordered_chr
+  colnames(igk_esm) <- seq(128, str_length(igk_seq)+127) # adjusting for DMS numbering
+  
+  igk_esm_df <- as.data.frame.table(igk_esm)
+  colnames(igk_esm_df) <- c("mutant", "position", "probability")
+  
+  return(igk_esm_df)
+}
+
+```
+
+```{r}
+igh_esm1_df <- extract_igh_predictions(path_to_replay_esm1) %>% 
+  mutate(esm_model = 1)
+igh_esm2_df <- extract_igh_predictions(path_to_replay_esm2) %>% 
+  mutate(esm_model = 2)
+igh_esm3_df <- extract_igh_predictions(path_to_replay_esm3) %>% 
+  mutate(esm_model = 3)
+igh_esm4_df <- extract_igh_predictions(path_to_replay_esm4) %>% 
+  mutate(esm_model = 4)
+igh_esm5_df <- extract_igh_predictions(path_to_replay_esm5) %>% 
+  mutate(esm_model = 5)
+
+igk_esm1_df <- extract_igk_predictions(path_to_replay_esm1) %>% 
+  mutate(esm_model = 1)
+igk_esm2_df <- extract_igk_predictions(path_to_replay_esm2) %>% 
+  mutate(esm_model = 2)
+igk_esm3_df <- extract_igk_predictions(path_to_replay_esm3) %>% 
+  mutate(esm_model = 3)
+igk_esm4_df <- extract_igk_predictions(path_to_replay_esm4) %>% 
+  mutate(esm_model = 4)
+igk_esm5_df <- extract_igk_predictions(path_to_replay_esm5) %>% 
+  mutate(esm_model = 5)
+
+```
+
+
+
+#### DMS results
+
+```{r}
+# delta_bind_CGG - the change in binding relative to the wildtype, specifically log[K_A(mut)] - log[K_A(wt)]
+full_dms_df <- read_csv(path_to_replay_dms, show_col_types = FALSE) 
+
+aa_levels <- c("C", "P", "G", "V", "M", "L", "I", "A", "F", "W", "Y", "T", "S", "N", "Q", "E", "D", "H", "K", "R")
+
+igh_dms_df <- full_dms_df %>% 
+  filter(chain == "H") %>% 
+  select(c(position, wildtype, mutant, delta_bind_CGG, delta_expr)) %>% 
+  mutate(
+    wildtype = factor(wildtype, levels = aa_levels),
+    mutant = factor(mutant, levels = aa_levels)
+  )
+
+igk_dms_df <- full_dms_df %>% 
+  filter(chain == "L") %>% 
+  select(c(position, wildtype, mutant, delta_bind_CGG, delta_expr)) %>% 
+  mutate(
+    wildtype = factor(wildtype, levels = aa_levels),
+    mutant = factor(mutant, levels = aa_levels)
+  )
+
+```
+
+```{r}
+igh_dms_df %>% 
+  select(c(wildtype, position)) %>% 
+  unique() %>% 
+  pull(wildtype) %>% 
+  str_flatten() == igh_seq
+```
+
+```{r}
+igk_dms_df %>% 
+  select(c(wildtype, position)) %>% 
+  unique() %>% 
+  pull(wildtype) %>% 
+  str_flatten() == igk_seq
+```
+
+
+
+#### BLOSUM results
+
+```{r}
+```
+
+
+
+#### DMS plots - change in binding affinity
+
+```{r}
+igh_dms_df %>% 
+  mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+  ggplot(
+    aes(
+      x = position, 
+      y = mutant, 
+      fill = delta_bind_CGG
+    )
+  ) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = ifelse(mutant == wildtype, "X", "")), color = "grey50") +
+  #scale_x_discrete(
+  scale_x_continuous(
+    name = "",
+    limits = c(0, 113),
+    expand = c(0.0001, 0.0001),
+    breaks = seq(5, 110, 5),
+    labels = seq(5, 110, 5)
+  ) +
+  scale_y_discrete(name = "") +
+  scale_fill_continuous_diverging(
+    name = "&Delta; affinity",
+    palette = "Blue-Red 3",
+    rev = TRUE, 
+    na.value = "grey90"
+  ) +
+  ggtitle("IgH DMS") +
+  theme_classic(14) +
+  theme(
+    legend.position = "bottom",
+    legend.justification = "right",
+    legend.box.spacing = unit(0, "pt"),
+    legend.key.width = unit(2, "cm"),
+    axis.line.x = element_blank(),
+    legend.title = element_markdown()
+  ) -> plot_igh_dms
+
+plot_igh_dms
+```
+
+
+```{r}
+igk_dms_df %>% 
+  mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>%
+  ggplot(
+    aes(
+      x = position, 
+      y = mutant, 
+      fill = delta_bind_CGG
+    )
+  ) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = ifelse(mutant == wildtype, "X", "")), color = "grey50") +
+  scale_x_continuous(
+    name = "",
+    limits = c(127, 236),
+    expand = c(0.0001, 0.0001),
+    breaks = seq(130, 230, 5),
+    labels = seq(130, 230, 5)
+  ) +
+  scale_y_discrete(name = "") +
+  scale_fill_continuous_diverging(
+    name = "&Delta; affinity",
+    palette = "Blue-Red 3",
+    rev = TRUE,
+    na.value = "grey90"
+  ) +
+  ggtitle("IgK DMS") +
+  theme_classic(14) +
+  theme(
+    legend.position = "bottom",
+    legend.justification = "right",
+    legend.box.spacing = unit(0, "pt"),
+    legend.key.width = unit(2, "cm"),
+    axis.line.x = element_blank(),
+    legend.title = element_markdown()
+  ) -> plot_igk_dms
+
+plot_igk_dms
+```
+
+#### DMS plots - change in expression
+
+```{r}
+igh_dms_df %>% 
+  ggplot(
+    aes(
+      x = position, 
+      y = mutant, 
+      fill = delta_expr
+    )
+  ) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = ifelse(mutant == wildtype, "X", "")), color = "grey50") +
+  #scale_x_discrete(
+  scale_x_continuous(
+    name = "",
+    limits = c(0, 113),
+    expand = c(0.0001, 0.0001),
+    breaks = seq(5, 110, 5),
+    labels = seq(5, 110, 5)
+  ) +
+  scale_y_discrete(name = "") +
+  scale_fill_continuous_diverging(
+    name = "&Delta; expression",
+    palette = "Blue-Red 3",
+    rev = TRUE, 
+    na.value = "grey90"
+  ) +
+  ggtitle("IgH DMS") +
+  theme_classic(14) +
+  theme(
+    legend.position = "bottom",
+    legend.justification = "right",
+    legend.box.spacing = unit(0, "pt"),
+    legend.key.width = unit(2, "cm"),
+    axis.line.x = element_blank(),
+    legend.title = element_markdown()
+  ) -> plot_igh_exp_dms
+
+plot_igh_exp_dms
+```
+
+
+```{r}
+igk_dms_df %>% 
+  ggplot(
+    aes(
+      x = position, 
+      y = mutant, 
+      fill = delta_expr
+    )
+  ) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = ifelse(mutant == wildtype, "X", "")), color = "grey50") +
+  scale_x_continuous(
+    name = "",
+    limits = c(127, 236),
+    expand = c(0.0001, 0.0001),
+    breaks = seq(130, 230, 5),
+    labels = seq(130, 230, 5)
+  ) +
+  scale_y_discrete(name = "") +
+  scale_fill_continuous_diverging(
+    name = "&Delta; expression",
+    palette = "Blue-Red 3",
+    rev = TRUE,
+    na.value = "grey90"
+  ) +
+  ggtitle("IgK DMS") +
+  theme_classic(14) +
+  theme(
+    legend.position = "bottom",
+    legend.justification = "right",
+    legend.box.spacing = unit(0, "pt"),
+    legend.key.width = unit(2, "cm"),
+    axis.line.x = element_blank(),
+    legend.title = element_markdown()
+  ) -> plot_igk_exp_dms
+
+plot_igk_exp_dms
+```
+
+
+
+#### ESM plots
+
+```{r}
+igh_full_df <- full_join(igh_esm1_df, igh_esm2_df) %>% 
+  full_join(., igh_esm3_df) %>% 
+  full_join(., igh_esm4_df) %>% 
+  full_join(., igh_esm5_df) %>% 
+  mutate(position = as.numeric(position)) %>% 
+  left_join(igh_dms_df, ., by = c("position", "mutant"))
+
+igh_full_ratio_df <- igh_full_df %>% 
+  group_by(position, esm_model) %>%
+  filter(mutant == wildtype) %>% 
+  summarize(wt_prob = probability) %>% 
+  left_join(igh_full_df, .) %>% 
+  mutate(
+    prob_ratio = probability/wt_prob,
+    log_ratio = log10(prob_ratio)
+  )
+
+
+igk_full_df <- full_join(igk_esm1_df, igk_esm2_df) %>% 
+  full_join(., igk_esm3_df) %>% 
+  full_join(., igk_esm4_df) %>% 
+  full_join(., igk_esm5_df) %>% 
+  mutate(position = as.numeric(levels(position)[position])) %>% 
+  left_join(igk_dms_df, ., by = c("position", "mutant"))
+ 
+igk_full_ratio_df <- igk_full_df %>%
+  group_by(position, esm_model) %>%
+  filter(mutant == wildtype) %>%
+  summarize(wt_prob = probability) %>%
+  left_join(igk_full_df, .) %>%
+  mutate(
+    prob_ratio = probability/wt_prob,
+    log_ratio = log10(prob_ratio)
+  )
+```
+
+
+```{r}
+igh_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  ggplot(
+    aes(
+      x = position, 
+      y = mutant, 
+      fill = log_ratio
+    )
+  ) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = ifelse(mutant == wildtype, "X", "")), color = "grey50") +
+  #scale_x_discrete(
+  scale_x_continuous(
+    name = "",
+    limits = c(0, 113),
+    expand = c(0.0001, 0.0001),
+    breaks = seq(5, 110, 5),
+    labels = seq(5, 110, 5)
+  ) +
+  scale_y_discrete(name = "") +
+  scale_fill_continuous_diverging(
+    name = "log ratio",
+    palette = "Blue-Red 3",
+    rev = TRUE, 
+    na.value = "grey90"
+  ) +
+  ggtitle("IgH ESM") +
+  theme_classic(14) +
+  theme(
+    legend.position = "bottom",
+    legend.justification = "right",
+    legend.box.spacing = unit(0, "pt"),
+    legend.key.width = unit(2, "cm"),
+    axis.line.x = element_blank(),
+    legend.title = element_markdown()
+  ) -> plot_igh_esm
+
+plot_igh_esm
+```
+
+```{r}
+igk_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  ggplot(
+    aes(
+      x = position, 
+      y = mutant, 
+      fill = log_ratio
+    )
+  ) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = ifelse(mutant == wildtype, "X", "")), color = "grey50") +
+  #scale_x_discrete(
+  scale_x_continuous(
+    name = "",
+    limits = c(127, 236),
+    expand = c(0.0001, 0.0001),
+    breaks = seq(130, 230, 5),
+    labels = seq(130, 230, 5)
+  ) +
+  scale_y_discrete(name = "") +
+  scale_fill_continuous_diverging(
+    name = "log ratio",
+    palette = "Blue-Red 3",
+    rev = TRUE, 
+    na.value = "grey90"
+  ) +
+  ggtitle("IgK ESM") +
+  theme_classic(14) +
+  theme(
+    legend.position = "bottom",
+    legend.justification = "right",
+    legend.box.spacing = unit(0, "pt"),
+    legend.key.width = unit(2, "cm"),
+    axis.line.x = element_blank(),
+    legend.title = element_markdown()
+  ) -> plot_igk_esm
+
+plot_igk_esm
+```
+
+
+
+#### Correlations with affinity
+
+```{r}
+dsm_igh <- igh_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+  pull(delta_bind_CGG)
+
+# esm1_prob_igh <- igh_full_ratio_df %>% 
+#   filter(esm_model == 1) %>% 
+#   pull(probability)
+# 
+# esm1_ratio_igh <- igh_full_ratio_df %>% 
+#   filter(esm_model == 1) %>% 
+#   pull(prob_ratio)
+
+esm1_log_ratio_igh <- igh_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  pull(log_ratio)
+
+# cor.test(dsm_igh, esm1_prob_igh, method = "spearman")
+# cor.test(dsm_igh, esm1_ratio_igh, method = "spearman")
+cor.test(dsm_igh, esm1_log_ratio_igh, method = "spearman")
+
+```
+
+```{r}
+dsm_igk <- igk_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+  pull(delta_bind_CGG)
+
+# esm1_prob_igk <- igk_full_ratio_df %>% 
+#   filter(esm_model == 1) %>% 
+#   mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+#   pull(probability)
+# 
+# esm1_ratio_igk <- igk_full_ratio_df %>% 
+#   filter(esm_model == 1) %>% 
+#   mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+#   pull(prob_ratio)
+
+esm1_log_ratio_igk <- igk_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+  pull(log_ratio)
+
+# cor.test(dsm_igk, esm1_prob_igk, method = "spearman")
+# cor.test(dsm_igk, esm1_ratio_igk, method = "spearman")
+cor.test(dsm_igk, esm1_log_ratio_igk, method = "spearman")
+```
+
+```{r}
+text_igh <- tibble(
+  label = c(
+    "&rho; = 0.032"
+  ),
+  x = -5.5,
+  y = 0.75
+)
+
+igh_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+  ggplot(aes(log_ratio, delta_bind_CGG)) +
+  geom_point(alpha = 0.3) +
+  geom_richtext(data=text_igh, aes(x=x, y=y, label=label), fill = NA, label.color = NA) +
+  scale_x_continuous(name = "log probability ratio") +
+  scale_y_continuous(name = "&Delta; affinity") +
+  ggtitle("IgH") +
+  theme_half_open(14) +
+  cowplot::background_grid() +
+  theme(
+    axis.title.y = element_markdown()
+  ) -> plot_igh_corr
+
+plot_igh_corr
+```
+
+```{r}
+text_igk <- tibble(
+  label = c(
+    "&rho; = 0.264"
+  ),
+  x = -5.5,
+  y = 0.75
+)
+
+igk_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+  ggplot(aes(log_ratio, delta_bind_CGG)) +
+  geom_point(alpha = 0.3) +
+  geom_richtext(data=text_igk, aes(x=x, y=y, label=label), fill = NA, label.color = NA) +
+  scale_x_continuous(name = "log probability ratio") +
+  scale_y_continuous(name = "&Delta; affinity") +
+  ggtitle("IgK") +
+  theme_half_open(14) +
+  cowplot::background_grid() +
+  theme(
+    axis.title.y = element_markdown()
+  ) -> plot_igk_corr
+
+plot_igk_corr
+```
+
+```{r}
+esm2_log_ratio_igh <- igh_full_ratio_df %>% 
+  filter(esm_model == 2) %>% 
+  pull(log_ratio)
+
+esm3_log_ratio_igh <- igh_full_ratio_df %>% 
+  filter(esm_model == 3) %>% 
+  pull(log_ratio)
+
+esm4_log_ratio_igh <- igh_full_ratio_df %>% 
+  filter(esm_model == 4) %>% 
+  pull(log_ratio)
+
+esm5_log_ratio_igh <- igh_full_ratio_df %>% 
+  filter(esm_model == 5) %>% 
+  pull(log_ratio)
+
+cor.test(dsm_igh, esm1_log_ratio_igh, method = "spearman")
+cor.test(dsm_igh, esm2_log_ratio_igh, method = "spearman")
+cor.test(dsm_igh, esm3_log_ratio_igh, method = "spearman")
+cor.test(dsm_igh, esm4_log_ratio_igh, method = "spearman")
+cor.test(dsm_igh, esm5_log_ratio_igh, method = "spearman")
+```
+
+```{r}
+esm2_log_ratio_igk <- igk_full_ratio_df %>% 
+  filter(esm_model == 2) %>% 
+  pull(log_ratio)
+
+esm3_log_ratio_igk <- igk_full_ratio_df %>% 
+  filter(esm_model == 3) %>% 
+  pull(log_ratio)
+
+esm4_log_ratio_igk <- igk_full_ratio_df %>% 
+  filter(esm_model == 4) %>% 
+  pull(log_ratio)
+
+esm5_log_ratio_igk <- igk_full_ratio_df %>% 
+  filter(esm_model == 5) %>% 
+  pull(log_ratio)
+
+cor.test(dsm_igk, esm1_log_ratio_igk, method = "spearman")
+cor.test(dsm_igk, esm2_log_ratio_igk, method = "spearman")
+cor.test(dsm_igk, esm3_log_ratio_igk, method = "spearman")
+cor.test(dsm_igk, esm4_log_ratio_igk, method = "spearman")
+cor.test(dsm_igk, esm5_log_ratio_igk, method = "spearman")
+```
+
+
+
+
+#### Correlations with expression
+
+```{r}
+dsm_expr_igh <- igh_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  pull(delta_expr)
+
+cor.test(dsm_expr_igh, esm1_log_ratio_igh, method = "spearman")
+```
+
+```{r}
+dsm_expr_igk <- igk_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  pull(delta_expr)
+
+cor.test(dsm_expr_igk, esm1_log_ratio_igk, method = "spearman")
+```
+
+```{r}
+text_igh_expr <- tibble(
+  label = c(
+    "&rho; = 0.365"
+  ),
+  x = -5.5,
+  y = 0.75
+)
+
+igh_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  ggplot(aes(log_ratio, delta_expr)) +
+  geom_point(alpha = 0.3) +
+  geom_richtext(data=text_igh_expr, aes(x=x, y=y, label=label), fill = NA, label.color = NA) +
+  scale_x_continuous(name = "log probability ratio") +
+  scale_y_continuous(name = "&Delta; expression") +
+  ggtitle("IgH") +
+  theme_half_open(14) +
+  cowplot::background_grid() +
+  theme(
+    axis.title.y = element_markdown()
+  ) -> plot_igh_expr_corr
+
+plot_igh_expr_corr
+```
+
+```{r}
+text_igk_expr <- tibble(
+  label = c(
+    "&rho; = 0.552"
+  ),
+  x = -5.5,
+  y = 0.75
+)
+
+igk_full_ratio_df %>% 
+  filter(esm_model == 1) %>% 
+  ggplot(aes(log_ratio, delta_expr)) +
+  geom_point(alpha = 0.3) +
+  geom_richtext(data=text_igk_expr, aes(x=x, y=y, label=label), fill = NA, label.color = NA) +
+  scale_x_continuous(name = "log probability ratio") +
+  scale_y_continuous(name = "&Delta; expression") +
+  ggtitle("IgK") +
+  theme_half_open(14) +
+  cowplot::background_grid() +
+  theme(
+    axis.title.y = element_markdown()
+  ) -> plot_igk_expr_corr
+
+plot_igk_expr_corr
+```
+
+
+```{r}
+cor.test(dsm_expr_igh, esm1_log_ratio_igh, method = "spearman")
+cor.test(dsm_expr_igh, esm2_log_ratio_igh, method = "spearman")
+cor.test(dsm_expr_igh, esm3_log_ratio_igh, method = "spearman")
+cor.test(dsm_expr_igh, esm4_log_ratio_igh, method = "spearman")
+cor.test(dsm_expr_igh, esm5_log_ratio_igh, method = "spearman")
+```
+
+```{r}
+cor.test(dsm_expr_igk, esm1_log_ratio_igk, method = "spearman")
+cor.test(dsm_expr_igk, esm2_log_ratio_igk, method = "spearman")
+cor.test(dsm_expr_igk, esm3_log_ratio_igk, method = "spearman")
+cor.test(dsm_expr_igk, esm4_log_ratio_igk, method = "spearman")
+cor.test(dsm_expr_igk, esm5_log_ratio_igk, method = "spearman")
+```
+
+
+#### Saving plots
+
+DMS VS ESM:
+
+Affinity
+
+```{r}
+p1 <- plot_igh_dms +
+  theme(
+    title = element_blank(),
+    legend.position = "top",
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank()
+  )
+
+p2 <- plot_igh_esm +
+  theme(title = element_blank())
+
+plot_igh <- p1 / p2 +
+  theme(
+    plot.background = element_rect(fill="white", color = NA)
+  )
+
+plot_igh
+
+save_plot(
+  glue("{path_to_output}/igh_dms_esm_heat.png"),
+  plot_igh,
+  base_height = 7.71,
+  base_asp = 1.618, 
+  base_width = NULL
+)
+
+```
+
+```{r}
+p3 <- plot_igk_dms +
+  theme(
+    title = element_blank(),
+    legend.position = "top",
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank()
+  )
+
+p4 <- plot_igk_esm +
+  theme(title = element_blank())
+
+plot_igk <- p3 / p4 +
+  theme(
+    plot.background = element_rect(fill="white", color = NA)
+  )
+
+plot_igk
+
+save_plot(
+  glue("{path_to_output}/igk_dms_esm_heat.png"),
+  plot_igk,
+  base_height = 7.71,
+  base_asp = 1.618, 
+  base_width = NULL
+)
+```
+
+
+```{r}
+plot_corr <- plot_igh_corr | plot_igk_corr +
+  theme(
+    plot.background = element_rect(fill="white", color = NA)
+  )
+
+plot_corr
+
+save_plot(
+  glue("{path_to_output}/ig_dms_esm_corr.png"),
+  plot_corr,
+  base_height = 5.71,
+  base_asp = 1.618, 
+  base_width = NULL
+)
+
+```
+
+Expression
+
+```{r}
+p5 <- plot_igh_exp_dms +
+  theme(
+    title = element_blank(),
+    legend.position = "top",
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank()
+  )
+
+
+plot_igh_exp <- p5 / p2 +
+  theme(
+    plot.background = element_rect(fill="white", color = NA)
+  )
+
+plot_igh_exp
+
+save_plot(
+  glue("{path_to_output}/igh_dms_esm_heat_exp.png"),
+  plot_igh_exp,
+  base_height = 7.71,
+  base_asp = 1.618, 
+  base_width = NULL
+)
+```
+
+```{r}
+p6 <- plot_igk_exp_dms +
+  theme(
+    title = element_blank(),
+    legend.position = "top",
+    axis.ticks.x = element_blank(),
+    axis.text.x = element_blank()
+  )
+
+plot_igk_exp <- p6 / p4 +
+  theme(
+    plot.background = element_rect(fill="white", color = NA)
+  )
+
+plot_igk_exp
+
+save_plot(
+  glue("{path_to_output}/igk_dms_esm_heat_exp.png"),
+  plot_igk_exp,
+  base_height = 7.71,
+  base_asp = 1.618, 
+  base_width = NULL
+)
+```
+
+```{r}
+plot_corr_exp <- plot_igh_expr_corr | plot_igk_expr_corr +
+  theme(
+    plot.background = element_rect(fill="white", color = NA)
+  )
+
+plot_corr_exp
+
+save_plot(
+  glue("{path_to_output}/ig_dms_esm_corr_exp.png"),
+  plot_corr_exp,
+  base_height = 5.71,
+  base_asp = 1.618, 
+  base_width = NULL
+)
+```
+
+
+
+
+
+
+Full ESM model:
+
+```{r}
+igh_avg_esm <- igh_full_ratio_df %>% 
+  group_by(position, mutant) %>% 
+  mutate(avg_esm = mean(log_ratio)) %>% 
+  filter(esm_model == 1) %>% 
+  pull(avg_esm)
+
+cor.test(dsm_igh, igh_avg_esm, method = "spearman")
+cor.test(dsm_expr_igh, igh_avg_esm, method = "spearman")
+```
+
+```{r}
+igk_avg_esm <- igk_full_ratio_df %>% 
+  group_by(position, mutant) %>% 
+  mutate(avg_esm = mean(log_ratio)) %>% 
+  filter(esm_model == 1) %>% 
+  pull(avg_esm)
+
+cor.test(dsm_igk, igk_avg_esm, method = "spearman")
+cor.test(dsm_expr_igk, igk_avg_esm, method = "spearman")
+```
+
+
