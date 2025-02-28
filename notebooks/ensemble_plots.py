@@ -196,19 +196,25 @@ def plot_esm_ensemble(model = "ESM-1v"):
     axs[5].legend().set_visible(False)
 
 
-    fig.suptitle(title, fontsize=20)
-    fig.supylabel('number of substitutions', fontsize=20)
-    plt.tight_layout()
+    # fig.suptitle(title, fontsize=20)
+    # fig.supylabel('number of substitutions', fontsize=20)
+    # plt.tight_layout()
 
-    outfname = f"{plot_output_dir}/{model}_ensemble_oe.png"
-    print(outfname,'created!')
-    plt.savefig(outfname)
-    plt.close()
+    # outfname = f"{plot_output_dir}/{model}_ensemble_oe.png"
+    # print(outfname,'created!')
+    # plt.savefig(outfname)
+    # plt.close()
+    print(f"{model} - overlap: {results_1['overlap']:.3g}, residual: {results_1['residual']:.3g}")
+    print(f"{model} - overlap: {results_2['overlap']:.3g}, residual: {results_2['residual']:.3g}")
+    print(f"{model} - overlap: {results_3['overlap']:.3g}, residual: {results_3['residual']:.3g}")
+    print(f"{model} - overlap: {results_4['overlap']:.3g}, residual: {results_4['residual']:.3g}")
+    print(f"{model} - overlap: {results_5['overlap']:.3g}, residual: {results_5['residual']:.3g}")
+    print(f"{model} - overlap: {results_all['overlap']:.3g}, residual: {results_all['residual']:.3g}")
 
 
 # plot_esm_ensemble("ESM1v_mask")
-# # plot_esm_ensemble("NetamESM_mask")
-# # plot_esm_ensemble("S5FESM_mask")
+# plot_esm_ensemble("NetamESM_mask")
+# plot_esm_ensemble("S5FESM_mask")
 
 
 
@@ -216,27 +222,30 @@ full_results_df = pd.read_csv(f"{ensemble_output_dir}/combined_performance.csv")
 
 results_df = full_results_df[full_results_df['model'] != 'ESM1v_no-scale']
 
+oe_results_df = pd.read_csv(f"{ensemble_output_dir}/oe_performance.csv")
+
 results_df[['epam_model', 'esm_version']] = results_df['model'].str.split('_', expand=True)
+oe_results_df[['epam_model', 'esm_version']] = oe_results_df['model'].str.split('_', expand=True)
 
-version_colors = {'ensemble': oi_black, '1': oi_orange, '2': oi_skyblue, '3': oi_bluishgreen, '4': oi_yellow, '5': oi_blue}#, 'no-scale': oi_vermillion}
+version_colors = {'ensemble': oi_black, '1': oi_orange, '2': oi_blue, '3': oi_bluishgreen, '4': oi_yellow, '5': oi_vermillion}#, 'no-scale': oi_vermillion}
 
-fig = plt.figure(figsize=(10,5))
+fig = plt.figure(figsize=(10,4.5))
 fig.patch.set_facecolor('white')
 # gs = fig.add_gridspec(2, 3)
 gs = fig.add_gridspec(1, 3)
 axs = gs.subplots(sharex=False, sharey=True)
 
-axs[0].scatter(results_df['sub_accuracy'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
-# axs[0].barh(results_df['sub_accuracy'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
-axs[0].set_title("Substitution accuracy")
+axs[0].scatter(oe_results_df['overlap'], oe_results_df['epam_model'], c=oe_results_df['esm_version'].map(version_colors), alpha=1, s=60)
+# axs[0].barh(results_df['cross_entropy'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
+axs[0].set_title("Overlap")
 
-axs[1].scatter(results_df['cross_entropy'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
-# axs[1].barh(results_df['cross_entropy'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
-axs[1].set_title("Cross-entropy loss")
+axs[1].scatter(results_df['r_precision'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
+# axs[1].barh(results_df['r_precision'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
+axs[1].set_title("R-precision")
 
-axs[2].scatter(results_df['r_precision'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
-# axs[2].barh(results_df['r_precision'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
-axs[2].set_title("R-precision")
+axs[2].scatter(results_df['sub_accuracy'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=1, s=60)
+# axs[2].barh(results_df['sub_accuracy'], results_df['epam_model'], color=results_df['esm_version'].map(version_colors), alpha=1)
+axs[2].set_title("Substitution accuracy")
 
 # axs[1,0].scatter(results_df['overlap'], results_df['epam_model'], c=results_df['esm_version'].map(version_colors), alpha=0.6, s=60)
 # axs[1,0].set_title("Overlap")
