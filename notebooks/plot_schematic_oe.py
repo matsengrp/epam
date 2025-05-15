@@ -26,6 +26,9 @@ anarci_flairr = "/fh/fast/matsen_e/shared/bcr-mut-sel/pcps/v2/anarci/ford-flairr
 pcp_path = "/home/mjohnso4/epam/pcp_inputs/ford-flairr-seq-prod_pcp_2024-07-26_MASKED_NI_noN_no-naive.csv"
 schematic_output_dir = "/home/mjohnso4/epam/output"
 
+major_text_size = 30 #20
+minor_text_size = 20 #15
+
 pcp_df = load_and_filter_pcp_df(pcp_path)
 numbering, excluded = get_numbering_dict(anarci_flairr, pcp_df, True, "imgt")
 
@@ -50,10 +53,10 @@ def plot_schematic():
     # )
 
     ax.set_xlim(-.5, 36.5) # 51 - 46.5, 41 - 36.5, 71 - 66.5
-    ax.set_xlabel("IMGT position", fontsize=20, labelpad=10)
-    ax.tick_params(axis='x', labelsize=12)
-    ax.set_ylabel("number of substitutions", fontsize=20, labelpad=10)
-    ax.legend(loc='upper left', fontsize=12)
+    ax.set_xlabel("IMGT position", fontsize=major_text_size, labelpad=10)
+    ax.tick_params(axis='x', labelsize=minor_text_size)
+    ax.set_ylabel("number of substitutions", fontsize=major_text_size, labelpad=10)
+    ax.legend(loc='upper left', fontsize=minor_text_size)
     plt.tight_layout()
 
     outfname = f"{schematic_output_dir}/schematic_zoom_oe.pdf"
