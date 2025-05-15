@@ -15,17 +15,17 @@ model_name_to_spec = {
 batch_number = range(1, number_of_batches+1)
 esm_model_numbers = range(1, 6)
 
-ensemble_models = ("ESM1v_mask", "S5FESM_mask", "NetamESM_mask")
+ensemble_models = ("ESM1v_mask", "S5FESM_mask", "ThriftyESM_mask")
 ensemble_model_name_to_spec = {
     key: model_name_to_spec[key] for key in ensemble_models
 }
 
-individual_esm_models = ("ESM1v_mask", "S5FESM_mask", "NetamESM_mask")
+individual_esm_models = ("ESM1v_mask", "S5FESM_mask", "ThriftyESM_mask")
 individual_esm_model_name_to_spec = {
     key: model_name_to_spec[key] for key in individual_esm_models
 }
 
-model_combos = ["ensemble_set/ESM1v_mask", "esm1/ESM1v_mask", "esm2/ESM1v_mask", "esm3/ESM1v_mask", "esm4/ESM1v_mask", "esm5/ESM1v_mask", "ensemble_set/S5FESM_mask", "esm1/S5FESM_mask", "esm2/S5FESM_mask", "esm3/S5FESM_mask", "esm4/S5FESM_mask", "esm5/S5FESM_mask", "ensemble_set/NetamESM_mask", "esm1/NetamESM_mask", "esm2/NetamESM_mask", "esm3/NetamESM_mask", "esm4/NetamESM_mask", "esm5/NetamESM_mask"]
+model_combos = ["ensemble_set/ESM1v_mask", "esm1/ESM1v_mask", "esm2/ESM1v_mask", "esm3/ESM1v_mask", "esm4/ESM1v_mask", "esm5/ESM1v_mask", "ensemble_set/S5FESM_mask", "esm1/S5FESM_mask", "esm2/S5FESM_mask", "esm3/S5FESM_mask", "esm4/S5FESM_mask", "esm5/S5FESM_mask", "ensemble_set/ThriftyESM_mask", "esm1/ThriftyESM_mask", "esm2/ThriftyESM_mask", "esm3/ThriftyESM_mask", "esm4/ThriftyESM_mask", "esm5/ThriftyESM_mask"]
 
 def get_model_class(model_name, set_model_name_to_spec):
     return set_model_name_to_spec.get(model_name, (None, None))[0]
@@ -36,8 +36,8 @@ def get_model_params(model_name, set_model_name_to_spec):
 
 rule all:
     input:
-        expand("output/{pcp_input}/combined_performance.csv", pcp_input=config["pcp_input"]),
-        expand("output/{pcp_input}/combined_timing.csv", pcp_input=config["pcp_input"]),
+        expand("output/{pcp_input}/ensemble_combined_performance.csv", pcp_input=config["pcp_input"]),
+        expand("output/{pcp_input}/ensemble_combined_timing.csv", pcp_input=config["pcp_input"]),
     # input:
     #     expand("output/{pcp_input}/esm{esm_model_number}/{model_name}/batch{part}/aaprob.hdf5", 
     #            pcp_input=pcp_input, 
@@ -46,18 +46,18 @@ rule all:
     #            part=batch_number)
 
 
-rule split_pcp_batches:
-    input:
-        "pcp_inputs/{pcp_input}.csv"
-    output:
-        out_csvs=dynamic("pcp_batched_inputs/{pcp_input}_{part}.csv")  
-    params:
-        output_dir="pcp_batched_inputs/",
-        batch_size=pcp_per_batch
-    shell:
-        """
-        python scripts/split_pcp_files.py {input} {params.output_dir} {params.batch_size}
-        """
+# rule split_pcp_batches:
+#     input:
+#         "pcp_inputs/{pcp_input}.csv"
+#     output:
+#         out_csvs=dynamic("pcp_batched_inputs/{pcp_input}_{part}.csv")  
+#     params:
+#         output_dir="pcp_batched_inputs/",
+#         batch_size=pcp_per_batch
+#     shell:
+#         """
+#         python scripts/split_pcp_files.py {input} {params.output_dir} {params.batch_size}
+#         """
 
 
 rule precompute_esm:
@@ -82,6 +82,8 @@ rule process_esm:
     params:
         part=lambda wildcards: wildcards.part,
         esm_model_number=lambda wildcards: wildcards.esm_model_number
+    wildcard_constraints:
+        esm_model_number="\d+"  # This ensures esm_model_number only matches digits
     shell:
         """
         epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
@@ -183,8 +185,8 @@ rule combine_performance_files:
             set_model=model_combos,
         ),
     output:
-        "output/{pcp_input}/combined_performance.csv",
-        "output/{pcp_input}/combined_timing.csv",
+        "output/{pcp_input}/ensemble_combined_performance.csv",
+        "output/{pcp_input}/ensemble_combined_timing.csv",
     run:
         input_files = ",".join(input)
         input_timing_files = ",".join(
