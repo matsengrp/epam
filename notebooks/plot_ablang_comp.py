@@ -13,9 +13,13 @@ from epam.oe_plot import (
 )
 from matplotlib.patches import Rectangle
 
-epam_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v1/"
-anarci_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/pcps/v1/anarci"
-output_dir = "/home/mjohnso4/epam/output"
+race_file_version = "rodriguez-airr-seq-race-prod_pcp_2024-07-28_MASKED_NI_noN_no-naive"
+epam_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2"
+anarci_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/pcps/v2/anarci"
+local_dir = "/home/mjohnso4/epam"
+output_dir = f"{local_dir}/output/plots"
+anarci_path = f"{anarci_dir}/rodriguez-airr-seq-race-prod_imgt.csv"
+pcp_path = f"{local_dir}/pcp_inputs/{race_file_version}.csv"
 
 model_list = [
     "AbLang1", "AbLang2_wt", "AbLang2_mask",
@@ -25,16 +29,10 @@ modelname_list = [
     "AbLang1", "AbLang2 (wt)", "AbLang2 (mask)"
 ]
 
-dataset  = "rodriguez-airr-seq-race-prod_pcp_2024-04-01_MASKED_NI_noN_no-naive"
+dataset  = race_file_version
 dsname   = "rodriguez"
 dstitle  = "Rodriguez et al."
-imgtfile = "rodriguez-airr-seq-race-prod_anarci-seqs_imgt_H_patch.csv"
 
-anarci_path = f"{anarci_dir}/{imgtfile}"
-
-# pcp_path = pcp_path_of_aaprob_path(f"{epam_results_dir}/{dataset}/S5F/combined_aaprob.hdf5")
-# pcp_path = "/fh/fast/matsen_e/shared/bcr-mut-sel/pcps/v1/rodriguez-airr-seq-race-prod_pcp_2024-04-01_MASKED_NI_noN_no-naive.csv"
-pcp_path = "pcp_inputs/rodriguez-airr-seq-race-prod_pcp_2024-04-01_MASKED_NI_noN_no-naive.csv"
 pcp_df = load_and_filter_pcp_df(pcp_path)
 
 numbering, excluded = get_numbering_dict(anarci_path, pcp_df, True, "imgt")
@@ -46,7 +44,7 @@ for model in model_list:
     print("Model:", model)
     aaprob = f"{epam_results_dir}/{dataset}/{model}/combined_aaprob.hdf5"
     df = get_site_mutabilities_df(aaprob, numbering)
-    df.to_csv(f"{dsname}_{model}_imgt.csv.tar.gz", index=False)
+    df.to_csv(f"{output_dir}/{dsname}_{model}_imgt.csv.tar.gz", index=False)
     
     site_sub_probs_df[model] = df
     
@@ -101,5 +99,6 @@ outfname = f"{output_dir}/ablang_comp_{dsname}"
 # print(f"{output_dir}.png",'created!')
 # plt.savefig(f"{outfname}.png")
 print(f"{outfname}.pdf",'created!')
+plt.savefig(f"{outfname}.png")
 plt.savefig(f"{outfname}.pdf")
 plt.close()
