@@ -182,19 +182,48 @@ rule combine_performance_files:
         "output/{pcp_input}/ensemble_combined_performance.csv",
         "output/{pcp_input}/ensemble_combined_timing.csv",
     run:
-        input_files = ",".join(input)
-        input_timing_files = ",".join(
+        import pandas as pd
+        import os
+        
+        performance_dfs = []
+        
+        for input_file in input:
+            df = pd.read_csv(input_file)
+            
+            if "esm1/" in input_file:
+                ensemble_member = "1"
+            elif "esm2/" in input_file:
+                ensemble_member = "2"
+            elif "esm3/" in input_file:
+                ensemble_member = "3"
+            elif "esm4/" in input_file:
+                ensemble_member = "4"
+            elif "esm5/" in input_file:
+                ensemble_member = "5"
+            elif "ensemble_set/" in input_file:
+                ensemble_member = "Ensemble"
+            else:
+                ensemble_member = "Unknown"
+                
+            df["ensemble_member"] = ensemble_member
+            
+            path_parts = os.path.dirname(input_file).split('/')
+            model_path = '/'.join(path_parts[-2:])  # Get the last two parts of the path
+            df["model_path"] = model_path
+            
+            performance_dfs.append(df)
+        
+        combined_performance_df = pd.concat(performance_dfs, ignore_index=True)
+        combined_performance_df.to_csv(output[0], index=False)
+        
+        input_timing_files = [
             f"output/{pcp_input}/{set_model}/batch{part}/timing.tsv"
             for set_model in model_combos
             for part in batch_number
-        )
-        output_file = output[0]
-        output_timing_file = output[1]
+        ]
+        
         subprocess.run(
-            f"epam concatenate_csvs {input_files} {output_file}", shell=True, check=True
-        )
-        subprocess.run(
-            f"epam concatenate_csvs {input_timing_files} {output_timing_file} --is_tsv --record_path",
+            f"epam concatenate_csvs {','.join(input_timing_files)} {output[1]} --is_tsv --record_path",
             shell=True,
             check=True,
         )
