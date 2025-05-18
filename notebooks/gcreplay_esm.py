@@ -10,17 +10,13 @@ from netam.sequences import (
     AA_STR_SORTED,
 )
 from netam.common import pick_device
-from epam.esm_precompute import (
-    load_and_convert_to_dict,
-    aa_idx_array_of_str
-)
 
 output_dir = "/home/mjohnso4/epam/data/gcreplay"
 replay_igh = "EVQLQESGPSLVKPSQTLSLTCSVTGDSITSGYWNWIRKFPGNKLEYMGYISYSGSTYYNPSLKSRISITRDTSKNQYYLQLNSVTTEDTATYYCARDFDVWGAGTTVTVSS"
 replay_igk = "DIVMTQSQKFMSTSVGDRVSVTCKASQNVGTNVAWYQQKPGQSPKALIYSASYRYSGVPDRFTGSGSGTDFTLTISNVQSEDLAEYFCQQYNSYPLTFGSGTKLEIKR"
 
 
-def write_naive_logits(model_number, output_hdf5):
+def write_naive_probs(model_number, output_hdf5):
     
     model_location = f"esm1v_t33_650M_UR90S_{model_number}"
     
@@ -76,47 +72,11 @@ def write_naive_logits(model_number, output_hdf5):
                 f"{parent}", data=matrix, compression="gzip", compression_opts=4
             )
 
-def convert_esm_output(logit_hdf5_path, probability_hdf5_path):
-
-    # Load logits from HDF5 file
-    parent_logit_dict = load_and_convert_to_dict(logit_hdf5_path)
-
-    # Get attributes from logit HDF5 file
-    with h5py.File(logit_hdf5_path, "r") as infile:
-        model_name = infile.attrs["model_name"]
-        data_set = infile.attrs["data_set"]
-
-    with h5py.File(probability_hdf5_path, "w") as outfile:
-        # Attributes related to PCP data file
-        outfile.attrs["model_name"] = model_name
-        outfile.attrs["data_set"] = data_set
-
-        for parent in parent_logit_dict:
-            logit_matrix = parent_logit_dict[parent]
-
-            # Convert logits to probabilities with softmax
-            logit_tensor = torch.tensor(logit_matrix)
-            prob_tensor = torch.softmax(logit_tensor, dim=-1)
-            prob_matrix = prob_tensor.numpy().squeeze()
-
-            # Normalize by the probability of the parent AA at each site.
-            parent_idx = aa_idx_array_of_str(parent)
-            parent_probs = prob_matrix[np.arange(len(parent_idx)), parent_idx]
-            prob_ratio_matrix = prob_matrix / parent_probs[:, None]
-
-            outfile.create_dataset(
-                f"{parent}",
-                data=prob_ratio_matrix,
-                compression="gzip",
-                compression_opts=4,
-            )
 
 for model_number in range(1, 6):
     print(f"Processing model number {model_number}...")
     
-    logit_output_hdf5 = f"{output_dir}/replay_igh_igk_esm{model_number}_logits.hdf5"
-    ratio_output_hdf5 = f"{output_dir}/replay_igh_igk_esm{model_number}_ratios.hdf5"
+    output_hdf5 = f"{output_dir}/replay_igh_igk_esm{model_number}.hdf5"
     
-    write_naive_logits(model_number, output_hdf5=logit_output_hdf5)
-    convert_esm_output(logit_output_hdf5, ratio_output_hdf5)
+    write_naive_logits(model_number, output_hdf5)
     
