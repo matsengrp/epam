@@ -1,6 +1,0 @@
-{
-    "dataset": "Wyatt-IgL",
-    "number_of_batches": 13,
-    "pcp_per_batch": 4740,
-    "pcp_input": "wyatt-10x-1p5m_paired-igl_fs-all_pcp_2024-11-22_NI_noN_no-naive"
-  }

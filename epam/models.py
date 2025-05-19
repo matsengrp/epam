@@ -842,7 +842,7 @@ class ESM1vSelModel(BaseModel):
         child (str): The child sequence (ignored for ESM1v model)
 
         Returns:
-        numpy.ndarray: A 2D array containing the normalized probabilities of the amino acids by site.
+        numpy.ndarray: A 2D array containing the selection factors of the amino acids by site.
         """
         assert (
             parent in self.selection_matrices.keys()
@@ -1110,13 +1110,15 @@ class BLOSUM(BaseModel):
         scaling=1.0,
     ):
         """
-        Initialize a selection model from GCReplay DMS data.
+        Initialize a selection model from a BLOSUM matrix. Use as selection factors in MutSel classes.
+
+        If sf_rescale is set to "sigmoid", the selection factors are rescaled using a sigmoid transformation.
 
         Parameters:
         matrix_name (str): Name of BLOSUM matrix (e.g. "BLOSUM45", "BLOSUM62", "BLOSUM80", "BLOSUM90")
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         sf_rescale (str, optional): The selection factor rescaling approach.
-        scaling (float): Exponent on the log odds ratio.
+        scaling (float): Exponent on the BLOSUM observed-expected ratio.
         """
         super().__init__(model_name=model_name)
         self.substitution_matrix = Bio.Align.substitution_matrices.load(matrix_name)
@@ -1125,9 +1127,7 @@ class BLOSUM(BaseModel):
 
     def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
         """
-        Generate a numpy array of the normalized probability of the various amino acids by site according to DMS measurements.
-
-        The rows of the array correspond to the amino acids sorted alphabetically.
+        Generate a matrix of selection factors from BLOSUM matrix entries.
 
         Parameters:
         parent (str): The parent nucleotide sequence for which we want the array of probabilities.
