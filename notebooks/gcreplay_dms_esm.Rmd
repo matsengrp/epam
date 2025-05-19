@@ -1,5 +1,5 @@
 ---
-title: "GCReplay DMS v ESM v BLOSUM"
+title: "GCReplay DMS v ESM"
 output: 
   html_document:
     df_print: kable
@@ -134,13 +134,6 @@ igk_dms_df %>%
   unique() %>% 
   pull(wildtype) %>% 
   str_flatten() == igk_seq
-```
-
-
-
-#### BLOSUM results
-
-```{r}
 ```
 
 
@@ -615,7 +608,7 @@ cor.test(dsm_expr_igk, esm1_log_ratio_igk, method = "spearman")
 ```{r}
 text_igh_expr <- tibble(
   label = c(
-    "&rho; = 0.365"
+    "&rho; = 0.370"
   ),
   x = -5.5,
   y = 0.75
@@ -641,7 +634,7 @@ plot_igh_expr_corr
 ```{r}
 text_igk_expr <- tibble(
   label = c(
-    "&rho; = 0.552"
+    "&rho; = 0.554"
   ),
   x = -5.5,
   y = 0.75
@@ -703,7 +696,11 @@ p2 <- plot_igh_esm +
 plot_igh <- p1 / p2 +
   theme(
     plot.background = element_rect(fill="white", color = NA)
-  )
+  ) 
+
+# # Now add the label outside the plot area with draw_label
+# final_plot <- ggdraw(plot_igh) + 
+#   draw_label("IgH DMS vs ESM-1v", x = 0.01, y = 0.95, hjust = 0, vjust = 1, fontface = "bold")
 
 plot_igh
 
