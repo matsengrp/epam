@@ -44,9 +44,11 @@ def annotate_sites_df(
     df,
     pcp_df,
     numbering_dict=None,
+    add_codons_aas=False,
 ):
     """
-    Add annotations to a per-site DataFrame to indicate position of each site and whether each site is in a CDR.
+    Add annotations to a per-site DataFrame to indicate position of each site, whether each site is in a CDR,
+    and optionally parent/child codon and amino acid information.
     The input DataFrame describes a site in each row is expected to have the 'pcp_index' column,
     indicating the index of the PCP the site belongs to.
 
@@ -54,14 +56,24 @@ def annotate_sites_df(
     df (pd.DataFrame): site mutabilities DataFrame.
     pcp_df (pd.DataFrame): PCP file of the dataset.
     numbering_dict (dict): mapping (sample_id, family) to numbering list.
+    add_codons_aas (bool): whether to add codon and amino acid information from parent/child sequences.
 
     Returns:
     output_df (pd.DataFrame): dataframe with additional columns 'site' and 'is_cdr'.
+                              If add_codons_aas=True, also adds columns 'parent_codon', 'parent_aa', 
+                              'child_codon', and 'child_aa'.
                               Note that if numbering_dict is provided and there are clonal families with missing
                               ANARCI numberings, the associated sites (rows) will be excluded.
     """
     sites_col = []
     is_cdr_col = []
+    
+    # Only create these if we're adding codon/aa information
+    if add_codons_aas:
+        parent_codon_col = []
+        parent_aa_col = []
+        child_codon_col = []
+        child_aa_col = []
 
     pcp_groups = df.groupby("pcp_index")
     for pcp_index in df["pcp_index"].drop_duplicates():
@@ -72,6 +84,16 @@ def annotate_sites_df(
         assert (
             nsites == len(pcp_row["parent"]) // 3
         ), f"number of sites ({nsites}) does not match sequence length ({len(pcp_row['parent']) // 3})"
+        
+        # If adding codon/aa info, prepare the sequences
+        if add_codons_aas:
+            # Get parent and child sequences
+            parent_seq = pcp_row["parent"]
+            child_seq = pcp_row["child"]
+            
+            # Translate nucleotide sequences to amino acids
+            parent_aa_seq = translate_sequence(parent_seq)
+            child_aa_seq = translate_sequence(child_seq)
 
         if numbering_dict is None:
             sites_col.append(np.arange(nsites))
@@ -84,9 +106,46 @@ def annotate_sites_df(
                 sites_col.append(["None"] * nsites)
 
         is_cdr_col.append(pcp_sites_cdr_annotation(pcp_row))
+        
+        # If adding codon/aa info, extract them for each site
+        if add_codons_aas:
+            # Extract codons and amino acids for each site
+            parent_codons = []
+            parent_aas = []
+            child_codons = []
+            child_aas = []
+            
+            for i in range(nsites):
+                codon_start = i * 3
+                codon_end = codon_start + 3
+                
+                # Extract parent codon and amino acid
+                parent_codon = parent_seq[codon_start:codon_end]
+                parent_aa = parent_aa_seq[i] if i < len(parent_aa_seq) else "X"
+                parent_codons.append(parent_codon)
+                parent_aas.append(parent_aa)
+                
+                # Extract child codon and amino acid
+                child_codon = child_seq[codon_start:codon_end]
+                child_aa = child_aa_seq[i] if i < len(child_aa_seq) else "X"
+                child_codons.append(child_codon)
+                child_aas.append(child_aa)
+            
+            parent_codon_col.append(parent_codons)
+            parent_aa_col.append(parent_aas)
+            child_codon_col.append(child_codons)
+            child_aa_col.append(child_aas)
 
     df["site"] = np.concatenate(sites_col)
     df["is_cdr"] = np.concatenate(is_cdr_col)
+    
+    # Add codon and amino acid columns if requested
+    if add_codons_aas:
+        df["parent_codon"] = np.concatenate(parent_codon_col)
+        df["parent_aa"] = np.concatenate(parent_aa_col)
+        df["child_codon"] = np.concatenate(child_codon_col)
+        df["child_aa"] = np.concatenate(child_aa_col)
+    
     if numbering_dict is None:
         return df
     else:
