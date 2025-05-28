@@ -5,13 +5,12 @@ import matplotlib.patches as mpatches
 import warnings
 import os
 from epam.utils import load_and_filter_pcp_df
-from epam.oe_plot import (
-    get_numbering_dict,
-    get_site_mutabilities_df, 
+from netam.oe_plot import (
     plot_sites_observed_vs_expected,
-    get_subs_and_preds_from_aaprob,
-    get_site_substitutions_df, 
-    plot_sites_observed_vs_top_k_predictions,
+)
+from epam.df_for_plots import (
+    get_numbering_dict,
+    get_site_mutabilities_df,
 )
 
 # Okabe-Ito colors
