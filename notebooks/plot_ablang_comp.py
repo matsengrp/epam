@@ -1,3 +1,5 @@
+# Plot OE comparsion between different AbLang models and implementations with Rodriguez et al.
+# Supplemental Figure
 import os
 import numpy as np
 import pandas as pd

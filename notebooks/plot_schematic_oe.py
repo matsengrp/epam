@@ -1,3 +1,5 @@
+# Plots example zoomed-in plot of observed vs expected substitutions for schematic
+# Used in Figure 1C
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt

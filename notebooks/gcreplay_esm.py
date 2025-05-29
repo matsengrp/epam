@@ -1,3 +1,6 @@
+# Run full ESM1-v ensemble on the GCReplay naive sequences for comparison with DMS data.
+# Supplemental Figure generated wtih gcreplay_dms_esm.Rmd
+
 import os
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"

@@ -1,3 +1,5 @@
+# Comparing performance of individiual vs ensembled ESM-1v models as standalone and selection factors in Rodriguez et al.
+# Supplemental Figure
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
