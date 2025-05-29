@@ -175,3 +175,8 @@ pcp_gcreplay_inputs/
 pcp_batched_inputs/
 output/
 _logs/
+notebooks/dataframes/
+notebooks/pcp_inputs/
+notebooks/pcp_gcreplay_inputs/
+notebooks/plots/
+notebooks/*.csv
