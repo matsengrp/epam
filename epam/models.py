@@ -232,10 +232,8 @@ class MutModel(BaseModel):
             Tolerance for optimization of log(branch length). Default is 1e-4.
         """
         super().__init__(model_name=model_name)
-        if optimize == True:
-            self.max_optimization_steps = max_optimization_steps
-        else:
-            self.max_optimization_steps = 0
+        self.optimize = optimize
+        self.max_optimization_steps = max_optimization_steps
         self.init_branch_length = init_branch_length
         self.optimization_tol = optimization_tol
 
@@ -319,12 +317,17 @@ class MutModel(BaseModel):
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, rates, sub_probs
         )
-        return optimize_branch_length(
-            log_prob_fn = log_pcp_probability,
-            starting_branch_length = starting_branch_length,
-            max_optimization = self.max_optimization_steps,
-            optimization_tol = self.optimization_tol,
-        )
+        
+        if self.optimize == True:
+            return optimize_branch_length(
+                log_prob_fn = log_pcp_probability,
+                starting_branch_length = starting_branch_length,
+                max_optimization = self.max_optimization_steps,
+                optimization_tol = self.optimization_tol,
+            )
+        else:
+            return starting_branch_length, False
+        
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         if self.init_branch_length is None:
@@ -443,10 +446,8 @@ class MLMBase(BaseModel):
 
         """
         super().__init__(model_name=model_name)
-        if optimize == True:
-            self.max_optimization_steps = max_optimization_steps
-        else:
-            self.max_optimization_steps = 0
+        self.optimize = optimize
+        self.max_optimization_steps = max_optimization_steps
         self.optimization_tol = optimization_tol
 
     @abstractmethod
@@ -515,12 +516,16 @@ class MLMBase(BaseModel):
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, prob_tensor
         )
-        return optimize_branch_length(
-            log_prob_fn = log_pcp_probability,
-            starting_branch_length = starting_branch_length,
-            max_optimization_steps = self.max_optimization_steps,
-            optimization_tol = self.optimization_tol,
-        )
+        
+        if self.optimize == True:
+            return optimize_branch_length(
+                log_prob_fn = log_pcp_probability,
+                starting_branch_length = starting_branch_length,
+                max_optimization_steps = self.max_optimization_steps,
+                optimization_tol = self.optimization_tol,
+            )
+        else:
+            return starting_branch_length, False
 
     def scale_probability_array(
         self, prob_arr: np.ndarray, parent: str, branch_length: float
