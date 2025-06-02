@@ -6,11 +6,13 @@ from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
 from epam.df_for_plots import (
     get_site_mutabilities_df,
     get_subs_and_preds_from_aaprob,
-    get_site_substitutions_df,
     get_sub_acc_from_aaprob,
-    get_site_subs_acc_df,
     get_site_csp_df,
-    get_numbering_dict
+)
+from netam.oe_plot import (
+    get_numbering_dict,
+    get_site_substitutions_df,
+    get_site_subs_acc_df,
 )
 
 epam_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2"

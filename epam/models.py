@@ -215,7 +215,6 @@ class MutModel(BaseModel):
         init_branch_length=None,
         max_optimization_steps=1000,
         optimization_tol=1e-4,
-        learning_rate=0.1,
     ):
         """
         Initialize a new instance of the MutModel for neutral nucleotide mutations.
@@ -231,17 +230,12 @@ class MutModel(BaseModel):
             Maximum number of gradient descent steps. Default is 1000. Ignored if optimize is False.
         optimization_tol : float, optional
             Tolerance for optimization of log(branch length). Default is 1e-4.
-        learning_rate : float, optional
-            Learning rate for torch's SGD. Default is 0.1.
         """
         super().__init__(model_name=model_name)
-        if optimize == True:
-            self.max_optimization_steps = max_optimization_steps
-        else:
-            self.max_optimization_steps = 0
+        self.optimize = optimize
+        self.max_optimization_steps = max_optimization_steps
         self.init_branch_length = init_branch_length
         self.optimization_tol = optimization_tol
-        self.learning_rate = learning_rate
 
     @abstractmethod
     def predict_rates_and_normed_subs_probs(
@@ -323,13 +317,17 @@ class MutModel(BaseModel):
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, rates, sub_probs
         )
-        return optimize_branch_length(
-            log_pcp_probability,
-            starting_branch_length,
-            self.learning_rate,
-            self.max_optimization_steps,
-            self.optimization_tol,
-        )
+        
+        if self.optimize == True:
+            return optimize_branch_length(
+                log_prob_fn = log_pcp_probability,
+                starting_branch_length = starting_branch_length,
+                max_optimization = self.max_optimization_steps,
+                optimization_tol = self.optimization_tol,
+            )
+        else:
+            return starting_branch_length, False
+        
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         if self.init_branch_length is None:
@@ -436,7 +434,6 @@ class MLMBase(BaseModel):
         optimize=True,
         max_optimization_steps=1000,
         optimization_tol=1e-4,
-        learning_rate=0.1,
     ):
         """
         This is an abstract class with shared functionality for Masked Language Models (MLMs; i.e., AbLang1, AbLang2, ESM). All models rescales amino acid probabilities from MLMs with an optimized branch length for each parent-child pair for comparison with CTMC models.
@@ -446,16 +443,12 @@ class MLMBase(BaseModel):
         optimize (bool, optional): Whether to perform branch length optimization. Default is True.
         max_optimization_steps (int, optional): Maximum number of gradient descent steps. Default is 1000. Ignored if optimize is False.
         optimization_tol (float, optional): Tolerance for optimization of log(branch length). Default is 1e-4.
-        learning_rate (float, optional): Learning rate for torch's SGD. Default is 0.1.
 
         """
         super().__init__(model_name=model_name)
-        if optimize == True:
-            self.max_optimization_steps = max_optimization_steps
-        else:
-            self.max_optimization_steps = 0
+        self.optimize = optimize
+        self.max_optimization_steps = max_optimization_steps
         self.optimization_tol = optimization_tol
-        self.learning_rate = learning_rate
 
     @abstractmethod
     def probability_array_of_seq(self, seq: str) -> np.ndarray:
@@ -523,13 +516,16 @@ class MLMBase(BaseModel):
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, prob_tensor
         )
-        return optimize_branch_length(
-            log_pcp_probability,
-            starting_branch_length,
-            self.learning_rate,
-            self.max_optimization_steps,
-            self.optimization_tol,
-        )
+        
+        if self.optimize == True:
+            return optimize_branch_length(
+                log_prob_fn = log_pcp_probability,
+                starting_branch_length = starting_branch_length,
+                max_optimization_steps = self.max_optimization_steps,
+                optimization_tol = self.optimization_tol,
+            )
+        else:
+            return starting_branch_length, False
 
     def scale_probability_array(
         self, prob_arr: np.ndarray, parent: str, branch_length: float

@@ -161,7 +161,7 @@ def test_snapshot():
             # optimization is fiddly and we want to be able to change it without
             # breaking the snapshot test.
             if isinstance(model, (MutModel, MLMBase)):
-                model.max_optimization_steps = 0
+                model.optimize = False
             out_file = f"_ignore/{source}-{model_name}.hdf5"
             if model_name in ("ESM1v_wt"):
                 model.preload_esm_data(pcp_hdf5_wt_path)
