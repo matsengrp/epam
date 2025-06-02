@@ -10,7 +10,7 @@ from epam.evaluation import (
     locate_child_substitutions,
     locate_child_substitutions,
 )
-from netam.oe_plot import (
+from epam.oe_plot import (
     pcp_sites_regions
 )
 from netam.sequences import (

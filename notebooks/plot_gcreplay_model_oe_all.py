@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from epam.evaluation import perplexity_of_probs
-from netam.oe_plot import (
+from epam.oe_plot import (
     plot_sites_observed_vs_top_k_predictions,
     plot_observed_vs_expected,
     plot_sites_observed_vs_expected,

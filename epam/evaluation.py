@@ -501,7 +501,7 @@ def perplexity_of_probs(probs):
 
     Args:
         probs (array-like): An array of probabilities. Values should be in
-        (0, 1], but we clip them below at 1e-12 to avoid log(0).
+        (0, 1], but we clip them below at 1e-6 to avoid log(0).
 
     Returns:
         float: The perplexity of the input probabilities.

@@ -9,7 +9,7 @@ from epam.df_for_plots import (
     get_sub_acc_from_aaprob,
     get_site_csp_df,
 )
-from netam.oe_plot import (
+from epam.oe_plot import (
     get_numbering_dict,
     get_site_substitutions_df,
     get_site_subs_acc_df,

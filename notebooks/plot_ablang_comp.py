@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
-from netam.oe_plot import (
+from epam.oe_plot import (
     get_numbering_dict,
     plot_sites_observed_vs_expected,
     plot_sites_observed_vs_top_k_predictions,
