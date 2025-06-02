@@ -7,7 +7,7 @@
     conda install datrie
     make install
 
-The `netam` package needs to be installed within the epam conda environment (though outside the epam file directory). Separately clone the repository (https://github.com/matsengrp/netam) and run `make install`.
+The `netam` package needs to be installed within the epam conda environment (though outside the epam file directory). Separately clone the repository (https://github.com/matsengrp/netam), checkout the relevant version of the repo `git checkout 22c8873`, and run `make install`.
 
 Getting Thrifty model crepes:
 
