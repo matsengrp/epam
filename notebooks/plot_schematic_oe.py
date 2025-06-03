@@ -7,7 +7,7 @@ import matplotlib.patches as mpatches
 import warnings
 import os
 from epam.utils import load_and_filter_pcp_df
-from netam.oe_plot import (
+from epam.oe_plot import (
     get_numbering_dict,
     plot_sites_observed_vs_expected,
 )

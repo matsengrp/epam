@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from netam.oe_plot import (
+from epam.oe_plot import (
     plot_sites_observed_vs_expected,
     plot_sites_observed_vs_top_k_predictions,
 )
