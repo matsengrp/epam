@@ -4,11 +4,11 @@ dms_data_file = "data/gcreplay/final_variant_scores.csv"
 shm_hc_data_file = 'data/gcreplay/chigy_hc_mutation_rates_nt.csv'
 shm_lc_data_file = 'data/gcreplay/chigy_lc_mutation_rates_nt.csv'
 GCREPLAY_IGH_MODELS = [
-    ("GCReplayESM_igh",           "CachedESM1v", {}),
+    ("GCReplayESM_igh",           "CachedESM1v", {"use_case": "standalone"}),
     ("GCReplaySHMESMSigmoid_igh", "GCReplaySHMESM", { "shm_data_file": shm_hc_data_file, "sf_rescale": "sigmoid", "init_branch_length": 1}),
 ]
 GCREPLAY_IGK_MODELS = [
-    ("GCReplayESM_igk",           "CachedESM1v", {}),
+    ("GCReplayESM_igk",           "CachedESM1v", {"use_case": "standalone"}),
     ("GCReplaySHMESMSigmoid_igk", "GCReplaySHMESM", { "shm_data_file": shm_lc_data_file, "sf_rescale": "sigmoid", "init_branch_length": 1}),
 ]
 
@@ -23,7 +23,7 @@ igk_model_name_to_spec = {
 
 igh_pcp_inputs = glob_wildcards("pcp_gcreplay_inputs/igh/{name}.csv").name
 igk_pcp_inputs = glob_wildcards("pcp_gcreplay_inputs/igk/{name}.csv").name
-esm_versions = ['esm1','esm2','esm3','esm4','esm5','ensemble_esm']
+esm_versions = ['esm1','esm2','esm3','esm4','esm5']
 
 rule all:
     input:
