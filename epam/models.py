@@ -744,25 +744,9 @@ class AbLang2(MLMBase):
         else:
             raise ValueError("chain must be set to 'heavy' or 'light'")
 
-        # Return probabilies based on scoring strategy (masked-marginals probabilities are not parent-dependent)
-        if self.masking == False:
-            assert len(seq) == arr_sorted.shape[0]
-            return arr_sorted
-        elif self.masking == True:
-            # Take the ratio of the probabilities relative to the parent AA.
-            parent_idx = aa_idx_array_of_str(seq)
-            parent_probs = arr_sorted[np.arange(len(seq)), parent_idx]
-            arr_prob_ratio = arr_sorted / parent_probs[:, None]
-
-            # Normalize the probabilities to sum to 1.
-            row_sums = np.sum(arr_prob_ratio, axis=1, keepdims=True)
-            arr_ratio_norm = arr_prob_ratio / row_sums
-
-            assert len(seq) == arr_ratio_norm.shape[0]
-
-            return arr_ratio_norm
-        else:
-            raise ValueError("masking must be set to True or False")
+        # Return probabilies (masked-marginals probabilities are not parent-dependent)
+        assert len(seq) == arr_sorted.shape[0]
+        return arr_sorted
 
 
 class CachedESM1v(MLMBase):
