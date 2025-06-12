@@ -3,6 +3,7 @@ from importlib import resources
 import logging
 import time
 from typing import Tuple
+import os
 
 import torch
 import torch.optim as optim
@@ -42,58 +43,62 @@ THRIFTY_DIR = str(resources.files("epam").parent) + "/thrifty-models/models/"
 # pipeline.
 
 FULLY_SPECIFIED_MODELS = [
-    ("AbLang1", "AbLang1", {"chain": "heavy"}),
-    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
+    # ("AbLang1", "AbLang1", {"chain": "heavy"}),
+    # # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
     (
         "AbLang2_mask",
         "AbLang2",
         {"version": "ablang2-paired", "chain": "heavy", "masking": True},
     ),
     # ("ESM1v_wt", "CachedESM1v", {}),
-    ("ESM1v_mask", "CachedESM1v", {"scoring_strategy": "masked"}),
     (
-        "S5F",
-        "S5F",
-        {
-            "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
-            "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
-            "init_branch_length": 1,
-        },
+        "ESM1v_mask", 
+        "CachedESM1v", 
+        {"scoring_strategy": "masked", "use_case": "standalone"}
     ),
-    (
-        "S5FESM_mask",
-        "S5FESM",
-        {
-            "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
-            "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
-            "sf_rescale": "sigmoid",
-            "init_branch_length": 1,
-        },
-    ),
-    (
-        "S5FBLOSUM",
-        "S5FBLOSUM",
-        {
-            "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
-            "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
-            "sf_rescale": "sigmoid",
-            "init_branch_length": 1,
-        },
-    ),
-    (
-        "ThriftyHumV0.2-59",
-        "NetamSHM",
-        {
-            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
-        },
-    ),
-    (
-        "ThriftyProdHumV0.2-59",
-        "NetamSHM",
-        {
-            "model_path_prefix": THRIFTY_DIR + "cnn_ind_lrg-v1wyatt-simple-0",
-        },
-    ),
+    # (
+    #     "S5F",
+    #     "S5F",
+    #     {
+    #         "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
+    #         "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
+    #         "init_branch_length": 1,
+    #     },
+    # ),
+    # (
+    #     "S5FESM_mask",
+    #     "S5FESM",
+    #     {
+    #         "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
+    #         "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
+    #         "sf_rescale": "sigmoid",
+    #         "init_branch_length": 1,
+    #     },
+    # ),
+    # (
+    #     "S5FBLOSUM",
+    #     "S5FBLOSUM",
+    #     {
+    #         "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
+    #         "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
+    #         "sf_rescale": "sigmoid",
+    #         "init_branch_length": 1,
+    #     },
+    # ),
+    # (
+    #     "ThriftyHumV0.2-59",
+    #     "NetamSHM",
+    #     {
+    #         "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
+    #     },
+    # ),
+    # (
+    #     "ThriftyProdHumV0.2-59",
+    #     "NetamSHM",
+    #     {
+    #         "model_path_prefix": THRIFTY_DIR + "cnn_ind_lrg-v1wyatt-simple-0",
+    #     },
+    # ),
     (
         "ThriftyESM_mask",
         "NetamSHMESM",
@@ -102,14 +107,14 @@ FULLY_SPECIFIED_MODELS = [
             "sf_rescale": "sigmoid",
         },
     ),
-    (
-        "ThriftyBLOSUM",
-        "NetamSHMBLOSUM",
-        {
-            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
-            "sf_rescale": "sigmoid",
-        },
-    ),
+    # (
+    #     "ThriftyBLOSUM",
+    #     "NetamSHMBLOSUM",
+    #     {
+    #         "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
+    #         "sf_rescale": "sigmoid",
+    #     },
+    # ),
 ]
 
 
@@ -749,7 +754,7 @@ class AbLang2(MLMBase):
 
 
 class CachedESM1v(MLMBase):
-    def __init__(self, model_name=None, scoring_strategy="masked"):
+    def __init__(self, model_name=None, scoring_strategy="masked", use_case=None):
         """
         Initialize ESM1v with cached selection matrices generated in esm_precompute.py for standalone model with scaling.
 
@@ -758,6 +763,7 @@ class CachedESM1v(MLMBase):
         """
         super().__init__(model_name=model_name)
         self.scoring_strategy = scoring_strategy
+        self.use_case = use_case
 
     def preload_esm_data(self, hdf5_path):
         """
@@ -766,7 +772,14 @@ class CachedESM1v(MLMBase):
         Parameters:
         hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
         """
-        self.selection_matrices = load_and_convert_to_dict(hdf5_path)
+        if self.use_case == "standalone":
+            logit_path = hdf5_path.replace("ratios", "logits")
+            assert (
+                os.path.exists(logit_path)
+            ), f"Logit file {logit_path} does not exist. File required for standalone ESM masked model."
+            self.selection_matrices = load_and_convert_to_dict(logit_path)
+        else:
+            self.selection_matrices = load_and_convert_to_dict(hdf5_path)
 
     def probability_array_of_seq(self, parent, child=None) -> np.ndarray:
         """
@@ -784,12 +797,20 @@ class CachedESM1v(MLMBase):
         ), f"{parent} not present in CachedESM."
 
         # Selection matrix precomputed for parent sequence
-        # probabilities for wt-marginals, probability ratios for masked-marginals
+        # probabilities for wt-marginals, probability ratios for masked-marginals.
+        # Standalone ESM masked-marginals model is precomputed logits.
         sel_matrix = self.selection_matrices[parent]
 
-        # Normalize the probability ratios to sum to 1.
+        # Handle use cases for masked-marginals.
         if self.scoring_strategy == "masked":
-            sel_matrix = sel_matrix / np.sum(sel_matrix, axis=1, keepdims=True)
+            if self.use_case == "standalone":
+                # Convert logits to probabilities using softmax
+                logit_tensor = torch.tensor(sel_matrix)
+                prob_tensor = torch.softmax(logit_tensor, dim=-1)
+                sel_matrix = prob_tensor.numpy().squeeze()
+            else:
+                # Normalize the probability ratios to sum to 1.
+                sel_matrix = sel_matrix / np.sum(sel_matrix, axis=1, keepdims=True)
 
         # Assert that each row/probability distribution sums to 1.
         if not np.allclose(np.sum(sel_matrix, axis=1), 1.0, atol=1e-5):

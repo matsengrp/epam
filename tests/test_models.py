@@ -136,7 +136,7 @@ pcp_hdf5_wt_path = (
 )
 pcp_hdf5_mask_path = (
     str(resources.files("epam").parent)
-    + "/data/10-random-from-10x-mask_prob_ratio.hdf5"
+    + "/data/10-random-from-10x-mask_ratios.hdf5"
 )
 
 
