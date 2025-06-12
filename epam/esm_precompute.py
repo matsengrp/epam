@@ -148,6 +148,30 @@ def precompute_and_save(pcp_path, output_hdf5, scoring_strategy, model_number=1)
         )
 
 
+def _set_hdf5_attributes(outfile, checksum, pcp_filename, model_name):
+    """Helper function to set standard attributes on HDF5 files."""
+    outfile.attrs["checksum"] = checksum
+    outfile.attrs["pcp_filename"] = pcp_filename
+    outfile.attrs["model_name"] = model_name
+
+
+def _compute_probabilities(logit_matrix):
+    """Helper function to convert logits to probabilities using softmax."""
+    logit_tensor = torch.tensor(logit_matrix)
+    prob_tensor = torch.softmax(logit_tensor, dim=-1)
+    return prob_tensor.numpy().squeeze()
+
+
+def _save_dataset(outfile, parent, data):
+    """Helper function to save dataset with standard compression."""
+    outfile.create_dataset(
+        f"{parent}",
+        data=data,
+        compression="gzip",
+        compression_opts=4,
+    )
+
+
 def process_esm_output(logit_hdf5_path, probability_hdf5_path, scoring_strategy):
     """
     Take ESM-1v logits and convert to probabilities or probability ratios based on scoring strategy.
@@ -166,45 +190,56 @@ def process_esm_output(logit_hdf5_path, probability_hdf5_path, scoring_strategy)
         pcp_filename = infile.attrs["pcp_filename"]
         model_name = infile.attrs["model_name"]
 
-    with h5py.File(probability_hdf5_path, "w") as outfile:
-        # Attributes related to PCP data file
-        outfile.attrs["checksum"] = checksum
-        outfile.attrs["pcp_filename"] = pcp_filename
-        outfile.attrs["model_name"] = model_name
+    if scoring_strategy == "wt-marginals":
+        with h5py.File(probability_hdf5_path, "w") as outfile:
+            # Attributes related to PCP data file
+            _set_hdf5_attributes(outfile, checksum, pcp_filename, model_name)
 
-        for parent in parent_logit_dict:
-            logit_matrix = parent_logit_dict[parent]
+            for parent in parent_logit_dict:
+                # Convert logits to probabilities with softmax
+                logit_matrix = parent_logit_dict[parent]
+                prob_matrix = _compute_probabilities(logit_matrix)
+                # Save probabilities to HDF5 file
+                _save_dataset(outfile, parent, prob_matrix)
 
-            # Convert logits to probabilities with softmax
-            logit_tensor = torch.tensor(logit_matrix)
-            prob_tensor = torch.softmax(logit_tensor, dim=-1)
-            prob_matrix = prob_tensor.numpy().squeeze()
+    elif scoring_strategy == "masked-marginals":
 
-            if scoring_strategy == "wt-marginals":
-                outfile.create_dataset(
-                    f"{parent}",
-                    data=prob_matrix,
-                    compression="gzip",
-                    compression_opts=4,
-                )
+        # Write probabilities directly for standalone model
+        int_hdf5_path = probability_hdf5_path.replace("ratio", "prob")
+        with h5py.File(int_hdf5_path, "w") as outfile:
+            # Attributes related to PCP data file
+            _set_hdf5_attributes(outfile, checksum, pcp_filename, model_name)
 
-            elif scoring_strategy == "masked-marginals":
+            for parent in parent_logit_dict:
+                # Convert logits to probabilities with softmax
+                logit_matrix = parent_logit_dict[parent]
+                prob_matrix = _compute_probabilities(logit_matrix)
+                
+                # Save probabilities to HDF5 file
+                _save_dataset(outfile, parent, prob_matrix)
+
+        # Write probability ratios for selection factors
+        with h5py.File(probability_hdf5_path, "w") as outfile:
+            # Attributes related to PCP data file
+            _set_hdf5_attributes(outfile, checksum, pcp_filename, model_name)
+
+            for parent in parent_logit_dict:
+                # Convert logits to probabilities with softmax
+                logit_matrix = parent_logit_dict[parent]
+                prob_matrix = _compute_probabilities(logit_matrix)
+                
                 # Normalize by the probability of the parent AA at each site.
                 parent_idx = aa_idx_array_of_str(parent)
                 parent_probs = prob_matrix[np.arange(len(parent_idx)), parent_idx]
                 prob_ratio_matrix = prob_matrix / parent_probs[:, None]
 
-                outfile.create_dataset(
-                    f"{parent}",
-                    data=prob_ratio_matrix,
-                    compression="gzip",
-                    compression_opts=4,
-                )
+                # Save probability ratios to HDF5 file
+                _save_dataset(outfile, parent, prob_ratio_matrix)
 
-            else:
-                raise ValueError(
-                    f"Invalid scoring strategy: {scoring_strategy}. Must be 'wt-marginals' or 'masked-marginals'."
-                )
+    else:
+        raise ValueError(
+            f"Invalid scoring strategy: {scoring_strategy}. Must be 'wt-marginals' or 'masked-marginals'."
+        )
 
 
 def ensemble_esm_models(hdf5_files, output_hdf5):

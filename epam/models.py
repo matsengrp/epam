@@ -775,7 +775,7 @@ class CachedESM1v(MLMBase):
         hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
         """
         if self.use_case == "standalone":
-            logit_path = hdf5_path.replace("ratios", "logits")
+            logit_path = hdf5_path.replace("ratios", "probs")
             assert os.path.exists(
                 logit_path
             ), f"Logit file {logit_path} does not exist. File required for standalone ESM masked model."
@@ -799,20 +799,9 @@ class CachedESM1v(MLMBase):
         ), f"{parent} not present in CachedESM."
 
         # Selection matrix precomputed for parent sequence
-        # probabilities for wt-marginals, probability ratios for masked-marginals.
-        # Standalone ESM masked-marginals model is precomputed logits.
+        # probabilities for wt-marginals and masked-marginals.
+        # Masked-marginals are not parent-dependent.
         sel_matrix = self.selection_matrices[parent]
-
-        # Handle use cases for masked-marginals.
-        if self.scoring_strategy == "masked":
-            if self.use_case == "standalone":
-                # Convert logits to probabilities using softmax
-                logit_tensor = torch.tensor(sel_matrix)
-                prob_tensor = torch.softmax(logit_tensor, dim=-1)
-                sel_matrix = prob_tensor.numpy().squeeze()
-            else:
-                # Normalize the probability ratios to sum to 1.
-                sel_matrix = sel_matrix / np.sum(sel_matrix, axis=1, keepdims=True)
 
         # Assert that each row/probability distribution sums to 1.
         if not np.allclose(np.sum(sel_matrix, axis=1), 1.0, atol=1e-5):
