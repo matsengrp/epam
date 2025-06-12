@@ -12,7 +12,7 @@ from epam.evaluation import (
     locate_child_substitutions,
     identify_child_substitutions,
 )
-from epam.oe_plot import(
+from epam.oe_plot import (
     pcp_sites_cdr_annotation,
 )
 from netam.sequences import (

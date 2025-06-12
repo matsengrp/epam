@@ -321,18 +321,17 @@ class MutModel(BaseModel):
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, rates, sub_probs
         )
-        
+
         if self.optimize == True:
             return optimize_branch_length(
-                log_prob_fn = log_pcp_probability,
-                starting_branch_length = starting_branch_length,
-                learning_rate = self.learning_rate,
-                max_optimization_steps = self.max_optimization_steps,
-                optimization_tol = self.optimization_tol,
+                log_prob_fn=log_pcp_probability,
+                starting_branch_length=starting_branch_length,
+                learning_rate=self.learning_rate,
+                max_optimization_steps=self.max_optimization_steps,
+                optimization_tol=self.optimization_tol,
             )
         else:
             return starting_branch_length, False
-        
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         if self.init_branch_length is None:
@@ -524,14 +523,14 @@ class MLMBase(BaseModel):
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, prob_tensor
         )
-        
+
         if self.optimize == True:
             return optimize_branch_length(
-                log_prob_fn = log_pcp_probability,
-                starting_branch_length = starting_branch_length,
-                learning_rate = self.learning_rate,
-                max_optimization_steps = self.max_optimization_steps,
-                optimization_tol = self.optimization_tol,
+                log_prob_fn=log_pcp_probability,
+                starting_branch_length=starting_branch_length,
+                learning_rate=self.learning_rate,
+                max_optimization_steps=self.max_optimization_steps,
+                optimization_tol=self.optimization_tol,
             )
         else:
             return starting_branch_length, False
