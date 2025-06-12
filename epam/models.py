@@ -52,9 +52,9 @@ FULLY_SPECIFIED_MODELS = [
     ),
     # ("ESM1v_wt", "CachedESM1v", {}),
     (
-        "ESM1v_mask", 
-        "CachedESM1v", 
-        {"scoring_strategy": "masked", "use_case": "standalone"}
+        "ESM1v_mask",
+        "CachedESM1v",
+        {"scoring_strategy": "masked", "use_case": "standalone"},
     ),
     # (
     #     "S5F",
@@ -99,14 +99,14 @@ FULLY_SPECIFIED_MODELS = [
     #         "model_path_prefix": THRIFTY_DIR + "cnn_ind_lrg-v1wyatt-simple-0",
     #     },
     # ),
-    (
-        "ThriftyESM_mask",
-        "NetamSHMESM",
-        {
-            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
-            "sf_rescale": "sigmoid",
-        },
-    ),
+    # (
+    #     "ThriftyESM_mask",
+    #     "NetamSHMESM",
+    #     {
+    #         "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
+    #         "sf_rescale": "sigmoid",
+    #     },
+    # ),
     # (
     #     "ThriftyBLOSUM",
     #     "NetamSHMBLOSUM",
@@ -760,6 +760,8 @@ class CachedESM1v(MLMBase):
 
         Parameters:
         model_name (str, optional): The name of the model.
+        scoring_strategy (str): The scoring strategy used for the model. Default is "masked".
+        use_case (str, optional): The use case for the model, either "standalone" or None for use as selection factors. Default is None.
         """
         super().__init__(model_name=model_name)
         self.scoring_strategy = scoring_strategy
@@ -774,8 +776,8 @@ class CachedESM1v(MLMBase):
         """
         if self.use_case == "standalone":
             logit_path = hdf5_path.replace("ratios", "logits")
-            assert (
-                os.path.exists(logit_path)
+            assert os.path.exists(
+                logit_path
             ), f"Logit file {logit_path} does not exist. File required for standalone ESM masked model."
             self.selection_matrices = load_and_convert_to_dict(logit_path)
         else:
