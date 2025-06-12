@@ -43,8 +43,8 @@ THRIFTY_DIR = str(resources.files("epam").parent) + "/thrifty-models/models/"
 # pipeline.
 
 FULLY_SPECIFIED_MODELS = [
-    # ("AbLang1", "AbLang1", {"chain": "heavy"}),
-    # # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
+    ("AbLang1", "AbLang1", {"chain": "heavy"}),
+    # ("AbLang2_wt", "AbLang2", {"version": "ablang2-paired", "chain": "heavy", "masking": False}),
     (
         "AbLang2_mask",
         "AbLang2",
@@ -56,65 +56,65 @@ FULLY_SPECIFIED_MODELS = [
         "CachedESM1v",
         {"scoring_strategy": "masked", "use_case": "standalone"},
     ),
-    # (
-    #     "S5F",
-    #     "S5F",
-    #     {
-    #         "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
-    #         "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
-    #         "init_branch_length": 1,
-    #     },
-    # ),
-    # (
-    #     "S5FESM_mask",
-    #     "S5FESM",
-    #     {
-    #         "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
-    #         "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
-    #         "sf_rescale": "sigmoid",
-    #         "init_branch_length": 1,
-    #     },
-    # ),
-    # (
-    #     "S5FBLOSUM",
-    #     "S5FBLOSUM",
-    #     {
-    #         "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
-    #         "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
-    #         "sf_rescale": "sigmoid",
-    #         "init_branch_length": 1,
-    #     },
-    # ),
-    # (
-    #     "ThriftyHumV0.2-59",
-    #     "NetamSHM",
-    #     {
-    #         "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
-    #     },
-    # ),
-    # (
-    #     "ThriftyProdHumV0.2-59",
-    #     "NetamSHM",
-    #     {
-    #         "model_path_prefix": THRIFTY_DIR + "cnn_ind_lrg-v1wyatt-simple-0",
-    #     },
-    # ),
-    # (
-    #     "ThriftyESM_mask",
-    #     "NetamSHMESM",
-    #     {
-    #         "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
-    #         "sf_rescale": "sigmoid",
-    #     },
-    # ),
-    # (
-    #     "ThriftyBLOSUM",
-    #     "NetamSHMBLOSUM",
-    #     {
-    #         "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
-    #         "sf_rescale": "sigmoid",
-    #     },
-    # ),
+    (
+        "S5F",
+        "S5F",
+        {
+            "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
+            "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
+            "init_branch_length": 1,
+        },
+    ),
+    (
+        "S5FESM_mask",
+        "S5FESM",
+        {
+            "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
+            "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
+            "sf_rescale": "sigmoid",
+            "init_branch_length": 1,
+        },
+    ),
+    (
+        "S5FBLOSUM",
+        "S5FBLOSUM",
+        {
+            "muts_file": DATA_DIR + "S5F/hh_s5f_muts.csv",
+            "subs_file": DATA_DIR + "S5F/hh_s5f_subs.csv",
+            "sf_rescale": "sigmoid",
+            "init_branch_length": 1,
+        },
+    ),
+    (
+        "ThriftyHumV0.2-59",
+        "NetamSHM",
+        {
+            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
+        },
+    ),
+    (
+        "ThriftyProdHumV0.2-59",
+        "NetamSHM",
+        {
+            "model_path_prefix": THRIFTY_DIR + "cnn_ind_lrg-v1wyatt-simple-0",
+        },
+    ),
+    (
+        "ThriftyESM_mask",
+        "NetamSHMESM",
+        {
+            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
+            "sf_rescale": "sigmoid",
+        },
+    ),
+    (
+        "ThriftyBLOSUM",
+        "NetamSHMBLOSUM",
+        {
+            "model_path_prefix": THRIFTY_DIR + "ThriftyHumV0.2-59",
+            "sf_rescale": "sigmoid",
+        },
+    ),
 ]
 
 
