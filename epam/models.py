@@ -3,6 +3,7 @@ from importlib import resources
 import logging
 import time
 from typing import Tuple
+import os
 
 import torch
 import torch.optim as optim
@@ -50,7 +51,11 @@ FULLY_SPECIFIED_MODELS = [
         {"version": "ablang2-paired", "chain": "heavy", "masking": True},
     ),
     # ("ESM1v_wt", "CachedESM1v", {}),
-    ("ESM1v_mask", "CachedESM1v", {"scoring_strategy": "masked"}),
+    (
+        "ESM1v_mask",
+        "CachedESM1v",
+        {"scoring_strategy": "masked", "use_case": "standalone"},
+    ),
     (
         "S5F",
         "S5F",
@@ -321,18 +326,17 @@ class MutModel(BaseModel):
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, rates, sub_probs
         )
-        
+
         if self.optimize == True:
             return optimize_branch_length(
-                log_prob_fn = log_pcp_probability,
-                starting_branch_length = starting_branch_length,
-                learning_rate = self.learning_rate,
-                max_optimization_steps = self.max_optimization_steps,
-                optimization_tol = self.optimization_tol,
+                log_prob_fn=log_pcp_probability,
+                starting_branch_length=starting_branch_length,
+                learning_rate=self.learning_rate,
+                max_optimization_steps=self.max_optimization_steps,
+                optimization_tol=self.optimization_tol,
             )
         else:
             return starting_branch_length, False
-        
 
     def aaprobs_of_parent_child_pair(self, parent, child) -> np.ndarray:
         if self.init_branch_length is None:
@@ -524,14 +528,14 @@ class MLMBase(BaseModel):
         log_pcp_probability = self._build_log_pcp_probability(
             parent, child, prob_tensor
         )
-        
+
         if self.optimize == True:
             return optimize_branch_length(
-                log_prob_fn = log_pcp_probability,
-                starting_branch_length = starting_branch_length,
-                learning_rate = self.learning_rate,
-                max_optimization_steps = self.max_optimization_steps,
-                optimization_tol = self.optimization_tol,
+                log_prob_fn=log_pcp_probability,
+                starting_branch_length=starting_branch_length,
+                learning_rate=self.learning_rate,
+                max_optimization_steps=self.max_optimization_steps,
+                optimization_tol=self.optimization_tol,
             )
         else:
             return starting_branch_length, False
@@ -744,37 +748,24 @@ class AbLang2(MLMBase):
         else:
             raise ValueError("chain must be set to 'heavy' or 'light'")
 
-        # Return probabilies based on scoring strategy (masked-marginals probabilities are not parent-dependent)
-        if self.masking == False:
-            assert len(seq) == arr_sorted.shape[0]
-            return arr_sorted
-        elif self.masking == True:
-            # Take the ratio of the probabilities relative to the parent AA.
-            parent_idx = aa_idx_array_of_str(seq)
-            parent_probs = arr_sorted[np.arange(len(seq)), parent_idx]
-            arr_prob_ratio = arr_sorted / parent_probs[:, None]
-
-            # Normalize the probabilities to sum to 1.
-            row_sums = np.sum(arr_prob_ratio, axis=1, keepdims=True)
-            arr_ratio_norm = arr_prob_ratio / row_sums
-
-            assert len(seq) == arr_ratio_norm.shape[0]
-
-            return arr_ratio_norm
-        else:
-            raise ValueError("masking must be set to True or False")
+        # Return probabilies (masked-marginals probabilities are not parent-dependent)
+        assert len(seq) == arr_sorted.shape[0]
+        return arr_sorted
 
 
 class CachedESM1v(MLMBase):
-    def __init__(self, model_name=None, scoring_strategy="masked"):
+    def __init__(self, model_name=None, scoring_strategy="masked", use_case=None):
         """
         Initialize ESM1v with cached selection matrices generated in esm_precompute.py for standalone model with scaling.
 
         Parameters:
         model_name (str, optional): The name of the model.
+        scoring_strategy (str): The scoring strategy used for the model. Default is "masked".
+        use_case (str, optional): The use case for the model, either "standalone" or None for use as selection factors. Default is None.
         """
         super().__init__(model_name=model_name)
         self.scoring_strategy = scoring_strategy
+        self.use_case = use_case
 
     def preload_esm_data(self, hdf5_path):
         """
@@ -783,7 +774,14 @@ class CachedESM1v(MLMBase):
         Parameters:
         hdf5_path (str): Path to HDF5 file containing pre-computed selection matrices.
         """
-        self.selection_matrices = load_and_convert_to_dict(hdf5_path)
+        if self.use_case == "standalone":
+            logit_path = hdf5_path.replace("ratios", "probs")
+            assert os.path.exists(
+                logit_path
+            ), f"Logit file {logit_path} does not exist. File required for standalone ESM masked model."
+            self.selection_matrices = load_and_convert_to_dict(logit_path)
+        else:
+            self.selection_matrices = load_and_convert_to_dict(hdf5_path)
 
     def probability_array_of_seq(self, parent, child=None) -> np.ndarray:
         """
@@ -801,12 +799,9 @@ class CachedESM1v(MLMBase):
         ), f"{parent} not present in CachedESM."
 
         # Selection matrix precomputed for parent sequence
-        # probabilities for wt-marginals, probability ratios for masked-marginals
+        # probabilities for wt-marginals and masked-marginals.
+        # Masked-marginals are not parent-dependent.
         sel_matrix = self.selection_matrices[parent]
-
-        # Normalize the probability ratios to sum to 1.
-        if self.scoring_strategy == "masked":
-            sel_matrix = sel_matrix / np.sum(sel_matrix, axis=1, keepdims=True)
 
         # Assert that each row/probability distribution sums to 1.
         if not np.allclose(np.sum(sel_matrix, axis=1), 1.0, atol=1e-5):

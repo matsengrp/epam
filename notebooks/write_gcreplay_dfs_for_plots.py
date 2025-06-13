@@ -30,7 +30,7 @@ for chain in ['igh','igk']:
         print("Model:", model)
         
         if "ESM" in model:
-            aaprob_path = f"{epam_esm_results_dir}/{chain}/{dataset}/{model}_{chain}/ensemble_esm/aaprob.hdf5"
+            aaprob_path = f"{epam_esm_results_dir}/{chain}/{dataset}/{model}_{chain}/esm1/aaprob.hdf5"
         else:
             aaprob_path = f"{epam_results_dir}/{chain}/{dataset}/{model}_{chain}/aaprob.hdf5"
         
