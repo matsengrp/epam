@@ -72,7 +72,8 @@ rule process_esm:
     input:
         in_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_logits_{part}.hdf5",
     output:
-        out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5",
+        rpob_out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_probs_{part}.hdf5",
+        ratio_out_hdf5="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5",
     params:
         part=lambda wildcards: wildcards.part,
         esm_model_number=lambda wildcards: wildcards.esm_model_number
@@ -80,11 +81,28 @@ rule process_esm:
         esm_model_number="\d+"  # This ensures esm_model_number only matches digits
     shell:
         """
-        epam process_esm_output {input.in_hdf5} {output.out_hdf5} "masked-marginals"
+        epam process_esm_output {input.in_hdf5} {output.ratio_out_hdf5} "masked-marginals"
         """
 
 
-rule ensemble_esm:
+rule ensemble_esm_probs:
+    input:
+        expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_probs_{part}.hdf5", 
+               pcp_input=pcp_input, 
+               esm_model_number=esm_model_numbers,
+               part="{part}")
+    output:
+        "pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_probs_{part}.hdf5",
+    run:
+        input_files = ",".join(input)
+        output_file = output[0]
+        
+        subprocess.run(
+            f"epam ensemble_esm_models {input_files} {output_file}", shell=True, check=True
+        )
+
+
+rule ensemble_esm_selection_factors:
     input:
         expand("pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5", 
                pcp_input=pcp_input, 
@@ -104,7 +122,11 @@ rule ensemble_esm:
 rule run_esm_ensemble_models:
     input:
         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
-        hdf5_path="pcp_batched_inputs/{pcp_input}_esm_ensemble_mask_ratios_{part}.hdf5",
+        hdf5_path=lambda wildcards: (
+            f"pcp_batched_inputs/{wildcards.pcp_input}_esm_ensemble_mask_probs_{wildcards.part}.hdf5"
+            if wildcards.model_name == "ESM1v_mask"
+            else f"pcp_batched_inputs/{wildcards.pcp_input}_esm_ensemble_mask_ratios_{wildcards.part}.hdf5"
+        ),
     output:
         aaprob="output/{pcp_input}/ensemble_set/{model_name}/batch{part}/aaprob.hdf5",
     params:
@@ -121,10 +143,15 @@ rule run_esm_ensemble_models:
         epam aaprob {params.model_class} "{params.model_params}" {input.in_csv} {output.aaprob} {input.hdf5_path}
         """
 
+
 rule run_esm_individual_models:
     input:
         in_csv="pcp_batched_inputs/{pcp_input}_{part}.csv",
-        hdf5_path="pcp_batched_inputs/{pcp_input}_esm{esm_model_number}_mask_ratios_{part}.hdf5",
+        hdf5_path=lambda wildcards: (
+            f"pcp_batched_inputs/{wildcards.pcp_input}_esm{wildcards.esm_model_number}_mask_probs_{wildcards.part}.hdf5"
+            if wildcards.model_name == "ESM1v_mask"
+            else f"pcp_batched_inputs/{wildcards.pcp_input}_esm{wildcards.esm_model_number}_mask_ratios_{wildcards.part}.hdf5"
+        ),
     output:
         aaprob="output/{pcp_input}/esm{esm_model_number}/{model_name}/batch{part}/aaprob.hdf5",
     params:
