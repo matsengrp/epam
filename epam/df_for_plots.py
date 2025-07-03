@@ -24,6 +24,7 @@ from netam.sequences import (
 def get_site_mutabilities_df(
     aaprob_path,
     numbering_dict=None,
+    child_is_leaf=None,
 ):
     """
     Computes the amino acid site mutability probabilities
@@ -37,12 +38,17 @@ def get_site_mutabilities_df(
     Parameters:
     aaprob_path (str): path to aaprob matrix for parent-child pairs.
     numbering_dict (dict): mapping (sample_id, family) to numbering list.
+    child_is_leaf (bool): If True, restricts to PCPs where child is a leaf node;
+                          if False, restricts to PCPs where child is not a leaf node;
+                          if None (default), no restriction applied.
 
     Returns:
     output_df (pd.DataFrame): dataframe with columns pcp_index, site, prob, mutation, is_cdr.
     """
     pcp_path = pcp_path_of_aaprob_path(aaprob_path)
     pcp_df = load_and_filter_pcp_df(pcp_path)
+    if child_is_leaf is not None:
+        pcp_df = pcp_df[pcp_df['child_is_leaf']==child_is_leaf]
     nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
     aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
     parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
@@ -92,7 +98,7 @@ def get_site_mutabilities_df(
     return output_df
 
 
-def get_subs_and_preds_from_aaprob(aaprob_path):
+def get_subs_and_preds_from_aaprob(aaprob_path, child_is_leaf=None):
     """
     Determines the sites of observed and predicted substitutions of every PCP in a dataset,
     from the aaprob file of matrices.
@@ -101,6 +107,9 @@ def get_subs_and_preds_from_aaprob(aaprob_path):
 
     Parameters:
     aaprob_path (str): path to aaprob matrix for parent-child pairs.
+    child_is_leaf (bool): If True, restricts to PCPs where child is a leaf node;
+                          if False, restricts to PCPs where child is not a leaf node;
+                          if None (default), no restriction applied.
 
     Returns tuple with:
     pcp_indices (list): indices to the reference PCP file.
@@ -110,6 +119,8 @@ def get_subs_and_preds_from_aaprob(aaprob_path):
     """
     pcp_path = pcp_path_of_aaprob_path(aaprob_path)
     pcp_df = load_and_filter_pcp_df(pcp_path)
+    if child_is_leaf is not None:
+        pcp_df = pcp_df[pcp_df['child_is_leaf']==child_is_leaf]
     nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
     aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
     parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
@@ -151,7 +162,7 @@ def get_subs_and_preds_from_aaprob(aaprob_path):
     return (pcp_indices, pcp_sub_locations, top_k_sub_locations, pcp_sample_family_dict)
 
 
-def get_sub_acc_from_aaprob(aaprob_path, top_k=1):
+def get_sub_acc_from_aaprob(aaprob_path, top_k=1, child_is_leaf=None):
     """
     Determines the sites of observed substitutions and whether the amino acid substitution is predicted
     among the top-k most probable for every PCP in a dataset, using the aaprob file of matrices.
@@ -159,6 +170,9 @@ def get_sub_acc_from_aaprob(aaprob_path, top_k=1):
     Parameters:
     aaprob_path (str): path to aaprob matrix for parent-child pairs.
     top_k (int): the number of top substitutions to consider for matching to observed.
+    child_is_leaf (bool): If True, restricts to PCPs where child is a leaf node;
+                          if False, restricts to PCPs where child is not a leaf node;
+                          if None (default), no restriction applied.
 
     Returns tuple with:
     pcp_indices (list): indices to the reference PCP file.
@@ -169,6 +183,8 @@ def get_sub_acc_from_aaprob(aaprob_path, top_k=1):
     """
     pcp_path = pcp_path_of_aaprob_path(aaprob_path)
     pcp_df = load_and_filter_pcp_df(pcp_path)
+    if child_is_leaf is not None:
+        pcp_df = pcp_df[pcp_df['child_is_leaf']==child_is_leaf]
     nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
     aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
     parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
@@ -229,6 +245,7 @@ def get_sub_acc_from_aaprob(aaprob_path, top_k=1):
 def get_site_csp_df(
     aaprob_path,
     numbering_dict=None,
+    child_is_leaf=None,
 ):
     """
     Computes the site conditional substitution probabilities (CSP)
@@ -245,12 +262,17 @@ def get_site_csp_df(
     Parameters:
     aaprob_path (str): path to aaprob matrix for parent-child pairs.
     numbering_dict (dict): mapping (sample_id, family) to numbering list.
+    child_is_leaf (bool): If True, restricts to PCPs where child is a leaf node;
+                          if False, restricts to PCPs where child is not a leaf node;
+                          if None (default), no restriction applied.
 
     Returns:
     output_df (pd.DataFrame): dataframe with columns pcp_index, site, prob, aa, mutation, is_cdr.
     """
     pcp_path = pcp_path_of_aaprob_path(aaprob_path)
     pcp_df = load_and_filter_pcp_df(pcp_path)
+    if child_is_leaf is not None:
+        pcp_df = pcp_df[pcp_df['child_is_leaf']==child_is_leaf]
     nt_seqs = list(zip(pcp_df["parent"], pcp_df["child"]))
     aa_seqs = [tuple(translate_sequences(pcp_pair)) for pcp_pair in nt_seqs]
     parent_aa_seqs, child_aa_seqs = zip(*aa_seqs)
