@@ -58,202 +58,116 @@ def create_combined_branch_lengths(mpath):
     combined_df.to_csv(combined_file_path, index=False)
 
 
-def create_violin_plots(dataset_data, dsname, dstitle, output_dir):
-    """
-    Create violin plots for branch length distributions (linear and log scale)
+def create_violin_plots(dataset_data, dsname, output_dir):
+    # Get unique datasets
+    datasets = [ds[1] for ds in dataset_list]
+    n_datasets = len(datasets)
     
-    Args:
-        dataset_data (pd.DataFrame): Combined data for all models in a dataset
-        dsname (str): Dataset short name
-        dstitle (str): Dataset title for plot
-        output_dir (str): Directory to save figures
-    """
+    # Create figure with single row and datasets as columns (log scale only)
+    fig, axes = plt.subplots(1, n_datasets, figsize=(8*n_datasets, 8))
+    if n_datasets == 1:
+        axes = [axes]
     
-    # Set up the plotting style
-    plt.style.use('default')
-    sns.set_palette("husl")
-    
-    # Create figure with two subplots (linear and log scale)
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
-    
-    # Linear scale violin plot
-    violin_parts1 = ax1.violinplot([dataset_data[dataset_data['model'] == model]['opt_branch_length'].dropna() 
-                                   for model in modelname_list], 
-                                  positions=range(len(modelname_list)), 
-                                  showmeans=False, showmedians=True)
-    
-    ax1.set_xticks(range(len(modelname_list)))
-    ax1.set_xticklabels(modelname_list, rotation=45, ha='right')
-    ax1.set_ylabel('Optimized Branch Length')
-    ax1.set_title(f'{dstitle} - Linear Scale')
-    ax1.grid(True, alpha=0.3)
-    
-    # Log scale violin plot
-    # Filter out zero and negative values for log scale
-    log_data = dataset_data[dataset_data['opt_branch_length'] > 0]
-    
-    violin_parts2 = ax2.violinplot([log_data[log_data['model'] == model]['opt_branch_length'].dropna() 
-                                   for model in modelname_list], 
-                                  positions=range(len(modelname_list)), 
-                                  showmeans=False, showmedians=True)
-    
-    ax2.set_xticks(range(len(modelname_list)))
-    ax2.set_xticklabels(modelname_list, rotation=45, ha='right')
-    ax2.set_ylabel('Optimized Branch Length (log scale)')
-    ax2.set_title(f'{dstitle} - Log Scale')
-    ax2.set_yscale('log')
-    ax2.grid(True, alpha=0.3)
-    
-    # Customize violin colors
-    colors = sns.color_palette("husl", len(modelname_list))
-    for i, (vp1, vp2) in enumerate(zip(violin_parts1['bodies'], violin_parts2['bodies'])):
-        vp1.set_facecolor(colors[i])
-        vp1.set_alpha(0.7)
-        vp2.set_facecolor(colors[i])
-        vp2.set_alpha(0.7)
-
-    # Set internal lines to black (instead of default red)
-    for part_name in ['cbars', 'cmins', 'cmaxes', 'cquartiles', 'cmedians', 'cmeans']:
-        if part_name in violin_parts1:
-            violin_parts1[part_name].set_color('black')
-        if part_name in violin_parts2:
-            violin_parts2[part_name].set_color('black')
+    for idx, dataset in enumerate(datasets):
+        ax = axes[idx]
+        ds_data = dataset_data[dataset_data['dataset'] == dataset]
+        log_data = ds_data[ds_data['opt_branch_length'] > 0]
+        
+        violin_parts = ax.violinplot([log_data[log_data['model'] == model]['opt_branch_length'].dropna() 
+                                     for model in modelname_list], 
+                                    positions=range(len(modelname_list)), 
+                                    vert=False,  # Horizontal violins
+                                    showmeans=False, showmedians=True)
+        
+        ax.set_yticks(range(len(modelname_list)))
+        if idx == 0:  # Only show labels on leftmost panel
+            ax.set_yticklabels(modelname_list)
+            ax.set_ylabel('Model')
+        else:
+            ax.set_yticklabels([])
+            ax.set_ylabel('')
+        ax.set_xlabel('Optimized Branch Length (log scale)')
+        ax.set_title(f'{dataset}')
+        ax.set_xscale('log')
+        ax.grid(True, alpha=0.3)
+        
+        # Color customization
+        colors = sns.color_palette("husl", len(modelname_list))
+        for i, vp in enumerate(violin_parts['bodies']):
+            vp.set_facecolor(colors[i])
+            vp.set_alpha(0.7)
+        
+        # Set lines to black
+        for part_name in ['cbars', 'cmins', 'cmaxes', 'cquartiles', 'cmedians', 'cmeans']:
+            if part_name in violin_parts:
+                violin_parts[part_name].set_color('black')
     
     plt.tight_layout()
-    
-    # Save the figure
-    output_filename = os.path.join(output_dir, f"{dsname}_branch_length_distributions.png")
+    output_filename = os.path.join(output_dir, f"{dsname}_branch_length_distributions.pdf")
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
     print(f"Saved: {output_filename}")
     plt.close()
 
 
-def create_iqtree_violin_plots(dataset_data, dsname, dstitle, output_dir):
-    """
-    Create violin plots for branch length distributions in log scale, comparing to the IQ-TREE model
+def create_iqtree_violin_plots(dataset_data, dsname, output_dir):
+    # Reorder datasets to match: Tang, Jaffe, Rodriguez, Ford
+    dataset_order = ["Tang et al.", "Jaffe et al.", "Rodriguez et al.", "Ford et al."]
+    n_datasets = len(dataset_order)
     
-    Args:
-        dataset_data (pd.DataFrame): Combined data for all models in a dataset
-        dsname (str): Dataset short name
-        dstitle (str): Dataset title for plot
-        output_dir (str): Directory to save figures
-    """
+    # Create 2x2 grid
+    fig, axes = plt.subplots(2, 2, figsize=(20, 20))
+    axes = axes.flatten()  # Flatten to make indexing easier
     
-    # Set up the plotting style
-    plt.style.use('default')
-    sns.set_palette("husl")
+    for idx, dataset in enumerate(dataset_order):
+        ax = axes[idx]
+        ds_data = dataset_data[dataset_data['dataset'] == dataset]
+        log_data = ds_data[ds_data['opt_branch_length'] > 0]
+        
+        violin_parts = ax.violinplot([log_data[log_data['model'] == model]['opt_branch_length'].dropna() 
+                                     for model in modelname_plot_list], 
+                                    positions=range(len(modelname_plot_list)), 
+                                    vert=False,  # Horizontal violins
+                                    showmeans=False, showmedians=True)
+        
+        ax.axhline(y=0.5, color='black', linestyle='--', linewidth=2, alpha=0.7)
+        
+        ax.set_yticks(range(len(modelname_plot_list)))
+        # Show labels only on left column (idx 0 and 2)
+        if idx % 2 == 0:
+            ax.set_yticklabels(modelname_plot_list, fontsize=24)
+            # ax.set_ylabel('Model', fontsize=30)
+        else:
+            ax.set_yticklabels([])
+            ax.set_ylabel('')
+        # ax.set_xlabel('Optimized Branch Length (log scale)', fontsize=30)
+        ax.set_title(f'{dataset}', fontsize=24)
+        ax.set_xscale('log')
+        ax.tick_params(axis="x", labelsize=24)
+        ax.grid(True, alpha=0.3)
+        
+        # Colors and styling
+        colors = sns.color_palette("husl", len(modelname_plot_list))
+        for i, vp in enumerate(violin_parts['bodies']):
+            vp.set_facecolor(colors[i])
+            vp.set_alpha(0.7)
+        
+        for part_name in ['cbars', 'cmins', 'cmaxes', 'cquartiles', 'cmedians', 'cmeans']:
+            if part_name in violin_parts:
+                violin_parts[part_name].set_color('black')
     
-    # Create figure with single subplot
-    fig, ax = plt.subplots(1, 1, figsize=(16, 8))
+        # Add a single centered x-axis label at the bottom
+    fig.text(0.6, 0.02, 'optimized branch length (log scale)', ha='center', fontsize=30)
     
-    # Filter out zero and negative values for log scale
-    log_data = dataset_data[dataset_data['opt_branch_length'] > 0]
-    
-    # Create violin plot for all models
-    violin_parts = ax.violinplot([log_data[log_data['model'] == model]['opt_branch_length'].dropna() 
-                                 for model in modelname_plot_list], 
-                                positions=range(len(modelname_plot_list)), 
-                                showmeans=False, showmedians=True)
-    
-    # Add vertical separation line after IQ-TREE (position 0)
-    ax.axvline(x=0.5, color='black', linestyle='--', linewidth=2, alpha=0.7)
-    
-    ax.set_xticks(range(len(modelname_plot_list)))
-    ax.set_xticklabels(modelname_plot_list, rotation=45, ha='right')
-    ax.set_ylabel('Optimized Branch Length (log scale)')
-    ax.set_title(f'{dstitle}')
-    ax.set_yscale('log')
-    ax.grid(True, alpha=0.3)
-    
-    # Customize violin colors
-    colors = sns.color_palette("husl", len(modelname_plot_list))
-    for i, vp in enumerate(violin_parts['bodies']):
-        vp.set_facecolor(colors[i])
-        vp.set_alpha(0.7)
-
-    # Set internal lines to black (instead of default red)
-    for part_name in ['cbars', 'cmins', 'cmaxes', 'cquartiles', 'cmedians', 'cmeans']:
-        if part_name in violin_parts:
-            violin_parts[part_name].set_color('black')
-    
-    plt.tight_layout()
-    
-    # Save the figure
-    output_filename = os.path.join(output_dir, f"{dsname}_bl_opt_v_iqtree.png")
+    plt.tight_layout(rect=[0, 0.05, 1, 1])  # Leave space at bottom for label
+    output_filename = os.path.join(output_dir, f"{dsname}_bl_opt_v_iqtree.pdf")
+    output_filename2 = os.path.join(output_dir, f"{dsname}_bl_opt_v_iqtree.png")
     plt.savefig(output_filename, dpi=300, bbox_inches='tight')
+    plt.savefig(output_filename2, dpi=300, bbox_inches='tight')
     print(f"Saved: {output_filename}")
     plt.close()
+    
 
-
-def create_bl_diff_violin_plots(dataset_data, dsname, dstitle, output_dir):
-    """
-    Create violin plots for the difference in branch lengths relative to IQ-TREE
-    
-    Args:
-        dataset_data (pd.DataFrame): Combined data for all models in a dataset (must include IQ-TREE)
-        dsname (str): Dataset short name
-        dstitle (str): Dataset title for plot
-        output_dir (str): Directory to save figures
-    """
-    
-    # Set up the plotting style
-    plt.style.use('default')
-    sns.set_palette("husl")
-    
-    # Get IQ-TREE data as reference
-    iqtree_data = dataset_data[dataset_data['model'] == 'IQ-TREE'].copy()
-    iqtree_data = iqtree_data.set_index('pcp_index')
-    
-    # Calculate differences for each model
-    diff_data = []
-    for model in modelname_list:
-        model_data = dataset_data[dataset_data['model'] == model].copy()
-        model_data = model_data.set_index('pcp_index')
-        
-        # Merge with IQ-TREE data on pcp_index
-        merged = model_data.merge(iqtree_data[['opt_branch_length']], 
-                                 left_index=True, right_index=True, 
-                                 suffixes=('_model', '_iqtree'))
-        
-        # Calculate difference
-        merged['bl_diff'] = merged['opt_branch_length_model'] - merged['opt_branch_length_iqtree']
-        
-        diff_data.append(merged['bl_diff'])
-    
-    # Create figure
-    fig, ax = plt.subplots(1, 1, figsize=(14, 8))
-    
-    # Create violin plot
-    violin_parts = ax.violinplot(diff_data, 
-                                positions=range(len(modelname_list)), 
-                                showmeans=False, showmedians=True)
-    
-    ax.set_xticks(range(len(modelname_list)))
-    ax.set_xticklabels(modelname_list, rotation=45, ha='right')
-    ax.set_ylabel('Branch Length Difference vs IQ-TREE')
-    ax.set_title(f'{dstitle}')
-    # ax.set_yscale('log')
-    ax.grid(True, alpha=0.3)
-    
-    # Customize violin colors
-    colors = sns.color_palette("husl", len(modelname_list))
-    for i, vp in enumerate(violin_parts['bodies']):
-        vp.set_facecolor(colors[i])
-        vp.set_alpha(0.7)
-
-    # Set internal lines to black
-    for part_name in ['cbars', 'cmins', 'cmaxes', 'cquartiles', 'cmedians', 'cmeans']:
-        if part_name in violin_parts:
-            violin_parts[part_name].set_color('black')
-    
-    plt.tight_layout()
-    
-    # Save the figure
-    output_filename = os.path.join(output_dir, f"{dsname}_bl_differences.png")
-    plt.savefig(output_filename, dpi=300, bbox_inches='tight')
-    print(f"Saved: {output_filename}")
-    plt.close()
-
+all_datasets_data = []
 
 for dsinfo in dataset_list:
     print("Dataset:", dsinfo[0])
@@ -274,23 +188,26 @@ for dsinfo in dataset_list:
 
         df = pd.read_csv(combined_file)
         df['model'] = modelname
+        df['dataset'] = dstitle  # Add dataset identifier
 
         dataset_model_data.append(df)
 
     combined_dataset = pd.concat(dataset_model_data, ignore_index=True)
-    # create_violin_plots(combined_dataset, dsname, dstitle, output_dir)
-
+    
+    # Add IQ-TREE data
     pcp_df = pd.read_csv(os.path.join(path_to_pcp_data, f"{dsfilename}.csv"))
     pcp_bl_df = pcp_df[['branch_length']].copy()
     pcp_bl_df = pcp_bl_df.rename(columns={'branch_length': 'opt_branch_length'})
     pcp_bl_df['model'] = "IQ-TREE"
     pcp_bl_df['pcp_index'] = pcp_df.index
+    pcp_bl_df['dataset'] = dstitle
+    
+    combined_dataset = pd.concat([combined_dataset, pcp_bl_df], ignore_index=True)
+    all_datasets_data.append(combined_dataset)
 
-    full_combined_dataset = pd.concat([combined_dataset, pcp_bl_df], ignore_index=True)
-    # create_iqtree_violin_plots(full_combined_dataset, dsname, dstitle, output_dir)
-    create_bl_diff_violin_plots(full_combined_dataset, dsname, dstitle, output_dir)
+# Combine all datasets
+full_data = pd.concat(all_datasets_data, ignore_index=True)
 
-
-
-
-
+# Create the combined plots
+# create_violin_plots(full_data, "all_datasets", output_dir)
+create_iqtree_violin_plots(full_data, "all_datasets", output_dir)
