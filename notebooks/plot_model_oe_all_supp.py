@@ -20,51 +20,55 @@ from matplotlib.patches import Rectangle
 dfs_dir = "dataframes"
 output_dir = "plots"
 os.makedirs(output_dir, exist_ok=True)
-tab_dir = "tables"
-os.makedirs(tab_dir, exist_ok=True)
-
-dataset_list = [
-    ("ford", "Ford et al."),
-    ("rodriguez", "Rodriguez et al."),
-    ("tang", "Tang et al."),
-    ("wyatt", "Jaffe et al."),
-]
 
 model_list = [
-    "S5F", "S5FESM_mask", "S5FBLOSUM",
-    "ThriftyHumV0.2-59", "ThriftyProdHumV0.2-59", "ThriftyESM_mask", "ThriftyBLOSUM",
-    "ESM1v_mask", "AbLang2_mask", "AbLang1"
+    "S5F", "ThriftyHumV0.2-59",
+    "S5FBLOSUM", "ThriftyBLOSUM",
+    "S5FESM_mask", "ThriftyESM_mask",
+    "ThriftyProdHumV0.2-59", "ESM1v_mask",
+    "AbLang1", "AbLang2_mask",
 ]
 
 modelname_list = [
-    "S5F", "S5F + ESM-1v", "S5F + BLOSUM62",
-    "Thrifty-SHM", "Thrifty-prod", "Thrifty-SHM + ESM-1v", "Thrifty-SHM + BLOSUM62",
-    "ESM-1v", "AbLang2", "AbLang1"
+    "S5F", "Thrifty-SHM",
+    "S5F + BLOSUM62", "Thrifty-SHM + BLOSUM62",
+    "S5F + ESM-1v", "Thrifty-SHM + ESM-1v",
+    "Thrifty-prod", "ESM-1v",
+    "AbLang1", "AbLang2",
 ]
 
-METRICS_COLUMNS = ["model","name","subs_overlap","r_precision","sub_acc","csp_perplexity","ssp_overlap","csp_overlap"]
+dsname = 'tang'
+dstitle = 'Tang et al.'
 
 
-for dsinfo in dataset_list:
-    print("Dataset:", dsinfo[0])
-    dsname = dsinfo[0]
-    dstitle = dsinfo[1]
-    
-    metrics_df = pd.DataFrame(columns=METRICS_COLUMNS)
-    coldata={}
-    for metric in METRICS_COLUMNS:
-        coldata[metric]=[]  
+with open(f'{dfs_dir}/{dsname}_numbering.pkl', 'rb') as f:
+    numbering = pickle.load(f)
 
-    with open(f'{dfs_dir}/{dsname}_numbering.pkl', 'rb') as f:
-        numbering = pickle.load(f)
+iplot=0
+for iplot in [1,2]:
+    if iplot==1:
+        figheight = 48
+        nrows = 3
+        fig_model_list = model_list[:6]
+        fig_modelname_list = modelname_list[:6]
+    else:
+        figheight = 32
+        nrows = 2
+        fig_model_list = model_list[-4:]
+        fig_modelname_list = modelname_list[-4:]
 
-    for model, modelname in zip(model_list, modelname_list):
+    fig = plt.figure(constrained_layout=True, figsize=[32, figheight])
+    fig.patch.set_facecolor('white')
+    subfigs = fig.subfigures(nrows,2,wspace=0.1,hspace=0.1)
+
+    isubfig=0
+    for model, modelname in zip(fig_model_list, fig_modelname_list):
         print("Model:", model)
         
-        fig = plt.figure(constrained_layout=True, figsize=[16,16])
-        fig.patch.set_facecolor('white')
+        irow = isubfig // 2
+        icol = isubfig % 2
 
-        (subfig_t, subfig_m, subfig_b) = fig.subfigures(3,1,height_ratios=[4,8,4])
+        (subfig_t, subfig_m, subfig_b) = subfigs[irow, icol].subfigures(3,1,height_ratios=[4,8,4])
         
         #
         # Plot SSP observed vs expected
@@ -81,7 +85,7 @@ for dsinfo in dataset_list:
             transform = topax.transAxes,
             fontsize=14
         )
-        topax.legend(loc='upper left', fontsize=14)
+        topax.legend(loc='upper left', fontsize=12)
         topax.set_ylabel("no. of substitutions", fontsize=20, labelpad=10)
         topax.set_xlabel("$\log_{10}$(site substitution probability)", fontsize=20, labelpad=10)
         
@@ -98,7 +102,7 @@ for dsinfo in dataset_list:
         
         sitemuts_results = plot_sites_observed_vs_expected(sitemuts_df, ax1, numbering)
         ax1.text(
-            0.02, 0.63,
+            0.02, 0.60,
             f'overlap: {sitemuts_results["overlap"]:.3g}',
             verticalalignment ='top', 
             horizontalalignment ='left', 
@@ -106,7 +110,7 @@ for dsinfo in dataset_list:
             fontsize=14
         )
         ax1.text(
-            0.02, 0.55,
+            0.02, 0.52,
             f'R-precision: {r_prec:.3g}',
             verticalalignment ='top', 
             horizontalalignment ='left', 
@@ -115,7 +119,7 @@ for dsinfo in dataset_list:
         )
         ax1.axes.get_xaxis().get_label().set_visible(False)
         ax1.set_ylabel("no. of substitutions", fontsize=20, labelpad=10)
-        ax1.legend(loc='upper left', fontsize=14)
+        ax1.legend(loc='upper left', fontsize=12)
         plt.setp(ax1.get_xticklabels()[1::3], visible=False)
         plt.setp(ax1.get_xticklabels()[1::2], visible=False)
         ax1.tick_params(axis="x", labelsize=12, labelrotation=90)
@@ -187,28 +191,18 @@ for dsinfo in dataset_list:
             transform = bottomax.transAxes,
             fontsize=14
         )
-        bottomax.legend(loc='upper left', fontsize=14)
+        bottomax.legend(loc='upper left', fontsize=12)
         bottomax.set_ylabel("no. of substitutions", fontsize=20, labelpad=10)
         bottomax.set_xlabel("$\log_{10}$(conditional substitution probability)", fontsize=20, labelpad=10)
         
-        fig.suptitle(f'{dstitle}, {modelname}', fontsize=20, x=0.12, ha='left')
+        subfigs[irow, icol].suptitle(f'{dstitle}, {modelname}', fontsize=20, x=0.12, ha='left')
         
-        outfname = f"{output_dir}/{dsname}_{model}_oe"
-        print(f"{outfname}.png",'created!')
-        plt.savefig(f"{outfname}.png")
-        print(f"{outfname}.pdf",'created!')
-        plt.savefig(f"{outfname}.pdf")
-        plt.close()
-        
-        coldata["model"].append(model)
-        coldata["name"].append(modelname)
-        coldata["subs_overlap"].append(sitemuts_results["overlap"])
-        coldata["r_precision"].append(r_prec)
-        coldata["sub_acc"].append(subacc_results["total_subacc"])
-        coldata["csp_perplexity"].append(csp_perplexity)
-        coldata["ssp_overlap"].append(ssp_results["overlap"])
-        coldata["csp_overlap"].append(csp_results["overlap"])
-        
-    for metric in METRICS_COLUMNS:
-        metrics_df[metric] = coldata[metric]    
-    metrics_df.to_csv(f"{tab_dir}/{dsname}_metrics.csv")
+        isubfig += 1
+
+
+    outfname = f"{output_dir}/{dsname}_oe_supp{iplot}"
+    print(f"{outfname}.png",'created!')
+    plt.savefig(f"{outfname}.png")
+    print(f"{outfname}.pdf",'created!')
+    plt.savefig(f"{outfname}.pdf")
+    plt.close()

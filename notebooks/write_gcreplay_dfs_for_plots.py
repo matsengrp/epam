@@ -11,8 +11,8 @@ from epam.oe_plot import (
     get_site_subs_acc_df,
 )
 
-epam_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2/gcreplay"
-epam_esm_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2/gcreplay_esm"
+epam_results_dir = "epam_output/gcreplay"
+epam_esm_results_dir = "epam_output/gcreplay_esm"
 output_dir = "dataframes"
 os.makedirs(output_dir, exist_ok=True)
 

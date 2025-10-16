@@ -19,7 +19,8 @@ dfs_dir = "dataframes"
 
 output_dir = "plots"
 os.makedirs(output_dir, exist_ok=True)
-
+tab_dir = "tables"
+os.makedirs(tab_dir, exist_ok=True)
 
 model_list = [
     "GCReplaySHM", "GCReplaySHMDMSSigmoid", "GCReplayAbLang2", "GCReplayESM",
@@ -197,4 +198,4 @@ for chain in ['igh','igk']:
         
     for metric in METRICS_COLUMNS:
         metrics_df[metric] = coldata[metric]    
-    metrics_df.to_csv(f"gcreplay_{chain}_metrics.csv")
+    metrics_df.to_csv(f"{tab_dir}/gcreplay_{chain}_metrics.csv")

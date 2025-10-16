@@ -2,20 +2,25 @@
 # at known conserved sites for several models
 # (Figure 3)
 
+import os
 import numpy as np
 import pandas as pd
 
 conserved_xvals = ['23', '41', '43', '98', '102', '104', '118']
 
+dfs_dir = "dataframes"
+output_dir = "tables"
+os.makedirs(output_dir, exist_ok=True)
+
 dsname = "tang"
-outfname = f"{dsname}_conserved.csv"
+outfname = f"{output_dir}/{dsname}_conserved.csv"
 inputs = [
-    (f"dataframes/{dsname}_S5F_ssp_df.csv.gz", "S5F"),
-    (f"dataframes/{dsname}_ThriftyHumV0.2-59_ssp_df.csv.gz", "Thrifty-SHM"),
-    (f"dataframes/{dsname}_ESM1v_mask_ssp_df.csv.gz", "ESM-1v"),
-    (f"dataframes/{dsname}_ThriftyESM_mask_ssp_df.csv.gz", "Thrifty-SHM + ESM-1v"),
-    (f"dataframes/{dsname}_AbLang2_mask_ssp_df.csv.gz", "AbLang2"),
-    (f"dataframes/{dsname}_ThriftyProdHumV0.2-59_ssp_df.csv.gz", "Thrifty-prod"),    
+    (f"{dfs_dir}/{dsname}_S5F_ssp_df.csv.gz", "S5F"),
+    (f"{dfs_dir}/{dsname}_ThriftyHumV0.2-59_ssp_df.csv.gz", "Thrifty-SHM"),
+    (f"{dfs_dir}/{dsname}_ESM1v_mask_ssp_df.csv.gz", "ESM-1v"),
+    (f"{dfs_dir}/{dsname}_ThriftyESM_mask_ssp_df.csv.gz", "Thrifty-SHM + ESM-1v"),
+    (f"{dfs_dir}/{dsname}_AbLang2_mask_ssp_df.csv.gz", "AbLang2"),
+    (f"{dfs_dir}/{dsname}_ThriftyProdHumV0.2-59_ssp_df.csv.gz", "Thrifty-prod"),    
 ]
 
 

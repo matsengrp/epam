@@ -1,6 +1,7 @@
 # Write a dataframe of substitution accuracy for all models on Tang et al.
 # (Figure 4A)
 
+import os
 import h5py
 import numpy as np
 import pandas as pd
@@ -16,13 +17,15 @@ from netam.sequences import (
     translate_sequences,
 )
 
-epam_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2"
+epam_results_dir = "epam_output"
 top_k = 1
 
 dataset = "tang-deepshm-prod_pcp_2024-08-08_MASKED_NI_noN_no-naive"
 dsname = "tang"
 
-outfname = f"{dsname}_subacc.csv"
+output_dir = "tables"
+os.makedirs(output_dir, exist_ok=True)
+outfname = f"{output_dir}/{dsname}_subacc.csv"
 output_df = pd.DataFrame(columns=['model','All','FWR1','CDR1','FWR2','CDR2','FWR3','CDR3','FWR4'])
 
 model_list = [

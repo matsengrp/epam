@@ -41,6 +41,7 @@ modelname_list = [
 
 METRICS_COLUMNS = ["model","name","nsubs","subs_overlap","r_precision","sub_acc","csp_perplexity","ssp_overlap","csp_overlap"]
 
+tab_dir = "tables"
 for pcptype in ['','anc','leaf']:
 
     dfs_dir = f"dataframes"
@@ -228,6 +229,6 @@ for pcptype in ['','anc','leaf']:
         for metric in METRICS_COLUMNS:
             metrics_df[metric] = coldata[metric]
         if len(pcptype)>0:
-            metrics_df.to_csv(f"{dsname}_{pcptype}_nsubs_metrics.csv")
+            metrics_df.to_csv(f"{tab_dir}/{dsname}_{pcptype}_nsubs_metrics.csv")
         else:
-            metrics_df.to_csv(f"{dsname}_nsubs_metrics.csv")
+            metrics_df.to_csv(f"{tab_dir}/{dsname}_nsubs_metrics.csv")
