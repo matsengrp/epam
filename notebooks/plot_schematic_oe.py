@@ -25,10 +25,11 @@ oi_blue          = '#0072B2'
 oi_vermillion    = '#D55E00'
 oi_reddishpurple = '#CC79A7'
 
-aaprobs_flairr_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2/ford-flairr-seq-prod_pcp_2024-07-26_MASKED_NI_noN_no-naive"
-anarci_flairr = "/fh/fast/matsen_e/shared/bcr-mut-sel/pcps/v2/anarci/ford-flairr-seq-prod_imgt.csv"
-pcp_path = "/home/mjohnso4/epam/pcp_inputs/ford-flairr-seq-prod_pcp_2024-07-26_MASKED_NI_noN_no-naive.csv"
-schematic_output_dir = "/home/mjohnso4/epam/output"
+aaprobs_flairr_dir = "epam_output/ford-flairr-seq-prod_pcp_2024-07-26_MASKED_NI_noN_no-naive"
+anarci_flairr = "anarci/ford-flairr-seq-prod_imgt.csv"
+pcp_path = "pcp_inputs/ford-flairr-seq-prod_pcp_2024-07-26_MASKED_NI_noN_no-naive.csv"
+schematic_output_dir = "plots"
+os.makedirs(schematic_output_dir, exist_ok=True)
 
 major_text_size = 30 #20
 minor_text_size = 20 #15

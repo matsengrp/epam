@@ -54,7 +54,7 @@ def find_substitution_csps(matrix, parent, child):
 for chain in ['igh','igk']:
     print('chain:',chain)
     
-    outfname = f"gcreplay_{chain}"
+    outfname = f"{output_dir}/gcreplay_{chain}"
     if only_naive_parent==True:
         outfname = outfname + "_naive"
     if only_leaf_child==True:
