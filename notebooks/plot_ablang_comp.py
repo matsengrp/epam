@@ -1,29 +1,18 @@
 # Plot OE comparsion between different AbLang models and implementations with Rodriguez et al.
 # Supplemental Figure
+
 import os
-import numpy as np
+import pickle
 import pandas as pd
 import matplotlib.pyplot as plt
-from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
 from epam.oe_plot import (
-    get_numbering_dict,
     plot_sites_observed_vs_expected,
     plot_sites_observed_vs_top_k_predictions,
-    get_site_substitutions_df,
 )
-from epam.df_for_plots import (
-    get_site_mutabilities_df,
-    get_subs_and_preds_from_aaprob,
-)
-from matplotlib.patches import Rectangle
 
-race_file_version = "rodriguez-airr-seq-race-prod_pcp_2024-07-28_MASKED_NI_noN_no-naive"
-epam_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2"
-anarci_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/pcps/v2/anarci"
-local_dir = "/home/mjohnso4/epam"
-output_dir = f"{local_dir}/output/plots"
-anarci_path = f"{anarci_dir}/rodriguez-airr-seq-race-prod_imgt.csv"
-pcp_path = f"{local_dir}/pcp_inputs/{race_file_version}.csv"
+dfs_dir = "dataframes"
+output_dir = "plots"
+os.makedirs(output_dir, exist_ok=True)
 
 model_list = [
     "AbLang1", "AbLang2_wt", "AbLang2_mask",
@@ -33,26 +22,21 @@ modelname_list = [
     "AbLang1", "AbLang2 (wt)", "AbLang2 (mask)"
 ]
 
-dataset  = race_file_version
 dsname   = "rodriguez"
 dstitle  = "Rodriguez et al."
 
-pcp_df = load_and_filter_pcp_df(pcp_path)
-
-numbering, excluded = get_numbering_dict(anarci_path, pcp_df, True, "imgt")
+with open(f'{dfs_dir}/{dsname}_numbering.pkl', 'rb') as f:
+    numbering = pickle.load(f)
 
 site_sub_probs_df = {}
 r_prec = {}
 
 for model in model_list:
     print("Model:", model)
-    aaprob = f"{epam_results_dir}/{dataset}/{model}/combined_aaprob.hdf5"
-    df = get_site_mutabilities_df(aaprob, numbering)
-    df.to_csv(f"{output_dir}/{dsname}_{model}_imgt.csv.tar.gz", index=False)
+
+    site_sub_probs_df[model] = pd.read_csv(f'{dfs_dir}/{dsname}_{model}_ssp_df.csv.gz', index_col=0, dtype={'site':'object'})
     
-    site_sub_probs_df[model] = df
-    
-    muts_obs_pred_df = get_site_substitutions_df(get_subs_and_preds_from_aaprob(aaprob), numbering)
+    muts_obs_pred_df = pd.read_csv(f'{dfs_dir}/{dsname}_{model}_site_subs_df.csv.gz', index_col=0, dtype={'site':'object'})
     results = plot_sites_observed_vs_top_k_predictions(muts_obs_pred_df, None, numbering)
     r_prec[model] = results['r-precision']
     

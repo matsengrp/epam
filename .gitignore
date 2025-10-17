@@ -175,7 +175,10 @@ pcp_gcreplay_inputs/
 pcp_batched_inputs/
 output/
 _logs/
+notebooks/anarci/
+notebooks/epam_output/
 notebooks/dataframes/
+notebooks/tables/
 notebooks/pcp_inputs/
 notebooks/pcp_gcreplay_inputs/
 notebooks/plots/
