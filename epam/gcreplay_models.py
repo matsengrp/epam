@@ -74,6 +74,7 @@ class GCReplayDMS(models.BaseModel):
         model_name=None,
         sf_rescale=None,
         scaling=1.0,
+        fitness_mode='bind',
     ):
         """
         Initialize a selection model from GCReplay DMS data.
@@ -84,39 +85,51 @@ class GCReplayDMS(models.BaseModel):
         model_name (str, optional): The name of the model. If not specified, the class name is used.
         sf_rescale (str, optional): The selection factor rescaling approach.
         scaling (float): The multiplicative factor on the parent-child binding difference.
+        fitness_mode (str): What DMS measurement(s) to use for fitness: 'bind', 'expr', or 'bind_expr'.
         """
+        assert fitness_mode in ['bind','expr','bind_expr']
+        
         super().__init__(model_name=model_name)
         self.sf_rescale = sf_rescale
         self.scaling = scaling
         self.chain = chain[0].capitalize()
         dms_df = pd.read_csv(dms_data_file)
         self.dms_chain_df = dms_df[dms_df["chain"] == self.chain]
+        self.fitness_mode = fitness_mode
 
-        # Issue: Light chain DMS measurements at positions 129 (F,L), 134 (R) are missing.
-        # Patch: Set the missing binding values to the wildtype value.
+        # Issue: Light chain binding measurements at positions 129 (F,L), 134 (R) are missing.
+        #        Light chain expression measurements at positions 
+        #        129 (F,L), 133 (G), 134 (C,G,H,R), 136 (Q), 144 (C) are missing.
+        # Patch: Set the missing binding and expression values to the wildtype value.
         if self.chain == "L":
-            patch_sites = [129, 134]
+            patch_sites = [129, 133, 134, 136, 144]
             for site in patch_sites:
                 site_df = self.dms_chain_df[self.dms_chain_df["position"] == site]
                 wt_bind = site_df[site_df["wildtype"] == site_df["mutant"]][
                     "bind_CGG"
                 ].item()
+                wt_expr = site_df[site_df["wildtype"] == site_df["mutant"]][
+                    "expr"
+                ].item()
                 for i, row in site_df.iterrows():
                     if np.isnan(row["bind_CGG"]):
                         self.dms_chain_df.loc[i, "bind_CGG"] = wt_bind
                         self.dms_chain_df.loc[i, "delta_bind_CGG"] = 0.0
+                    if np.isnan(row["expr"]):
+                        self.dms_chain_df.loc[i, "expr"] = wt_expr
+                        self.dms_chain_df.loc[i, "delta_expr"] = 0.0
 
     def _get_dms_ratios(self, parent_aa: str, site: int) -> np.ndarray:
         """
-        Generate a numpy array of the ratios of association constants (K_A), according to DMS measurements,
+        Generate a numpy array of the ratios of product of association constants (K_A) and expression, according to DMS measurements,
         between each amino acid to the parent amino acid at a specified site.
 
         Parameters:
         parent_aa (str): The parent amino acid sequence.
-        site (int): The site in the parent sequence to get K_A ratios for (0-based index).
+        site (int): The site in the parent sequence to get K_A*expr ratios for (0-based index).
 
         Returns:
-        numpy.ndarray: An array containing the K_A ratios for the site.
+        numpy.ndarray: An array containing the K_A*expr ratios for the site.
         """
         if self.chain == "H":
             # heavy chain has amino acid positions [1, 112] in DMS data
@@ -130,10 +143,25 @@ class GCReplayDMS(models.BaseModel):
             "bind_CGG"
         ].item()
         assert ~np.isnan(ref_bind)
+        ref_logexpr = np.log10(site_dms_df[site_dms_df["mutant"] == parent_aa[site]][
+            "expr"
+        ].item())
+        assert ~np.isnan(ref_logexpr)
+        
+        expr_weight = 1
+        if self.fitness_mode == 'bind_expr':
+            ref_fitness = ref_bind + expr_weight*ref_logexpr
+            aa_fitnesses = site_dms_df["bind_CGG"].to_numpy() + expr_weight*np.log10(site_dms_df["expr"].to_numpy())
+        elif self.fitness_mode == 'bind':
+            ref_fitness = ref_bind
+            aa_fitnesses = site_dms_df["bind_CGG"].to_numpy()
+        elif self.fitness_mode == 'expr':
+            ref_fitness = expr_weight*ref_logexpr
+            aa_fitnesses = expr_weight*np.log10(site_dms_df["expr"].to_numpy())
 
         # log(10) because binding is log10[K_A]
-        return np.exp(site_dms_df["bind_CGG"].to_numpy() * np.log(10)) / np.exp(
-            ref_bind * np.log(10)
+        return np.exp(aa_fitnesses * np.log(10)) / np.exp(
+            ref_fitness * np.log(10)
         )
 
     def aaprobs_of_parent_child_pair(self, parent, child=None) -> np.ndarray:
@@ -240,6 +268,7 @@ class GCReplaySHMDMS(models.MutSelModel):
         chain="heavy",
         sf_rescale=None,
         scaling=1.0,
+        fitness_mode='bind',
         *args,
         **kwargs,
     ):
@@ -252,11 +281,12 @@ class GCReplaySHMDMS(models.MutSelModel):
         chain (str): Name of the chain, default is "heavy".
         sf_rescale (str, optional): The selection factor rescaling approach.
         scaling (float): The multiplicative factor on the parent-child binding difference.
+        fitness_mode (str): What DMS measurement(s) to use for fitness: 'bind', 'expr', or 'bind_expr'.
         """
         super().__init__(
             mutation_model=GCReplaySHM(shm_data_file),
             selection_model=GCReplayDMS(
-                dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling
+                dms_data_file, chain=chain, sf_rescale=sf_rescale, scaling=scaling, fitness_mode=fitness_mode,
             ),
             *args,
             **kwargs,
