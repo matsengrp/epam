@@ -21,7 +21,7 @@ library(patchwork)
 ```
 
 ```{r}
-path_to_output <- "/Users/mjohnso4/Documents/epam/data/gcreplay/"
+path_to_output <- "dataframes/"
 path_to_replay_esm1 <- glue("{path_to_output}replay_igh_igk_esm1.hdf5")
 path_to_replay_esm2 <- glue("{path_to_output}replay_igh_igk_esm2.hdf5")
 path_to_replay_esm3 <- glue("{path_to_output}replay_igh_igk_esm3.hdf5")
