@@ -38,3 +38,7 @@ Scripts to reproduce figures in [Johnson et al. (2025)](https://doi.org/10.1101/
 Running it to get matrices:
 
     epam aaprob NetamSHM '{"model_path_prefix": "/fh/fast/matsen_e/shared/bcr-mut-sel/netam-shm/trained_models/cnn_ind_med-shmoof_small-full-0"}' _ignore/wyatt-10x-1p5m_pcp_2023-09-11.first100.csv _ignore/output.hdf5
+
+## Parent-child pairs of B cell receptor sequences
+
+Dataframes of parent-child pairs analyzed in [Johnson et al. (2025)](https://doi.org/10.1101/2025.06.16.659977) can be obtained by downloading `pcps.tar.gz` from [10.5281/zenodo.17353498](https://zenodo.org/records/17353498).
