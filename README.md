@@ -9,22 +9,25 @@
 
 The `netam` package needs to be installed within the epam conda environment (though outside the epam file directory). Separately clone the repository (https://github.com/matsengrp/netam), checkout the relevant version of the repo `git checkout 22c8873`, and run `make install`.
 
-Getting Thrifty model crepes:
+Fetch data for the `thrifty-models` submodule:
 
     git submodule init
     git submodule update
-    scp <username>@quokka:/fh/fast/matsen_e/shared/bcr-mut-sel/working/crepe/2024-12-08-thrifty-prod/cnn_ind_lrg-v1wyatt-simple-0* thrifty-models/models/
 
-Getting GCReplay-DMS data:
+The "Thrifty-SHM" model in [Johnson et al. (2025)](https://doi.org/10.1101/2025.06.16.659977) is `thrifty-models/models/ThriftyHumV0.2-59`.
 
-    mkdir data/gcreplay
-    scp <username>@quokka:/fh/fast/matsen_e/ksung2/epam-gcreplay/final_variant_scores.csv data/gcreplay/
-    scp <username>@quokka:/fh/fast/matsen_e/ksung2/epam-gcreplay/chigy_?c_mutation_rates_nt.csv data/gcreplay/
+To get the model files for "Thrifty-prod", "S5F", and "ReplaySHM + DMS" in [Johnson et al. (2025)](https://doi.org/10.1101/2025.06.16.659977):
+- Go to [10.5281/zenodo.17353498](https://zenodo.org/records/17353498)
+- Download `models_setup.tar.gz` to the root directory of the epam repository
+- Extract the files: `tar -xzvf models_setup.tar.gz`
 
-Getting S5F data:
+|model | files|
+|---|---|
+| Thrifty-prod | `thrifty-models/models/cnn_ind_lrg-v1wyatt-simple-0.*` |
+| S5F | mutability rates: `data/S5F/hh_s5f_muts.csv`</br>substitution rates: `data/S5F/hh_s5f_subs.csv` |
+| ReplaySHM + DMS | heavy chain SHM: `data/gcreplay/chigy_hc_mutation_rates_nt.csv`</br>light chain SHM: `data/gcreplay/chigy_lc_mutation_rates_nt.csv`</br>DMS: `data/gcreplay/final_variant_scores.csv` |
 
-    scp -r <username>@quokka:/fh/fast/matsen_e/ksung2/shmple-gpu/shmple/model_weights/S5F data/
-
+Scripts to reproduce figures in [Johnson et al. (2025)](https://doi.org/10.1101/2025.06.16.659977) are found in `notebooks/`.
 
 ## Terminology
 
