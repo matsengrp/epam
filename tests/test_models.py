@@ -91,6 +91,7 @@ def test_cached_esm_wt(tol=1e-4):
     prob_file = f"_ignore/{source}-wt_prob.hdf5"
     compare_file = f"data/{source}-wt_prob.hdf5"
 
+    os.makedirs("_ignore", exist_ok=True)
     precompute_and_save(pcp_file, logit_file, "wt-marginals")
     process_esm_output(logit_file, prob_file, "wt-marginals")
     cached_esm_dict = load_and_convert_to_dict(prob_file)

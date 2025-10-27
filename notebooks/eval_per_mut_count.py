@@ -1,7 +1,7 @@
+import os
 import h5py
 import pandas as pd
 import numpy as np
-from netam.sequences import AA_STR_SORTED
 from epam.utils import pcp_path_of_aaprob_path, load_and_filter_pcp_df
 from netam.sequences import translate_sequences
 from epam.evaluation import (
@@ -12,16 +12,18 @@ from epam.evaluation import (
     identify_child_substitutions
 )
 
+output_dir = "tables"
+os.makedirs(output_dir, exist_ok=True)
 
 dataset_list = [
-("/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2/tang-deepshm-prod_pcp_2024-08-08_MASKED_NI_noN_no-naive/ThriftyProdHumV0.2-59/combined_aaprob.hdf5",
- 'tang_thriftyprod_eval.csv'),
+("epam_output/tang-deepshm-prod_pcp_2024-08-08_MASKED_NI_noN_no-naive/ThriftyProdHumV0.2-59/combined_aaprob.hdf5",
+ f'{output_dir}/tang_thriftyprod_eval.csv'),
 
-("/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2/gcreplay/igh/gctrees_2025-01-10-full_igh_pcp_NoBackMuts/GCReplaySHMDMSSigmoid_igh/aaprob.hdf5",
- 'gcreplay_igh_shmdms_eval.csv'),
+("epam_output/gcreplay/igh/gctrees_2025-01-10-full_igh_pcp_NoBackMuts/GCReplaySHMDMSSigmoid_igh/aaprob.hdf5",
+ f'{output_dir}/gcreplay_igh_shmdms_eval.csv'),
 
-("/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2/gcreplay/igk/gctrees_2025-01-10-full_igk_pcp_NoBackMuts/GCReplaySHMDMSSigmoid_igk/aaprob.hdf5",
- 'gcreplay_igk_shmdms_eval.csv'),
+("epam_output/gcreplay/igk/gctrees_2025-01-10-full_igk_pcp_NoBackMuts/GCReplaySHMDMSSigmoid_igk/aaprob.hdf5",
+ f'{output_dir}/gcreplay_igk_shmdms_eval.csv'),
 ]
 
 for dsinfo in dataset_list:

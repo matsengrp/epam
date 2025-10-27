@@ -15,8 +15,8 @@ from epam.oe_plot import (
     get_site_subs_acc_df,
 )
 
-epam_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2"
-anarci_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/pcps/v2/anarci"
+epam_results_dir = "epam_output"
+anarci_dir = "anarci"
 output_dir = "dataframes"
 os.makedirs(output_dir, exist_ok=True)
 
@@ -41,7 +41,7 @@ dataset_list = [
 model_list = [
     "S5F", "S5FESM_mask", "S5FBLOSUM",
     "ThriftyHumV0.2-59", "ThriftyProdHumV0.2-59", "ThriftyESM_mask", "ThriftyBLOSUM",
-    "ESM1v_mask", "AbLang2_mask", "AbLang1"
+    "ESM1v_mask", "AbLang2_mask", "AbLang2_wt", "AbLang1"
 ]
 
 for dsinfo in dataset_list:
@@ -64,6 +64,9 @@ for dsinfo in dataset_list:
     
     
     for model in model_list:
+        if (model=="AbLang2_wt") and (dsname!="rodriguez"):
+            continue
+        
         print("Model:", model)
         
         aaprob_path = f"{epam_results_dir}/{dataset}/{model}/combined_aaprob.hdf5"

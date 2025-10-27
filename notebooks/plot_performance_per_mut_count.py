@@ -6,10 +6,12 @@ import matplotlib.pyplot as plt
 output_dir = "plots"
 os.makedirs(output_dir, exist_ok=True)
 
+tab_dir = "tables"
+
 df_dict={}
-df_dict['tang'] = pd.read_csv('tang_thriftyprod_eval.csv', index_col=0)
-df_dict['gcreplay_igh'] = pd.read_csv('gcreplay_igh_shmdms_eval.csv', index_col=0)
-df_dict['gcreplay_igk'] = pd.read_csv('gcreplay_igk_shmdms_eval.csv', index_col=0)
+df_dict['tang'] = pd.read_csv(f'{tab_dir}/tang_thriftyprod_eval.csv', index_col=0)
+df_dict['gcreplay_igh'] = pd.read_csv(f'{tab_dir}/gcreplay_igh_shmdms_eval.csv', index_col=0)
+df_dict['gcreplay_igk'] = pd.read_csv(f'{tab_dir}/gcreplay_igk_shmdms_eval.csv', index_col=0)
 
 XMAX_HUMANS=25
 XMAX_REPLAY=8

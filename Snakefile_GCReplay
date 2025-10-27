@@ -5,13 +5,13 @@ shm_hc_data_file = 'data/gcreplay/chigy_hc_mutation_rates_nt.csv'
 shm_lc_data_file = 'data/gcreplay/chigy_lc_mutation_rates_nt.csv'
 GCREPLAY_IGH_MODELS = [
     ("GCReplaySHM_igh",                "GCReplaySHM", { "shm_data_file": shm_hc_data_file, "init_branch_length": 1}),
-    ("GCReplaySHMDMSSigmoid_igh",      "GCReplaySHMDMS", { "shm_data_file": shm_hc_data_file, "dms_data_file": dms_data_file, "chain": "heavy", "sf_rescale": "sigmoid", "init_branch_length": 1}),
+    ("GCReplaySHMDMSSigmoid_igh",      "GCReplaySHMDMS", { "shm_data_file": shm_hc_data_file, "dms_data_file": dms_data_file, "chain": "heavy", "sf_rescale": "sigmoid", "fitness_mode": "bind", "init_branch_length": 1}),
     ("GCReplaySHMBLOSUMSigmoid_igh",   "GCReplaySHMBLOSUM", { "shm_data_file": shm_hc_data_file, "matrix_name": "BLOSUM62", "sf_rescale": "sigmoid", "init_branch_length": 1}),
     ("GCReplayAbLang2_igh",            "AbLang2", {"version": "ablang2-paired", "masking": True, "chain": "heavy"}),
 ]
 GCREPLAY_IGK_MODELS = [
     ("GCReplaySHM_igk",                "GCReplaySHM", { "shm_data_file": shm_lc_data_file, "init_branch_length": 1}),
-    ("GCReplaySHMDMSSigmoid_igk",      "GCReplaySHMDMS", { "shm_data_file": shm_lc_data_file, "dms_data_file": dms_data_file, "chain": "light", "sf_rescale": "sigmoid", "init_branch_length": 1}),
+    ("GCReplaySHMDMSSigmoid_igk",      "GCReplaySHMDMS", { "shm_data_file": shm_lc_data_file, "dms_data_file": dms_data_file, "chain": "light", "sf_rescale": "sigmoid", "fitness_mode": "bind", "init_branch_length": 1}),
     ("GCReplaySHMBLOSUMSigmoid_igk",   "GCReplaySHMBLOSUM", { "shm_data_file": shm_lc_data_file, "matrix_name": "BLOSUM62", "sf_rescale": "sigmoid", "init_branch_length": 1}),
     ("GCReplayAbLang2_igk",            "AbLang2", {"version": "ablang2-paired", "masking": True, "chain": "light"}),
 ]

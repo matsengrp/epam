@@ -21,7 +21,8 @@ library(patchwork)
 ```
 
 ```{r}
-path_to_output <- "/Users/mjohnso4/Documents/epam/data/gcreplay/"
+path_to_output <- "dataframes/"
+path_to_plots <- "plots/"
 path_to_replay_esm1 <- glue("{path_to_output}replay_igh_igk_esm1.hdf5")
 path_to_replay_esm2 <- glue("{path_to_output}replay_igh_igk_esm2.hdf5")
 path_to_replay_esm3 <- glue("{path_to_output}replay_igh_igk_esm3.hdf5")
@@ -104,18 +105,20 @@ aa_levels <- c("C", "P", "G", "V", "M", "L", "I", "A", "F", "W", "Y", "T", "S", 
 
 igh_dms_df <- full_dms_df %>% 
   filter(chain == "H") %>% 
-  select(c(position, wildtype, mutant, delta_bind_CGG, delta_expr)) %>% 
+  select(c(position, wildtype, mutant, expr, delta_expr, delta_bind_CGG)) %>% 
   mutate(
     wildtype = factor(wildtype, levels = aa_levels),
-    mutant = factor(mutant, levels = aa_levels)
+    mutant = factor(mutant, levels = aa_levels),
+    expr_wt = 10.45565
   )
 
 igk_dms_df <- full_dms_df %>% 
   filter(chain == "L") %>% 
-  select(c(position, wildtype, mutant, delta_bind_CGG, delta_expr)) %>% 
+  select(c(position, wildtype, mutant, expr, delta_expr, delta_bind_CGG)) %>% 
   mutate(
     wildtype = factor(wildtype, levels = aa_levels),
-    mutant = factor(mutant, levels = aa_levels)
+    mutant = factor(mutant, levels = aa_levels),
+    expr_wt = 10.45565
   )
 
 ```
@@ -230,7 +233,7 @@ igh_dms_df %>%
     aes(
       x = position, 
       y = mutant, 
-      fill = delta_expr
+      fill = log10(expr/expr_wt)
     )
   ) +
   geom_tile(color = "white") +
@@ -245,7 +248,7 @@ igh_dms_df %>%
   ) +
   scale_y_discrete(name = "") +
   scale_fill_continuous_diverging(
-    name = "&Delta; expression",
+    name = "&Delta; log10(expression)",
     palette = "Blue-Red 3",
     rev = TRUE, 
     na.value = "grey90"
@@ -271,7 +274,7 @@ igk_dms_df %>%
     aes(
       x = position, 
       y = mutant, 
-      fill = delta_expr
+      fill = log10(expr/expr_wt)
     )
   ) +
   geom_tile(color = "white") +
@@ -285,7 +288,7 @@ igk_dms_df %>%
   ) +
   scale_y_discrete(name = "") +
   scale_fill_continuous_diverging(
-    name = "&Delta; expression",
+    name = "&Delta; log10(expression)",
     palette = "Blue-Red 3",
     rev = TRUE,
     na.value = "grey90"
@@ -303,6 +306,90 @@ igk_dms_df %>%
 
 plot_igk_exp_dms
 ```
+
+
+#### DMS plots - change in binding and expression
+
+```{r}
+igh_dms_df %>% 
+  mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+  ggplot(
+    aes(
+      x = position, 
+      y = mutant, 
+      fill = delta_bind_CGG + log10(expr/expr_wt)
+    )
+  ) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = ifelse(mutant == wildtype, "X", "")), color = "grey50") +
+  #scale_x_discrete(
+  scale_x_continuous(
+    name = "",
+    limits = c(0, 113),
+    expand = c(0.0001, 0.0001),
+    breaks = seq(5, 110, 5),
+    labels = seq(5, 110, 5)
+  ) +
+  scale_y_discrete(name = "") +
+  scale_fill_continuous_diverging(
+    name = "&Delta; affinity + &Delta; log10(expression)",
+    palette = "Blue-Red 3",
+    rev = TRUE, 
+    na.value = "grey90"
+  ) +
+  ggtitle("IgH DMS") +
+  theme_classic(14) +
+  theme(
+    legend.position = "bottom",
+    legend.justification = "right",
+    legend.box.spacing = unit(0, "pt"),
+    legend.key.width = unit(2, "cm"),
+    axis.line.x = element_blank(),
+    legend.title = element_markdown()
+  ) -> plot_igh_bind_exp_dms
+plot_igh_bind_exp_dms
+```
+
+
+```{r}
+igk_dms_df %>% 
+  mutate(delta_bind_CGG = replace_na(delta_bind_CGG, 0)) %>% 
+  ggplot(
+    aes(
+      x = position, 
+      y = mutant, 
+      fill = delta_bind_CGG + log10(expr/expr_wt)
+    )
+  ) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = ifelse(mutant == wildtype, "X", "")), color = "grey50") +
+  scale_x_continuous(
+    name = "",
+    limits = c(127, 236),
+    expand = c(0.0001, 0.0001),
+    breaks = seq(130, 230, 5),
+    labels = seq(130, 230, 5)
+  ) +
+  scale_y_discrete(name = "") +
+  scale_fill_continuous_diverging(
+    name = "&Delta; affinity + &Delta; log10(expression)",
+    palette = "Blue-Red 3",
+    rev = TRUE,
+    na.value = "grey90"
+  ) +
+  ggtitle("IgK DMS") +
+  theme_classic(14) +
+  theme(
+    legend.position = "bottom",
+    legend.justification = "right",
+    legend.box.spacing = unit(0, "pt"),
+    legend.key.width = unit(2, "cm"),
+    axis.line.x = element_blank(),
+    legend.title = element_markdown()
+  ) -> plot_igk_bind_exp_dms
+plot_igk_bind_exp_dms
+```
+
 
 
 
@@ -705,7 +792,7 @@ plot_igh <- p1 / p2 +
 plot_igh
 
 save_plot(
-  glue("{path_to_output}/igh_dms_esm_heat.png"),
+  glue("{path_to_plots}/igh_dms_esm_heat.png"),
   plot_igh,
   base_height = 7.71,
   base_asp = 1.618, 
@@ -734,7 +821,7 @@ plot_igk <- p3 / p4 +
 plot_igk
 
 save_plot(
-  glue("{path_to_output}/igk_dms_esm_heat.png"),
+  glue("{path_to_plots}/igk_dms_esm_heat.png"),
   plot_igk,
   base_height = 7.71,
   base_asp = 1.618, 
@@ -752,7 +839,7 @@ plot_corr <- plot_igh_corr | plot_igk_corr +
 plot_corr
 
 save_plot(
-  glue("{path_to_output}/ig_dms_esm_corr.png"),
+  glue("{path_to_plots}/ig_dms_esm_corr.png"),
   plot_corr,
   base_height = 5.71,
   base_asp = 1.618, 
@@ -781,7 +868,7 @@ plot_igh_exp <- p5 / p2 +
 plot_igh_exp
 
 save_plot(
-  glue("{path_to_output}/igh_dms_esm_heat_exp.png"),
+  glue("{path_to_plots}/igh_dms_esm_heat_exp.png"),
   plot_igh_exp,
   base_height = 7.71,
   base_asp = 1.618, 
@@ -806,7 +893,7 @@ plot_igk_exp <- p6 / p4 +
 plot_igk_exp
 
 save_plot(
-  glue("{path_to_output}/igk_dms_esm_heat_exp.png"),
+  glue("{path_to_plots}/igk_dms_esm_heat_exp.png"),
   plot_igk_exp,
   base_height = 7.71,
   base_asp = 1.618, 
@@ -823,7 +910,7 @@ plot_corr_exp <- plot_igh_expr_corr | plot_igk_expr_corr +
 plot_corr_exp
 
 save_plot(
-  glue("{path_to_output}/ig_dms_esm_corr_exp.png"),
+  glue("{path_to_plots}/ig_dms_esm_corr_exp.png"),
   plot_corr_exp,
   base_height = 5.71,
   base_asp = 1.618, 

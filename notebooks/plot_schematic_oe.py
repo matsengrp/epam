@@ -1,19 +1,14 @@
 # Plots example zoomed-in plot of observed vs expected substitutions for schematic
 # Used in Figure 1C
-import numpy as np
+
 import pandas as pd
+import pickle
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import warnings
 import os
-from epam.utils import load_and_filter_pcp_df
 from epam.oe_plot import (
-    get_numbering_dict,
     plot_sites_observed_vs_expected,
 )
-from epam.df_for_plots import (
-    get_site_mutabilities_df,
-)
+
 
 # Okabe-Ito colors
 oi_black         = '#000000'
@@ -25,24 +20,24 @@ oi_blue          = '#0072B2'
 oi_vermillion    = '#D55E00'
 oi_reddishpurple = '#CC79A7'
 
-aaprobs_flairr_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2/ford-flairr-seq-prod_pcp_2024-07-26_MASKED_NI_noN_no-naive"
-anarci_flairr = "/fh/fast/matsen_e/shared/bcr-mut-sel/pcps/v2/anarci/ford-flairr-seq-prod_imgt.csv"
-pcp_path = "/home/mjohnso4/epam/pcp_inputs/ford-flairr-seq-prod_pcp_2024-07-26_MASKED_NI_noN_no-naive.csv"
-schematic_output_dir = "/home/mjohnso4/epam/output"
+ssp_df_path = "dataframes/ford_ThriftyProdHumV0.2-59_ssp_df.csv.gz"
+anarci_flairr = "anarci/ford-flairr-seq-prod_imgt.csv"
+numbering_path = "dataframes/ford_numbering.pkl"
+pcp_path = "pcp_inputs/ford-flairr-seq-prod_pcp_2024-07-26_MASKED_NI_noN_no-naive.csv"
+schematic_output_dir = "plots"
+os.makedirs(schematic_output_dir, exist_ok=True)
 
 major_text_size = 30 #20
 minor_text_size = 20 #15
 
-pcp_df = load_and_filter_pcp_df(pcp_path)
-numbering, excluded = get_numbering_dict(anarci_flairr, pcp_df, True, "imgt")
+with open(numbering_path, 'rb') as f:
+    numbering = pickle.load(f)
 
 def plot_schematic():
-    aaprob = f"{aaprobs_flairr_dir}/ThriftyProdHumV0.2-59/combined_aaprob.hdf5"
-
     fig, ax = plt.subplots(figsize=[10,6]) #15,5
     fig.patch.set_facecolor('white')
 
-    site_sub_probs_df = get_site_mutabilities_df(aaprob, numbering)
+    site_sub_probs_df = pd.read_csv(ssp_df_path, index_col=0, dtype={'site':'object'})
     site_numbers = [str(i) for i in range(1, 41)] # 71
     zoomed_df = site_sub_probs_df[site_sub_probs_df['site'].isin(site_numbers)]
     results = plot_sites_observed_vs_expected(zoomed_df, ax, numbering)

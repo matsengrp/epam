@@ -1,6 +1,7 @@
 # Write a dataframe of substitution accuracy for all models on Replay
-# (Figure 5B and Supplementary)
+# (Figure 5B and 6B)
 
+import os
 import h5py
 import numpy as np
 import pandas as pd
@@ -17,10 +18,12 @@ from netam.sequences import (
     translate_sequences,
 )
 
-epam_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2/gcreplay"
-epam_esm_results_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2/gcreplay_esm"
+epam_results_dir = "epam_output/gcreplay"
+epam_esm_results_dir = "epam_output/gcreplay_esm"
 top_k = 1
 
+output_dir = "tables"
+os.makedirs(output_dir, exist_ok=True)
 
 model_list = [
     'GCReplaySHM', 'GCReplaySHMBLOSUMSigmoid', 'GCReplaySHMDMSSigmoid', 'GCReplaySHMESMSigmoid',
@@ -32,10 +35,21 @@ modelname_list = [
     "ESM-1v", "AbLang2"
 ]
 
+only_1sub = False
+only_naive_parent = False
+only_leaf_child = False
+
 for chain in ['igh','igk']:
     print('chain:',chain)
     
-    outfname = f"gcreplay_{chain}_subacc.csv"
+    outfname = f"{output_dir}/gcreplay_{chain}"
+    if only_naive_parent==True:
+        outfname = outfname + "_naive"
+    if only_leaf_child==True:
+        outfname = outfname + "_leaf"
+    if only_1sub==True:
+        outfname = outfname + "_1sub"
+    outfname = outfname + "_subacc.csv"
     output_df = pd.DataFrame(columns=['model','All','FWR1','CDR1','FWR2','CDR2','FWR3','CDR3','FWR4'])
     
     dataset = f"gctrees_2025-01-10-full_{chain}_pcp_NoBackMuts"
@@ -59,6 +73,7 @@ for chain in ['igh','igk']:
             for parent, child in zip(parent_aa_seqs, child_aa_seqs)
         ]
 
+        npcps = 0
         pcp_sub_correct = []
         pcp_regions = []
         with h5py.File(aaprob_path, "r") as matfile:
@@ -69,9 +84,22 @@ for chain in ['igh','igk']:
                     "matrix" + str(pcp_index)
                 ]  # assumes "matrix0" naming convention and that matrix names and pcp indices match
                 matrix = grp["data"]
+                
+                if (only_naive_parent==True) and (pcp_row['parent_is_naive']!=True):
+                    continue
 
+                if (only_leaf_child==True) and (pcp_row['child_is_leaf']!=True):
+                    continue
+                
                 parent_aa = parent_aa_seqs[index]
                 child_aa = child_aa_seqs[index]
+                
+                nsubs = sum([p!=c and p!='-' and c!='-' for p,c in zip(parent_aa, child_aa)])
+                if (only_1sub==True) and (nsubs!=1):
+                    continue
+                
+                npcps += 1
+                
                 pcp_sub_correct.append(
                     [
                         child_aa[j]
@@ -108,3 +136,6 @@ for chain in ['igh','igk']:
 
     print(output_df)
     output_df.to_csv(outfname,index=False)
+    print(npcps)
+    for region in ['FWR1','CDR1','FWR2','CDR2','FWR3','CDR3','FWR4']:
+        print(region, df[df['region']==region].shape[0])

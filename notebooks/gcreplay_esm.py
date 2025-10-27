@@ -14,7 +14,7 @@ from netam.sequences import (
 )
 from netam.common import pick_device
 
-output_dir = "/home/mjohnso4/epam/data/gcreplay"
+output_dir = "dataframes/"
 replay_igh = "EVQLQESGPSLVKPSQTLSLTCSVTGDSITSGYWNWIRKFPGNKLEYMGYISYSGSTYYNPSLKSRISITRDTSKNQYYLQLNSVTTEDTATYYCARDFDVWGAGTTVTVSS"
 replay_igk = "DIVMTQSQKFMSTSVGDRVSVTCKASQNVGTNVAWYQQKPGQSPKALIYSASYRYSGVPDRFTGSGSGTDFTLTISNVQSEDLAEYFCQQYNSYPLTFGSGTKLEIKR"
 
@@ -81,5 +81,5 @@ for model_number in range(1, 6):
     
     output_hdf5 = f"{output_dir}/replay_igh_igk_esm{model_number}.hdf5"
     
-    write_naive_logits(model_number, output_hdf5)
+    write_naive_probs(model_number, output_hdf5)
     

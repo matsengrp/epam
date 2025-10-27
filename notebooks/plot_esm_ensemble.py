@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import warnings
 import os
+import pickle
 from epam.utils import load_and_filter_pcp_df
 from epam.oe_plot import (
     get_numbering_dict,
@@ -25,66 +26,35 @@ oi_blue          = '#0072B2'
 oi_vermillion    = '#D55E00'
 oi_reddishpurple = '#CC79A7'
 
-local_dir = "/home/mjohnso4/epam"
-epam_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/epam/output/v2"
-pcp_dir = "/fh/fast/matsen_e/shared/bcr-mut-sel/pcps/v2"
-race_filename = "rodriguez-airr-seq-race-prod_pcp_2024-07-28_MASKED_NI_noN_no-naive"
-ensemble_output_dir = f"{local_dir}/output/{race_filename}"
-anarci_race = f"{pcp_dir}/anarci/rodriguez-airr-seq-race-prod_imgt.csv"
-plot_output_dir = f"{local_dir}/output/plots/"
-pcp_path = f"{local_dir}/pcp_inputs/{race_filename}.csv"
-metrics_file_path = f"{ensemble_output_dir}/ensemble_combined_performance.csv"
-oe_results_path = f"{ensemble_output_dir}/oe_metrics.csv"
 
+numbering_path = "dataframes/rodriguez_numbering.pkl"
+output_dir = "plots"
+os.makedirs(output_dir, exist_ok=True)
+metrics_file_path = "tables/ensemble_combined_performance.csv"
 
-def collect_esm_ensemble_results(models=["ESM1v_mask", "ThriftyESM_mask", "S5FESM_mask"]):
+models=["ESM1v_mask", "ThriftyESM_mask", "S5FESM_mask"]
+esm_numbers = ['esm1', 'esm2', 'esm3', 'esm4', 'esm5', 'ensemble_set']
+
+def collect_esm_ensemble_results():
     
-    pcp_df = load_and_filter_pcp_df(pcp_path)
-    numbering, excluded = get_numbering_dict(anarci_race, pcp_df, True, "imgt")
+    with open(numbering_path, 'rb') as f:
+        numbering = pickle.load(f)
 
     results_df = pd.DataFrame(columns=[
         'model', 'ensemble_member', 'overlap', 'residual'
     ])
     
-    for model in models:
-        aaprob_esm1 = f"{ensemble_output_dir}/esm1/{model}/combined_aaprob.hdf5"
-        aaprob_esm2 = f"{ensemble_output_dir}/esm2/{model}/combined_aaprob.hdf5"
-        aaprob_esm3 = f"{ensemble_output_dir}/esm3/{model}/combined_aaprob.hdf5"
-        aaprob_esm4 = f"{ensemble_output_dir}/esm4/{model}/combined_aaprob.hdf5"
-        aaprob_esm5 = f"{ensemble_output_dir}/esm5/{model}/combined_aaprob.hdf5"
-        aaprob_ensemble = f"{ensemble_output_dir}/ensemble_set/{model}/combined_aaprob.hdf5"
-        
-        site_sub_probs_df_1 = get_site_mutabilities_df(aaprob_esm1, numbering)
-        results_1 = get_overlap_and_residual(site_sub_probs_df_1, numbering)
-        
-        site_sub_probs_df_2 = get_site_mutabilities_df(aaprob_esm2, numbering)
-        results_2 = get_overlap_and_residual(site_sub_probs_df_2, numbering)
-        
-        site_sub_probs_df_3 = get_site_mutabilities_df(aaprob_esm3, numbering)
-        results_3 = get_overlap_and_residual(site_sub_probs_df_3, numbering)
-        
-        site_sub_probs_df_4 = get_site_mutabilities_df(aaprob_esm4, numbering)
-        results_4 = get_overlap_and_residual(site_sub_probs_df_4, numbering)
-        
-        site_sub_probs_df_5 = get_site_mutabilities_df(aaprob_esm5, numbering)
-        results_5 = get_overlap_and_residual(site_sub_probs_df_5, numbering)
-        
-        site_sub_probs_df_all = get_site_mutabilities_df(aaprob_ensemble, numbering)
-        results_all = get_overlap_and_residual(site_sub_probs_df_all, numbering)
-        
-        new_rows = [
-            {'model': model, 'ensemble_member': '1', 'overlap': results_1['overlap'], 'residual': results_1['residual']},
-            {'model': model, 'ensemble_member': '2', 'overlap': results_2['overlap'], 'residual': results_2['residual']},
-            {'model': model, 'ensemble_member': '3', 'overlap': results_3['overlap'], 'residual': results_3['residual']},
-            {'model': model, 'ensemble_member': '4', 'overlap': results_4['overlap'], 'residual': results_4['residual']},
-            {'model': model, 'ensemble_member': '5', 'overlap': results_5['overlap'], 'residual': results_5['residual']},
-            {'model': model, 'ensemble_member': 'Ensemble', 'overlap': results_all['overlap'], 'residual': results_all['residual']}
-        ]
-        
-        results_df = pd.concat([results_df, pd.DataFrame(new_rows)], ignore_index=True)
-
-    results_df.to_csv(oe_results_path, index=False)
-    print(f"Results saved to {oe_results_path}")
+    for esm_number in esm_numbers:
+        for model in models:
+            model_esm_ssp = f"dataframes/rodriguez_{model}_{esm_number}_ssp_df.csv.gz"
+            sitemuts_df = pd.read_csv(model_esm_ssp, index_col=0, dtype={'site':'object'})
+            model_esm_results = get_overlap_and_residual(sitemuts_df, numbering)
+            
+            new_row = [
+                {'model': model, 'ensemble_member': esm_number, 'overlap': model_esm_results['overlap'], 'residual': model_esm_results['residual']},
+            ]
+            
+            results_df = pd.concat([results_df, pd.DataFrame(new_row)], ignore_index=True)
     
     return results_df
 
@@ -96,14 +66,27 @@ def get_overlap_and_residual(site_sub_probs_df, numbering):
         'residual': results['residual']
     }
 
+
 def plot_ensemble_performance():
     # Load data
     results_df = pd.read_csv(metrics_file_path)
-    oe_results_df = pd.read_csv(oe_results_path)
+    oe_results_df = collect_esm_ensemble_results()
     
     # Simplify model names by removing "_mask" suffix
     results_df['simplified_model'] = results_df['model'].str.replace('_mask', '')
     oe_results_df['simplified_model'] = oe_results_df['model'].str.replace('_mask', '')
+
+    # Rename ensemble_set
+    oe_results_df['ensemble_member'] = oe_results_df['ensemble_member'].replace(
+        {
+            'ensemble_set': 'Ensemble',
+            'esm1': '1',
+            'esm2': '2',
+            'esm3': '3',
+            'esm4': '4',
+            'esm5': '5'
+        }
+    )
     
     # Color mapping
     version_colors = {
@@ -180,8 +163,8 @@ def plot_ensemble_performance():
     )
 
     # Save and show
-    plt.savefig(f"{plot_output_dir}/ensemble_performance.png")
-    plt.savefig(f"{plot_output_dir}/ensemble_performance.pdf")
+    plt.savefig(f"{output_dir}/ensemble_performance.png")
+    plt.savefig(f"{output_dir}/ensemble_performance.pdf")
     plt.show()
 
 plot_ensemble_performance()
