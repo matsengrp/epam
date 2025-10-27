@@ -4,9 +4,9 @@
 
 The environment can be set up with [Mamba](https://github.com/mamba-org/mamba). Create the environment and install relevant packages as follows:
 
-    mamba create -n epam python=3.11
-    mamba activate epam
-    mamba install datrie
+    conda create -n epam python=3.11
+    conda activate epam
+    conda install datrie
     make install
 
 The `netam` package needs to be installed within the epam conda environment (though outside the epam file directory). Separately clone the repository (https://github.com/matsengrp/netam), checkout the relevant version of the repo `git checkout 22c8873`, and run `make install`.
