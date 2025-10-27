@@ -2,9 +2,11 @@
 
 ## Developer install
 
-    conda create -n epam python=3.11
-    conda activate epam
-    conda install datrie
+The environment can be set up with [Mamba](https://github.com/mamba-org/mamba). Create the environment and install relevant packages as follows:
+
+    mamba create -n epam python=3.11
+    mamba activate epam
+    mamba install datrie
     make install
 
 The `netam` package needs to be installed within the epam conda environment (though outside the epam file directory). Separately clone the repository (https://github.com/matsengrp/netam), checkout the relevant version of the repo `git checkout 22c8873`, and run `make install`.
@@ -17,7 +19,7 @@ Fetch data for the `thrifty-models` submodule:
 The "Thrifty-SHM" model in [Johnson et al. (2025)](https://doi.org/10.1101/2025.06.16.659977) is `thrifty-models/models/ThriftyHumV0.2-59`.
 
 To get the model files for "Thrifty-prod", "S5F", and "ReplaySHM + DMS" in [Johnson et al. (2025)](https://doi.org/10.1101/2025.06.16.659977):
-- Go to [10.5281/zenodo.17353498](https://zenodo.org/records/17353498)
+- Go to [https://doi.org/10.5281/zenodo.17353498](https://zenodo.org/records/17353498)
 - Download `models_setup.tar.gz` to the root directory of the epam repository
 - Extract the files: `tar -xzvf models_setup.tar.gz`
 
@@ -41,4 +43,4 @@ Running it to get matrices:
 
 ## Parent-child pairs of B cell receptor sequences
 
-Dataframes of parent-child pairs analyzed in [Johnson et al. (2025)](https://doi.org/10.1101/2025.06.16.659977) can be obtained by downloading `pcps.tar.gz` from [10.5281/zenodo.17353498](https://zenodo.org/records/17353498).
+Dataframes of parent-child pairs analyzed in [Johnson et al. (2025)](https://doi.org/10.1101/2025.06.16.659977) can be obtained by downloading `pcps.tar.gz` from [https://doi.org/10.5281/zenodo.17353498](https://zenodo.org/records/17353498).
