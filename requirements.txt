@@ -5,7 +5,7 @@ fair-esm==2.0.0
 h5py==3.12.1
 numpy==2.0.2
 pytest==8.3.4
-snakemake==8.25.5
+snakemake==9.21.0
 tensorboardX==2.6.2.2
 torch==2.5.1
 typing_extensions==4.12.2
